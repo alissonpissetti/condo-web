@@ -1,0 +1,39 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Editar condomínio</h1>
+    <p class="page__intro">Altere o nome do condomínio selecionado.</p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <form class="form" (ngSubmit)="save()" novalidate>
+      @if (formError(); as fe) {
+        <p class="error" role="alert">{{ fe }}</p>
+      }
+
+      <label class="field">
+        <span class="field__label">Nome</span>
+        <input
+          type="text"
+          formControlName="name"
+          autocomplete="organization"
+          class="field__input"
+        />
+        @if (form.controls.name.invalid && form.controls.name.touched) {
+          <span class="field__error">{{
+            fieldErrorsPt(form.controls.name)
+          }}</span>
+        }
+      </label>
+
+      <div class="actions">
+        <button type="submit" class="btn primary" [disabled]="saving()">
+          {{ saving() ? 'A salvar…' : 'Salvar' }}
+        </button>
+      </div>
+    </form>
+  }
+</div>

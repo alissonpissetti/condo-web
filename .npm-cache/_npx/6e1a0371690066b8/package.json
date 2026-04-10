@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@angular/cli": "^19.2.24"
+  },
+  "_npx": {
+    "packages": [
+      "@angular/cli@19"
+    ]
+  }
+}

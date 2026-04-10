@@ -1,0 +1,18 @@
+0 verbose cli /Users/alisson/.nvm/versions/node/v24.10.0/bin/node /Users/alisson/.nvm/versions/node/v24.10.0/lib/node_modules/npm/bin/npm-cli.js
+1 info using npm@11.11.0
+2 info using node@v24.10.0
+3 silly config load:file:/Users/alisson/.nvm/versions/node/v24.10.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/alisson/Documents/condo-web/.npmrc
+5 silly config load:file:/Users/alisson/.npmrc
+6 silly config load:file:/Users/alisson/.nvm/versions/node/v24.10.0/etc/npmrc
+7 verbose title npm exec ng build
+8 verbose argv "exec" "--" "ng" "build"
+9 verbose logfile logs-max:10 dir:/Users/alisson/Documents/condo-web/.npm-cache/_logs/2026-04-10T16_59_49_605Z-
+10 verbose logfile /Users/alisson/Documents/condo-web/.npm-cache/_logs/2026-04-10T16_59_49_605Z-debug-0.log
+11 silly logfile done cleaning log files
+12 verbose cwd /Users/alisson/Documents/condo-web
+13 verbose os Darwin 25.3.0
+14 verbose node v24.10.0
+15 verbose npm  v11.11.0
+16 verbose exit 0
+17 info ok

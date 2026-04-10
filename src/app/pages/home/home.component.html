@@ -1,0 +1,97 @@
+<header class="topbar">
+  <div class="brand">
+    <img
+      class="brand-logo"
+      src="/logo-white.png"
+      width="677"
+      height="369"
+      alt="Meu Condomínio"
+    />
+  </div>
+  <nav class="actions">
+    @if (auth.isAuthenticated()) {
+      <a routerLink="/painel" class="btn ghost">Painel</a>
+      <button type="button" class="btn primary" (click)="auth.logout()">
+        Sair
+      </button>
+    } @else {
+      <a routerLink="/auth/login" class="btn ghost">Entrar</a>
+      <a routerLink="/auth/register" class="btn primary">Criar conta</a>
+    }
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero__inner">
+      <div class="hero__logo-slot">
+        <img
+          class="hero__logo"
+          src="/logo-dark.png"
+          width="677"
+          height="369"
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+        />
+      </div>
+      <p class="eyebrow">Gestão de condomínios online</p>
+      <h1>Administre o seu condomínio com clareza e segurança</h1>
+      <p class="lede">
+        O Meu Condomínio centraliza informações, unidades e agrupamentos num só
+        lugar — comece em minutos com a sua conta.
+      </p>
+      <div class="hero__ctas">
+        @if (!auth.isAuthenticated()) {
+          <a routerLink="/auth/register" class="btn primary lg"
+            >Começar gratuitamente</a
+          >
+          <a routerLink="/auth/login" class="btn outline lg">Já tenho conta</a>
+        } @else {
+          <a routerLink="/painel" class="btn primary lg">Ir para o painel</a>
+        }
+      </div>
+    </div>
+    <div class="hero__card" aria-hidden="true">
+      <div class="mock">
+        <div class="mock__row"></div>
+        <div class="mock__row short"></div>
+        <div class="mock__grid">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <article>
+      <h2>Conta e acesso</h2>
+      <p>
+        Registo e início de sessão seguros, para aceder ao painel com o seu
+        email e senha.
+      </p>
+    </article>
+    <article>
+      <h2>Condomínios</h2>
+      <p>
+        Depois de entrar, crie e consulte os condomínios ligados à sua conta,
+        num painel simples e direto.
+      </p>
+    </article>
+    <article>
+      <h2>Próximos passos</h2>
+      <p>
+        A plataforma pode evoluir para cobrir mais do dia a dia do condomínio,
+        sempre com foco em clareza para quem gere e para quem vive no prédio.
+      </p>
+    </article>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-brand">
+    <span class="footer-name">Meu Condomínio</span>
+    <span class="footer-year">· {{ year }}</span>
+  </div>
+  <span class="muted">Plataforma em evolução contínua</span>
+</footer>

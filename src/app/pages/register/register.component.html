@@ -1,0 +1,82 @@
+<div class="page">
+  <a
+    routerLink="/"
+    class="auth-brand"
+    aria-label="Meu Condomínio — início"
+  >
+    <img
+      class="auth-brand-logo"
+      src="/logo-top.png"
+      width="360"
+      height="96"
+      alt=""
+    />
+  </a>
+  <a routerLink="/" class="back">← Início</a>
+
+  <div class="card">
+    <h1>Criar conta</h1>
+    <p class="sub">
+      Email, celular (com DDD) e senha (mín. 8 caracteres) são
+      obrigatórios.
+    </p>
+
+    @if (error()) {
+      <div class="alert" role="alert">{{ error() }}</div>
+    }
+    @if (success()) {
+      <div class="success" role="status">{{ success() }}</div>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label>
+        <span>Email</span>
+        <input type="email" formControlName="email" autocomplete="email" />
+        @for (msg of fieldErrorsPt(form.controls.email); track msg) {
+          <small class="field-error">{{ msg }}</small>
+        }
+      </label>
+
+      <label>
+        <span>Celular</span>
+        <input
+          type="tel"
+          formControlName="phone"
+          appBrPhoneMask
+          placeholder="(61) 99999-8888"
+        />
+        <span class="hint">O mesmo número para receber o código de login por SMS.</span>
+        @for (msg of fieldErrorsPt(form.controls.phone); track msg) {
+          <small class="field-error">{{ msg }}</small>
+        }
+      </label>
+
+      <label>
+        <span>Senha</span>
+        <input
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+        />
+        @for (msg of fieldErrorsPt(form.controls.password); track msg) {
+          <small class="field-error">{{ msg }}</small>
+        }
+      </label>
+
+      <button type="submit" class="btn primary" [disabled]="submitting()">
+        {{ submitting() ? 'A criar…' : 'Registar' }}
+      </button>
+    </form>
+
+    @if (success()) {
+      <button type="button" class="btn secondary" (click)="goLogin()">
+        Ir para login
+      </button>
+    }
+
+    <p class="footer-line">
+      Já tem conta?
+      <a routerLink="/auth/login">Entrar</a>
+    </p>
+  </div>
+</div>

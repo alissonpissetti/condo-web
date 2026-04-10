@@ -1,0 +1,108 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Extrato</h1>
+    <p class="page__intro">
+      Saldos por unidade no período (despesas positivas, receitas repartidas como
+      crédito) e lista de transações.
+    </p>
+  </header>
+
+  <div class="filters card">
+    <div class="row wrap">
+      <label class="field">
+        <span>De</span>
+        <input
+          type="date"
+          class="input"
+          [value]="from()"
+          (input)="setFrom($any($event.target).value)"
+        />
+      </label>
+      <label class="field">
+        <span>Até</span>
+        <input
+          type="date"
+          class="input"
+          [value]="to()"
+          (input)="setTo($any($event.target).value)"
+        />
+      </label>
+      <label class="field grow">
+        <span>Fundo (opcional)</span>
+        <select
+          class="input"
+          [value]="fundFilter()"
+          (change)="setFundFilter($any($event.target).value)"
+        >
+          <option value="">Todos</option>
+          @for (f of funds(); track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="btn primary" (click)="load()">
+        Atualizar
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else if (statement()) {
+    <h2 class="section-title">Por unidade</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Agrupamento</th>
+            <th>Unidade</th>
+            <th class="num">Saldo no período</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of statement()!.byUnit; track r.unitId) {
+            <tr>
+              <td>{{ r.groupingName }}</td>
+              <td>{{ r.unitIdentifier }}</td>
+              <td class="num">{{ formatCentsBrl(r.balanceCents) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (statement()!.byUnit.length === 0) {
+        <p class="empty">Sem movimentos rateados neste período.</p>
+      }
+    </div>
+
+    <h2 class="section-title">Transações</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Título</th>
+            <th>Fundo</th>
+            <th class="num">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of statement()!.transactions; track t.id) {
+            <tr>
+              <td>{{ t.occurredOn }}</td>
+              <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
+              <td>{{ t.title }}</td>
+              <td>{{ t.fundName || '—' }}</td>
+              <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (statement()!.transactions.length === 0) {
+        <p class="empty">Nenhuma transação no período.</p>
+      }
+    </div>
+  }
+</div>

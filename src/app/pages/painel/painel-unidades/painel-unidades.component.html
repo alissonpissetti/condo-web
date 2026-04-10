@@ -1,0 +1,278 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Unidades</h1>
+    <p class="page__intro">
+      Agrupamentos, blocos, torres, internos, externos e suas unidades, você
+      modela seu condomínio aqui.
+    </p>
+  </header>
+
+  @if (actionError(); as ae) {
+    <p class="error" role="alert">{{ ae }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <section class="new-grouping card">
+      <h2 class="card__title">Novo agrupamento</h2>
+      <div class="row">
+        <input
+          type="text"
+          class="input grow"
+          placeholder="Ex.: Bloco A"
+          [value]="newGroupingName()"
+          (input)="setNewGroupingName($any($event.target).value)"
+          [disabled]="busy()"
+        />
+        <button
+          type="button"
+          class="btn primary"
+          (click)="createGrouping()"
+          [disabled]="busy()"
+        >
+          Adicionar
+        </button>
+      </div>
+    </section>
+
+    @for (g of rows(); track g.id) {
+      <section class="card grouping">
+        <div class="grouping__head">
+          @if (editingGroupingId() === g.id) {
+            <div class="row wrap">
+              <input
+                type="text"
+                class="input grow"
+                [value]="groupingNameDraft()"
+                (input)="onGroupingNameInput($event)"
+                [disabled]="busy()"
+              />
+              <button
+                type="button"
+                class="btn primary"
+                (click)="saveGroupingName(g.id)"
+                [disabled]="busy()"
+              >
+                Salvar nome
+              </button>
+              <button
+                type="button"
+                class="btn ghost"
+                (click)="cancelEditGrouping()"
+                [disabled]="busy()"
+              >
+                Cancelar
+              </button>
+            </div>
+          } @else {
+            <div class="row wrap grouping__title-row">
+              <h2 class="card__title">{{ g.name }}</h2>
+              <div class="grouping__actions">
+                <button
+                  type="button"
+                  class="btn ghost sm"
+                  (click)="startEditGrouping(g)"
+                  [disabled]="busy()"
+                >
+                  Editar nome
+                </button>
+                <button
+                  type="button"
+                  class="btn danger sm"
+                  (click)="deleteGrouping(g)"
+                  [disabled]="busy() || !canDeleteGrouping()"
+                  [title]="
+                    !canDeleteGrouping()
+                      ? 'Tem de existir pelo menos um agrupamento.'
+                      : ''
+                  "
+                >
+                  Eliminar agrupamento
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (g.units.length > 0) {
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Identificador</th>
+                  <th>Piso</th>
+                  <th>Notas</th>
+                  <th class="th-actions">
+                    <span class="sr-only">Ações</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (u of g.units; track u.id) {
+                  <tr [attr.id]="'unit-' + u.id">
+                    @if (isEditingUnit(u.id)) {
+                      <td>
+                        <input
+                          type="text"
+                          class="input table-input"
+                          [value]="unitDraft().identifier"
+                          (input)="
+                            patchUnitDraft({
+                              identifier: $any($event.target).value,
+                            })
+                          "
+                          [disabled]="busy()"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          class="input table-input"
+                          [value]="unitDraft().floor"
+                          (input)="
+                            patchUnitDraft({ floor: $any($event.target).value })
+                          "
+                          [disabled]="busy()"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          class="input table-input"
+                          [value]="unitDraft().notes"
+                          (input)="
+                            patchUnitDraft({ notes: $any($event.target).value })
+                          "
+                          [disabled]="busy()"
+                        />
+                      </td>
+                      <td class="td-actions">
+                        <div class="td-actions__inner">
+                          <button
+                            type="button"
+                            class="btn primary sm"
+                            (click)="saveUnit(g.id, u.id)"
+                            [disabled]="busy()"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            (click)="cancelEditUnit()"
+                            [disabled]="busy()"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </td>
+                    } @else {
+                      <td>{{ u.identifier }}</td>
+                      <td>{{ u.floor || '—' }}</td>
+                      <td class="notes">{{ u.notes || '—' }}</td>
+                      <td class="td-actions">
+                        <div class="td-actions__inner">
+                          <button
+                            type="button"
+                            class="icon-btn"
+                            (click)="startEditUnit(u)"
+                            [disabled]="busy()"
+                            [attr.aria-label]="
+                              'Editar unidade ' + u.identifier
+                            "
+                          >
+                            <svg
+                              class="icon-btn__svg"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fill="currentColor"
+                                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.004 1.004 0 0 0 0-1.42l-2.34-2.34a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="icon-btn icon-btn--danger"
+                            (click)="deleteUnit(g.id, u)"
+                            [disabled]="busy()"
+                            [attr.aria-label]="
+                              'Eliminar unidade ' + u.identifier
+                            "
+                          >
+                            <svg
+                              class="icon-btn__svg"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fill="currentColor"
+                                d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="units-empty">Nenhuma unidade neste agrupamento</p>
+        }
+
+        <div class="new-unit">
+          <span class="new-unit__label">Nova unidade</span>
+          <div class="row wrap">
+            <input
+              type="text"
+              class="input"
+              placeholder="Identificador (ex.: 101)"
+              [value]="newUnitFor(g.id).identifier"
+              (input)="
+                patchNewUnit(g.id, {
+                  identifier: $any($event.target).value,
+                })
+              "
+              [disabled]="busy()"
+            />
+            <input
+              type="text"
+              class="input narrow"
+              placeholder="Piso"
+              [value]="newUnitFor(g.id).floor"
+              (input)="
+                patchNewUnit(g.id, { floor: $any($event.target).value })
+              "
+              [disabled]="busy()"
+            />
+            <input
+              type="text"
+              class="input grow"
+              placeholder="Notas (opcional)"
+              [value]="newUnitFor(g.id).notes"
+              (input)="
+                patchNewUnit(g.id, { notes: $any($event.target).value })
+              "
+              [disabled]="busy()"
+            />
+            <button
+              type="button"
+              class="btn primary"
+              (click)="createUnit(g.id)"
+              [disabled]="busy()"
+            >
+              Adicionar unidade
+            </button>
+          </div>
+        </div>
+      </section>
+    }
+  }
+</div>

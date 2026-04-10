@@ -1,0 +1,253 @@
+<section class="dados" aria-labelledby="dados-titulo">
+  <header class="dados__header">
+    <h1 id="dados-titulo">Meus Dados</h1>
+    <p class="dados__intro">Altere seus dados e faça a gestão de sua conta.</p>
+  </header>
+
+  @if (loadError()) {
+    <div class="flash flash--error" role="alert">{{ loadError() }}</div>
+  }
+
+  @if (loading()) {
+    <p class="dados__loading muted">A carregar…</p>
+  } @else if (!loadError()) {
+    <div class="dados__layout">
+      @if (accountSummary(); as sum) {
+        <div class="meta-grid" aria-label="Resumo da conta">
+          <article class="meta-card">
+            <span class="meta-card__label">Conta desde</span>
+            <span class="meta-card__value">{{ sum.createdAtLabel }}</span>
+          </article>
+          <article class="meta-card">
+            <span class="meta-card__label">ID da conta</span>
+            <code class="meta-card__code">{{ sum.id }}</code>
+          </article>
+          @if (personRecordId(); as pid) {
+            <article class="meta-card">
+              <span class="meta-card__label">ID da pessoa</span>
+              <code class="meta-card__code">{{ pid }}</code>
+            </article>
+          }
+        </div>
+      }
+
+      @if (saveError()) {
+        <div class="flash flash--error" role="alert">{{ saveError() }}</div>
+      }
+      @if (saveSuccess()) {
+        <div class="flash flash--ok" role="status">{{ saveSuccess() }}</div>
+      }
+
+      <form class="dados-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <section class="form-card" aria-labelledby="sec-acesso">
+          <div class="form-card__accent" aria-hidden="true"></div>
+          <div class="form-card__body">
+            <div class="form-card__head">
+              <h2 id="sec-acesso" class="form-card__title">Dados de acesso</h2>
+              <p class="form-card__hint">Email e celular usados para entrar na aplicação.</p>
+            </div>
+            <div class="field-grid field-grid--1">
+              <label class="field">
+                <span class="field__label">Email</span>
+                <input type="email" formControlName="email" autocomplete="email" />
+                @for (msg of fieldErrorsPt(form.controls.email); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+              <label class="field">
+                <span class="field__label">Celular</span>
+                <input
+                  type="tel"
+                  formControlName="phone"
+                  appBrPhoneMask
+                  placeholder="(61) 99999-8888"
+                />
+                @for (msg of fieldErrorsPt(form.controls.phone); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="sec-pessoa">
+          <div class="form-card__accent form-card__accent--teal" aria-hidden="true"></div>
+          <div class="form-card__body">
+            <div class="form-card__head">
+              <h2 id="sec-pessoa" class="form-card__title">Identificação e endereço</h2>
+              <p class="form-card__hint">
+                Nome completo para criar ou manter a ficha. Com CEP preenchido, complete
+                o endereço ou use «Buscar CEP».
+              </p>
+            </div>
+
+            <div formGroupName="person" class="field-grid field-grid--person">
+              <label class="field field--span-2">
+                <span class="field__label">Nome completo</span>
+                <input type="text" formControlName="fullName" autocomplete="name" />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.fullName); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field">
+                <span class="field__label">CPF</span>
+                <input
+                  type="text"
+                  formControlName="cpf"
+                  appBrCpfMask
+                  placeholder="000.000.000-00"
+                />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.cpf); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <div class="cep-block field--span-2">
+                <label class="field cep-block__zip">
+                  <span class="field__label">CEP</span>
+                  <input
+                    type="text"
+                    formControlName="addressZip"
+                    appBrCepMask
+                    placeholder="00000-000"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="btn btn--secondary cep-block__btn"
+                  [disabled]="cepLookupLoading()"
+                  (click)="lookupCep()"
+                >
+                  {{ cepLookupLoading() ? 'A consultar…' : 'Buscar CEP' }}
+                </button>
+              </div>
+              @if (cepLookupError()) {
+                <small class="field-error field-error--block field--span-2">{{ cepLookupError() }}</small>
+              }
+
+              <label class="field field--span-2">
+                <span class="field__label">Logradouro</span>
+                <input type="text" formControlName="addressStreet" autocomplete="street-address" />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressStreet); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field">
+                <span class="field__label">Número</span>
+                <input
+                  type="text"
+                  formControlName="addressNumber"
+                  appBrAddressNumberMask
+                  autocomplete="off"
+                  placeholder="Ex.: 123 ou 123-A ou S/N"
+                />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressNumber); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field">
+                <span class="field__label">Complemento</span>
+                <input type="text" formControlName="addressComplement" autocomplete="off" />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressComplement); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field field--span-2">
+                <span class="field__label">Bairro</span>
+                <input type="text" formControlName="addressNeighborhood" autocomplete="off" />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressNeighborhood); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field field--grow">
+                <span class="field__label">Cidade</span>
+                <input type="text" formControlName="addressCity" autocomplete="address-level2" />
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressCity); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field field--uf">
+                <span class="field__label">UF</span>
+                <select formControlName="addressState" autocomplete="address-level1">
+                  <option value="">UF</option>
+                  @for (st of brazilStates; track st.uf) {
+                    <option [value]="st.uf">{{ st.uf }} — {{ st.name }}</option>
+                  }
+                </select>
+                @for (msg of fieldErrorsPt(form.controls.person.controls.addressState); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-card" aria-labelledby="sec-senha">
+          <div class="form-card__accent form-card__accent--amber" aria-hidden="true"></div>
+          <div class="form-card__body">
+            <div class="form-card__head">
+              <h2 id="sec-senha" class="form-card__title">Alterar senha</h2>
+              <p class="form-card__hint">Opcional. Só preencha se quiser definir uma nova senha.</p>
+            </div>
+
+            <div class="field-grid field-grid--senha">
+              <label class="field field--span-2">
+                <span class="field__label">Senha atual</span>
+                <input
+                  type="password"
+                  formControlName="currentPassword"
+                  autocomplete="current-password"
+                />
+              </label>
+              <label class="field">
+                <span class="field__label">Nova senha</span>
+                <input
+                  type="password"
+                  formControlName="newPassword"
+                  autocomplete="new-password"
+                />
+                @for (msg of fieldErrorsPt(form.controls.newPassword); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+              <label class="field">
+                <span class="field__label">Confirmar nova senha</span>
+                <input
+                  type="password"
+                  formControlName="confirmPassword"
+                  autocomplete="new-password"
+                />
+              </label>
+            </div>
+
+            @if (form.touched && form.errors?.['passwordMismatch']) {
+              <p class="field-error field-error--block">As novas senhas não coincidem.</p>
+            }
+            @if (form.touched && form.errors?.['passwordCurrentRequired']) {
+              <p class="field-error field-error--block">
+                Indique a senha atual para salvar a nova.
+              </p>
+            }
+            @if (form.touched && form.errors?.['passwordConfirmWithoutNew']) {
+              <p class="field-error field-error--block">
+                Preencha a nova senha ou apague a confirmação.
+              </p>
+            }
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn--primary" [disabled]="saving()">
+            {{ saving() ? 'A salvar…' : 'Salvar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+</section>

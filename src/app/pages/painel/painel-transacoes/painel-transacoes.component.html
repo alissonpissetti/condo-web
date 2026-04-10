@@ -1,0 +1,236 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Transações</h1>
+    <p class="page__intro">
+      Despesas e receitas com rateio entre unidades (igualitário, por unidade,
+      por agrupamento ou todos exceto selecionados). Receitas podem ser sem
+      repartição.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <div class="filters row wrap">
+      <label class="field grow">
+        <span>Filtrar por fundo</span>
+        <select
+          class="input"
+          [value]="fundFilter()"
+          (change)="setFundFilter($any($event.target).value)"
+        >
+          <option value="">Todos</option>
+          @for (f of funds(); track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    <section class="card form-card">
+      <h2 class="card__title">
+        {{ editingId() ? 'Editar transação' : 'Nova transação' }}
+      </h2>
+      @if (formError(); as fe) {
+        <p class="error" role="alert">{{ fe }}</p>
+      }
+      <div class="grid">
+        <label class="field">
+          <span>Tipo</span>
+          <select
+            class="input"
+            [value]="txKind()"
+            (change)="onTxKindChange($any($event.target).value)"
+          >
+            <option value="expense">Despesa</option>
+            <option value="income">Receita</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Valor (R$)</span>
+          <input
+            type="number"
+            class="input"
+            step="0.01"
+            min="0.01"
+            [value]="amountReais() || ''"
+            (input)="setAmountFromInput($any($event.target).value)"
+          />
+        </label>
+        <label class="field">
+          <span>Data</span>
+          <input
+            type="date"
+            class="input"
+            [value]="occurredOn()"
+            (input)="occurredOn.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field grow">
+          <span>Fundo (opcional)</span>
+          <select
+            class="input"
+            [value]="fundIdForm()"
+            (change)="fundIdForm.set($any($event.target).value)"
+          >
+            <option value="">—</option>
+            @for (f of funds(); track f.id) {
+              <option [value]="f.id">{{ f.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field grow2">
+          <span>Título</span>
+          <input
+            type="text"
+            class="input"
+            [value]="titleTx()"
+            (input)="titleTx.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field grow2">
+          <span>Descrição</span>
+          <input
+            type="text"
+            class="input"
+            [value]="descriptionTx()"
+            (input)="descriptionTx.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field grow2">
+          <span>Rateio</span>
+          <select
+            class="input"
+            [value]="allocKind()"
+            (change)="onAllocKindChange($any($event.target).value)"
+          >
+            <option value="all_units_equal">Todas as unidades (igual)</option>
+            <option value="unit_ids">Unidades selecionadas</option>
+            <option value="grouping_ids">Agrupamentos selecionados</option>
+            <option value="all_units_except">Todas exceto selecionadas</option>
+            @if (txKind() === 'income') {
+              <option value="none">Sem repartição por unidade</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      @if (allocKind() === 'unit_ids') {
+        <div class="pick-list">
+          <span class="pick-list__label">Unidades incluídas</span>
+          <div class="pick-list__items">
+            @for (u of flatUnits(); track u.id) {
+              <label class="pick">
+                <input
+                  type="checkbox"
+                  [checked]="unitInInclude(u.id)"
+                  (change)="toggleUnit(u.id, 'include')"
+                />
+                {{ u.groupingName }} — {{ u.identifier }}
+              </label>
+            }
+          </div>
+        </div>
+      }
+
+      @if (allocKind() === 'grouping_ids') {
+        <div class="pick-list">
+          <span class="pick-list__label">Agrupamentos incluídos</span>
+          <div class="pick-list__items">
+            @for (g of tree(); track g.id) {
+              <label class="pick">
+                <input
+                  type="checkbox"
+                  [checked]="groupingSelected(g.id)"
+                  (change)="toggleGrouping(g.id)"
+                />
+                {{ g.name }}
+              </label>
+            }
+          </div>
+        </div>
+      }
+
+      @if (allocKind() === 'all_units_except') {
+        <div class="pick-list">
+          <span class="pick-list__label">Unidades excluídas do rateio</span>
+          <div class="pick-list__items">
+            @for (u of flatUnits(); track u.id) {
+              <label class="pick">
+                <input
+                  type="checkbox"
+                  [checked]="unitInExclude(u.id)"
+                  (change)="toggleUnit(u.id, 'exclude')"
+                />
+                {{ u.groupingName }} — {{ u.identifier }}
+              </label>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="actions">
+        <button
+          type="button"
+          class="btn primary"
+          (click)="submit()"
+          [disabled]="saving()"
+        >
+          {{ saving() ? 'A salvar…' : editingId() ? 'Salvar' : 'Adicionar' }}
+        </button>
+        @if (editingId()) {
+          <button type="button" class="btn ghost" (click)="resetForm()">
+            Cancelar edição
+          </button>
+        }
+      </div>
+    </section>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Título</th>
+            <th>Fundo</th>
+            <th class="num">Valor</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of transactions(); track t.id) {
+            <tr>
+              <td>{{ t.occurredOn.slice(0, 10) }}</td>
+              <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
+              <td>{{ t.title }}</td>
+              <td>{{ t.fund?.name || '—' }}</td>
+              <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
+              <td class="td-actions">
+                <button
+                  type="button"
+                  class="btn ghost sm"
+                  (click)="startEdit(t)"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  class="btn danger sm"
+                  (click)="remove(t)"
+                >
+                  Eliminar
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (transactions().length === 0) {
+        <p class="empty">Nenhuma transação.</p>
+      }
+    </div>
+  }
+</div>

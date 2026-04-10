@@ -1,0 +1,97 @@
+<div class="shell">
+  <aside class="sidebar" aria-label="Menu principal">
+    <a routerLink="/" class="brand" aria-label="Meu Condomínio — início">
+      <img
+        class="brand-logo"
+        src="/logo-dark.png"
+        width="677"
+        height="369"
+        alt=""
+      />
+    </a>
+
+    <nav class="nav">
+      <a
+        routerLink="/painel/dados"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        >Meus Dados</a
+      >
+      <a
+        routerLink="/painel/condominios"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        >Meus Condomínios</a
+      >
+
+      @if (selectedCondo.selectedId(); as condoId) {
+        <div class="nav-divider" role="separator" aria-hidden="true"></div>
+        <div class="nav-section">
+          <span class="nav-section__label">Gestão</span>
+          <a
+            [routerLink]="['/painel/condominio', condoId, 'editar']"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            >Editar</a
+          >
+          <a
+            [routerLink]="['/painel/condominio', condoId, 'unidades']"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            >Unidades</a
+          >
+          @if (navData.tree().length > 0) {
+            <div class="nav-nested" aria-label="Atalhos por agrupamento">
+              @for (g of navData.tree(); track g.id) {
+                <span class="nav-nested__label">{{ g.name }}</span>
+                @for (u of g.units; track u.id) {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'unidades']"
+                    [fragment]="u.id"
+                    class="nav-nested__link"
+                    >{{ u.identifier }}</a
+                  >
+                }
+              }
+            </div>
+          }
+        </div>
+
+        <div class="nav-divider" role="separator" aria-hidden="true"></div>
+        <div class="nav-section">
+          <span class="nav-section__label">Financeiro</span>
+          <a
+            [routerLink]="['/painel/condominio', condoId, 'transacoes']"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            >Transações</a
+          >
+          <a
+            [routerLink]="['/painel/condominio', condoId, 'extrato']"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            >Extrato</a
+          >
+          <a
+            [routerLink]="['/painel/condominio', condoId, 'fundos']"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            >Fundos</a
+          >
+        </div>
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      <button type="button" class="btn ghost full" (click)="logout()">
+        Sair
+      </button>
+    </div>
+  </aside>
+
+  <div class="main-column">
+    <main class="main">
+      <router-outlet />
+    </main>
+  </div>
+</div>

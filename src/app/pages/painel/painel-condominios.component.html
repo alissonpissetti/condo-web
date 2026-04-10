@@ -1,0 +1,76 @@
+<section class="panel">
+  <h1>Os seus condomínios</h1>
+  <p class="lead">
+    Condomínios associados à sua conta. Pode criar novos abaixo.
+  </p>
+
+  @if (loadError()) {
+    <div class="alert">{{ loadError() }}</div>
+  }
+
+  @if (loadingList()) {
+    <p class="muted">A carregar…</p>
+  } @else if (!condominiums().length && !loadError()) {
+    <p class="muted">Nenhum condomínio encontrado no seu cadastro</p>
+  } @else {
+    <ul class="list" role="list">
+      @for (c of condominiums(); track c.id) {
+        <li [class.is-selected]="isSelected(c.id)">
+          <div class="row-main">
+            <span class="title">{{ c.name }}</span>
+            <span class="meta">{{ c.id }}</span>
+          </div>
+          <button
+            type="button"
+            class="pin"
+            [class.pin--on]="isSelected(c.id)"
+            (click)="selectCondominium(c.id)"
+            [attr.aria-pressed]="isSelected(c.id)"
+            [attr.aria-label]="
+              isSelected(c.id)
+                ? 'Remover seleção guardada para este condomínio'
+                : 'Salvar este condomínio como selecionado ao iniciar sessão'
+            "
+            title="Manter selecionado ao iniciar sessão"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                fill="currentColor"
+                d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+              />
+            </svg>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
+<section class="panel">
+  <h2>Novo condomínio</h2>
+  @if (formError()) {
+    <div class="alert">{{ formError() }}</div>
+  }
+  <form [formGroup]="form" (ngSubmit)="create()" novalidate>
+    <label>
+      <span>Nome</span>
+      <input
+        type="text"
+        formControlName="name"
+        placeholder="Ex.: Residencial Alpha"
+      />
+      @for (msg of fieldErrorsPt(form.controls.name); track msg) {
+        <small class="field-error">{{ msg }}</small>
+      }
+    </label>
+    <button type="submit" class="btn primary" [disabled]="saving()">
+      {{ saving() ? 'A criar…' : 'Criar' }}
+    </button>
+  </form>
+</section>

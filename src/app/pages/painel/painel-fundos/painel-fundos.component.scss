@@ -1,0 +1,155 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.page {
+  max-width: 44rem;
+  padding: 0 0 2.5rem;
+}
+
+.page__header {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.3rem, 2.2vw, 1.55rem);
+  font-weight: 700;
+}
+
+.page__intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, #c0392b 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, #c0392b 28%, var(--border));
+  font-size: 0.88rem;
+}
+
+.card {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.card__title {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.grow {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.btn {
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.55rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+
+  &.sm {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  &.primary {
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+  }
+
+  &.danger {
+    background: color-mix(in srgb, #c0392b 14%, var(--surface));
+    border-color: color-mix(in srgb, #c0392b 35%, var(--border));
+  }
+}
+
+.table-wrap {
+  border-radius: 0.55rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+
+  th,
+  td {
+    padding: 0.45rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    background: var(--surface-2);
+  }
+}
+
+.td-right {
+  text-align: right;
+}
+
+.empty {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}

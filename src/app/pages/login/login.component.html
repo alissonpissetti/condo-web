@@ -1,0 +1,154 @@
+<div class="page">
+  <a
+    routerLink="/"
+    class="auth-brand"
+    aria-label="Meu Condomínio — início"
+  >
+    <img
+      class="auth-brand-logo"
+      src="/logo-dark.png"
+      width="360"
+      height="96"
+      alt=""
+    />
+  </a>
+  <a routerLink="/" class="back">← Início</a>
+
+  <div class="card">
+    <h1>Entrar</h1>
+    <p class="sub">Email e senha, ou código enviado por SMS ao seu número registado.</p>
+
+    <div class="mode-tabs" role="tablist" aria-label="Forma de início de sessão">
+      <button
+        type="button"
+        class="mode-tab"
+        role="tab"
+        [attr.aria-selected]="loginMode() === 'email'"
+        [class.active]="loginMode() === 'email'"
+        (click)="setMode('email')"
+      >
+        Email e senha
+      </button>
+      <button
+        type="button"
+        class="mode-tab"
+        role="tab"
+        [attr.aria-selected]="loginMode() === 'sms'"
+        [class.active]="loginMode() === 'sms'"
+        (click)="setMode('sms')"
+      >
+        SMS
+      </button>
+    </div>
+
+    @if (error()) {
+      <div class="alert" role="alert">{{ error() }}</div>
+    }
+
+    @if (loginMode() === 'email') {
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <label>
+          <span>Email</span>
+          <input type="email" formControlName="email" autocomplete="email" />
+          @for (msg of fieldErrorsPt(form.controls.email); track msg) {
+            <small class="field-error">{{ msg }}</small>
+          }
+        </label>
+
+        <label>
+          <span>Senha</span>
+          <input
+            type="password"
+            formControlName="password"
+            autocomplete="current-password"
+          />
+          @for (msg of fieldErrorsPt(form.controls.password); track msg) {
+            <small class="field-error">{{ msg }}</small>
+          }
+        </label>
+
+        <button type="submit" class="btn primary" [disabled]="submitting()">
+          {{ submitting() ? 'A entrar…' : 'Entrar' }}
+        </button>
+      </form>
+    } @else {
+      @if (smsInfo()) {
+        <div class="info" role="status">{{ smsInfo() }}</div>
+      }
+
+      <form [formGroup]="smsForm" (ngSubmit)="onSmsFormSubmit()" novalidate>
+        <label>
+          <span>Celular</span>
+          <input
+            type="tel"
+            formControlName="phone"
+            appBrPhoneMask
+            placeholder="(61) 99999-8888"
+            [attr.readonly]="smsAwaitingCode() ? true : null"
+            [class.readonly-like]="smsAwaitingCode()"
+          />
+          @for (msg of fieldErrorsPt(smsForm.controls.phone); track msg) {
+            <small class="field-error">{{ msg }}</small>
+          }
+        </label>
+
+        @if (smsAwaitingCode()) {
+          <label>
+            <span>Código de 6 dígitos</span>
+            <input
+              type="text"
+              formControlName="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              placeholder="000000"
+              class="code-input"
+            />
+            @for (msg of fieldErrorsPt(smsForm.controls.code); track msg) {
+              <small class="field-error">{{ msg }}</small>
+            }
+          </label>
+
+          <div class="sms-actions">
+            <button
+              type="button"
+              class="btn ghost"
+              [disabled]="smsSending()"
+              (click)="changeSmsNumber()"
+            >
+              Alterar número
+            </button>
+            <button
+              type="button"
+              class="btn secondary"
+              [disabled]="smsSending()"
+              (click)="requestSmsCode()"
+            >
+              {{ smsSending() ? 'A enviar…' : 'Reenviar código' }}
+            </button>
+          </div>
+        }
+
+        @if (!smsAwaitingCode()) {
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="smsSending()"
+            (click)="requestSmsCode()"
+          >
+            {{ smsSending() ? 'A enviar…' : 'Receber código por SMS' }}
+          </button>
+        } @else {
+          <button type="submit" class="btn primary" [disabled]="smsVerifying()">
+            {{ smsVerifying() ? 'A entrar…' : 'Entrar com o código' }}
+          </button>
+        }
+      </form>
+    }
+
+    <p class="footer-line">
+      Ainda sem conta?
+      <a routerLink="/auth/register">Criar registo</a>
+    </p>
+  </div>
+</div>

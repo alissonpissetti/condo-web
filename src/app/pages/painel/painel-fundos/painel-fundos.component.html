@@ -1,0 +1,79 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Fundos</h1>
+    <p class="page__intro">
+      Fundos temporários ou permanentes (obras, internet, etc.) para associar às
+      transações e filtrar extratos.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <section class="card">
+      <h2 class="card__title">Novo fundo</h2>
+      <form class="form" (ngSubmit)="create()" novalidate>
+        @if (formError(); as fe) {
+          <p class="error" role="alert">{{ fe }}</p>
+        }
+        <div class="row wrap">
+          <input
+            type="text"
+            class="input grow"
+            formControlName="name"
+            placeholder="Nome do fundo"
+          />
+          <label class="check">
+            <input type="checkbox" formControlName="isTemporary" />
+            Temporário
+          </label>
+          <input
+            type="date"
+            class="input"
+            formControlName="endsAt"
+            title="Data fim (opcional)"
+          />
+          <button type="submit" class="btn primary" [disabled]="saving()">
+            {{ saving() ? 'A salvar…' : 'Adicionar' }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Fim</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (f of funds(); track f.id) {
+            <tr>
+              <td>{{ f.name }}</td>
+              <td>{{ f.isTemporary ? 'Temporário' : 'Permanente' }}</td>
+              <td>{{ f.endsAt || '—' }}</td>
+              <td class="td-right">
+                <button
+                  type="button"
+                  class="btn danger sm"
+                  (click)="remove(f)"
+                >
+                  Eliminar
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (funds().length === 0) {
+        <p class="empty">Nenhum fundo cadastrado.</p>
+      }
+    </div>
+  }
+</div>
