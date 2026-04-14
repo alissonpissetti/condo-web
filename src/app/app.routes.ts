@@ -20,6 +20,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'invitations/:token',
+    loadComponent: () =>
+      import('./pages/invite-landing/invite-landing.component').then(
+        (m) => m.InviteLandingComponent,
+      ),
+  },
+  {
     path: 'auth/forgot-password',
     loadComponent: () =>
       import('./pages/forgot-password/forgot-password.component').then(

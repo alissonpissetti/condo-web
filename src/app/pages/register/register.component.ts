@@ -10,7 +10,10 @@ import { translateHttpErrorMessage } from '../../core/api-errors-pt';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { AuthService } from '../../core/auth.service';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
-import { InvitesPublicService } from '../../core/invites-public.service';
+import {
+  InvitesPublicService,
+  type InvitePreview,
+} from '../../core/invites-public.service';
 
 @Component({
   selector: 'app-register',
@@ -31,12 +34,7 @@ export class RegisterComponent {
   protected readonly success = signal<string | null>(null);
   protected readonly submitting = signal(false);
   protected readonly inviteToken = signal<string | null>(null);
-  protected readonly invitePreview = signal<{
-    condominiumName: string;
-    unitIdentifier: string;
-    emailMasked: string;
-    roles: string[];
- } | null>(null);
+  protected readonly invitePreview = signal<InvitePreview | null>(null);
   protected readonly invitePreviewError = signal<string | null>(null);
 
   protected readonly form = this.fb.nonNullable.group({
@@ -59,12 +57,7 @@ export class RegisterComponent {
       this.inviteToken.set(t);
       this.invites.preview(t).subscribe({
         next: (p) => {
-          this.invitePreview.set({
-            condominiumName: p.condominiumName,
-            unitIdentifier: p.unitIdentifier,
-            emailMasked: p.emailMasked,
-                       roles: p.roles,
-          });
+          this.invitePreview.set(p);
         },
         error: (err: HttpErrorResponse) => {
           this.invitePreviewError.set(
@@ -126,8 +119,15 @@ export class RegisterComponent {
       .subscribe({
         next: () => {
           this.submitting.set(false);
+                   const pr = this.invitePreview();
+          const kind = pr?.inviteKind;
+          const uid = pr?.unitIdentifier;
           this.success.set(
-            'Conta criada e unidade associada. Pode iniciar sessão.',
+            kind === 'condominium'
+              ? uid
+                ? `Conta criada. Ficou como responsável pela unidade ${uid}. Pode iniciar sessão.`
+                : 'Conta criada com acesso ao condomínio. Pode iniciar sessão.'
+              : 'Conta criada e unidade associada. Pode iniciar sessão.',
           );
         },
         error: (err: HttpErrorResponse) => {

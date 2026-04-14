@@ -51,6 +51,18 @@
                 [routerLinkActiveOptions]="{ exact: true }"
                 >Unidades</a
               >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'convites']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Convites</a
+              >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'membros']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Membros</a
+              >
               @if (navData.tree().length > 0) {
                 <div class="nav-subsection">
                   <button

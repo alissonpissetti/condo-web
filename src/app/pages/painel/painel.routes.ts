@@ -37,6 +37,22 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/convites',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-convites/painel-convites.component').then(
+            (m) => m.PainelConvitesComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/membros',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-membros/painel-membros.component').then(
+            (m) => m.PainelMembrosComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/transacoes',
         canActivate: [selectedCondominiumGuard],
         loadComponent: () =>

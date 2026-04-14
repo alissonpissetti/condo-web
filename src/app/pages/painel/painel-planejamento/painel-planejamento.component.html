@@ -1,182 +1,470 @@
 <div class="page">
   <header class="page__header">
-    <h1>Planejamento</h1>
+    <h1>Pautas</h1>
     <p class="page__intro">
-      Pautas de assembleia, votação por unidade e geração de atas (PDF).
+      Crie assembleias com várias opções de voto, escolha única ou múltipla por unidade,
+      descrição em texto formatado e anexos de referência. Encerre a votação, registe a
+      decisão e gere o rascunho da ata em PDF.
     </p>
   </header>
 
   @if (actionError(); as ae) {
-    <p class="error" role="alert">{{ ae }}</p>
+    <p class="plan-banner plan-banner--error" role="alert">{{ ae }}</p>
   }
 
   @if (loading()) {
     <p class="muted">A carregar…</p>
   } @else if (loadError()) {
-    <p class="error" role="alert">{{ loadError() }}</p>
+    <p class="plan-banner plan-banner--error" role="alert">{{ loadError() }}</p>
   } @else {
-    @if (isSyndicOrOwner()) {
-      <section class="card">
-        <h2 class="card__title">Nova pauta</h2>
-        <form [formGroup]="createForm" (ngSubmit)="createPoll()" class="form-grid">
-          <label>
-            <span>Título</span>
-            <input class="input" type="text" formControlName="title" />
-          </label>
-          <label class="full">
-            <span>Texto (opcional)</span>
-            <textarea class="input" rows="3" formControlName="body"></textarea>
-          </label>
-          <label>
-            <span>Abre em</span>
-            <input class="input" type="datetime-local" formControlName="opensAt" />
-          </label>
-          <label>
-            <span>Encerra em</span>
-            <input class="input" type="datetime-local" formControlName="closesAt" />
-          </label>
-          <label>
-            <span>Tipo de assembleia</span>
-            <select class="input" formControlName="assemblyType">
-              <option value="ordinary">Ordinária</option>
-              <option value="election">Eleição</option>
-            </select>
-          </label>
-          <label>
-            <span>Opção A</span>
-            <input class="input" type="text" formControlName="optionA" />
-          </label>
-          <label>
-            <span>Opção B</span>
-            <input class="input" type="text" formControlName="optionB" />
-          </label>
-          <div class="full">
-            <button type="submit" class="btn primary" [disabled]="busy()">
-              Criar rascunho
-            </button>
+    <div class="plan-stack">
+      @if (isSyndicOrOwner()) {
+        <section class="form-card plan-create-card">
+          <div class="form-card__head">
+            <h2 class="form-card__title">Nova pauta</h2>
+            <p class="form-card__lede">
+              Indique assunto, período e descrição; depois as opções de voto (mínimo 2). Em
+              assembleias <strong>ordinárias</strong> pode permitir escolha múltipla.
+            </p>
           </div>
-        </form>
-      </section>
-    }
+          <form
+            class="fund-form"
+            [formGroup]="createForm"
+            (ngSubmit)="createPoll()"
+            novalidate
+          >
+            <div class="form-section">
+              <div class="form-section__head">
+                <span class="form-section__step" aria-hidden="true">1</span>
+                <div>
+                  <h3 class="form-section__title">Assunto e período</h3>
+                  <p class="form-section__hint">Título nas listas e nas atas.</p>
+                </div>
+              </div>
+              <div class="plan-create-step1-stack">
+                <label class="field field--block plan-create-title">
+                  <span class="field__label">Título</span>
+                  <input
+                    type="text"
+                    class="input input--lg plan-create-title__input"
+                    formControlName="title"
+                    autocomplete="off"
+                  />
+                </label>
+                <div class="plan-create-pair">
+                  <label class="field field--block">
+                    <span class="field__label">Abre em</span>
+                    <input
+                      class="input plan-create-pair__control"
+                      type="datetime-local"
+                      formControlName="opensAt"
+                    />
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Encerra em</span>
+                    <input
+                      class="input plan-create-pair__control"
+                      type="datetime-local"
+                      formControlName="closesAt"
+                    />
+                  </label>
+                </div>
+                <div class="plan-create-pair">
+                  <label class="field field--block">
+                    <span class="field__label">Tipo de assembleia</span>
+                    <select
+                      class="input plan-create-pair__control"
+                      formControlName="assemblyType"
+                    >
+                      <option value="ordinary">Ordinária</option>
+                      <option value="election">Eleição</option>
+                    </select>
+                  </label>
+                  <div
+                    class="field field--block plan-toggle"
+                    [class.plan-toggle--disabled]="
+                      createForm.getRawValue().assemblyType === 'election'
+                    "
+                  >
+                    <span class="field__label">Votação</span>
+                    <label class="plan-check-line">
+                      <input
+                        type="checkbox"
+                        formControlName="allowMultiple"
+                        [disabled]="
+                          createForm.getRawValue().assemblyType === 'election'
+                        "
+                      />
+                      <span>Múltipla por unidade</span>
+                    </label>
+                    @if (createForm.getRawValue().assemblyType === 'election') {
+                      <p class="form-section__hint plan-hint-tight">
+                        Eleições: escolha única.
+                      </p>
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
 
-    <section class="card">
-      <h2 class="card__title">Pautas</h2>
-      @if (polls().length === 0) {
-        <p class="muted">Nenhuma pauta ainda.</p>
-      } @else {
-        <ul class="poll-list">
-          @for (p of polls(); track p.id) {
-            <li>
-              <button type="button" class="poll-item" (click)="selectPoll(p)">
-                <span class="poll-item__title">{{ p.title }}</span>
-                <span class="muted sm">{{ p.status }} · {{ p.assemblyType }}</span>
+            <div class="form-section">
+              <div class="form-section__head">
+                <span class="form-section__step" aria-hidden="true">2</span>
+                <div>
+                  <h3 class="form-section__title">Descrição</h3>
+                  <p class="form-section__hint">
+                    Opcional. Texto formatado para os participantes.
+                  </p>
+                </div>
+              </div>
+              <app-poll-body-editor formControlName="body"></app-poll-body-editor>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section__head">
+                <span class="form-section__step" aria-hidden="true">3</span>
+                <div>
+                  <h3 class="form-section__title">Opções de resposta</h3>
+                  <p class="form-section__hint">Até 24 opções.</p>
+                </div>
+              </div>
+              <div class="plan-options" formArrayName="options">
+                @for (ctrl of optionsArray.controls; track $index) {
+                  <div class="plan-option-row">
+                    <span class="plan-option-row__idx">{{ $index + 1 }}</span>
+                    <input
+                      type="text"
+                      class="input plan-option-row__input"
+                      placeholder="Texto da opção"
+                      [formControlName]="$index"
+                    />
+                    @if (optionsArray.length > 2) {
+                      <button
+                        type="button"
+                        class="btn ghost sm plan-option-row__rm"
+                        (click)="removeOptionRow($index)"
+                      >
+                        Remover
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+              <button
+                type="button"
+                class="btn ghost plan-add-opt"
+                (click)="addOptionRow()"
+                [disabled]="optionsArray.length >= 24 || busy()"
+              >
+                + Adicionar opção
               </button>
-            </li>
-          }
-        </ul>
-      }
-    </section>
+            </div>
 
-    @if (selected(); as p) {
-      <section class="card">
-        <h2 class="card__title">{{ p.title }}</h2>
-        <p class="muted">Estado: {{ p.status }}</p>
-        @if (p.body) {
-          <p>{{ p.body }}</p>
-        }
-        <ul>
-          @for (o of p.options ?? []; track o.id) {
-            <li>{{ o.label }}</li>
-          }
-        </ul>
-
-        @if (p.status === 'open') {
-          <form [formGroup]="voteForm" (ngSubmit)="castVote(p)" class="vote-form">
-            <h3>O seu voto (por unidade)</h3>
-            <label>
-              <span>Unidade</span>
-              <select class="input" formControlName="unitId">
-                <option value="">—</option>
-                @for (u of myUnits(); track u.id) {
-                  <option [value]="u.id">{{ u.identifier }}</option>
-                }
-              </select>
-            </label>
-            <label>
-              <span>Opção</span>
-              <select class="input" formControlName="optionId">
-                <option value="">—</option>
-                @for (o of p.options ?? []; track o.id) {
-                  <option [value]="o.id">{{ o.label }}</option>
-                }
-              </select>
-            </label>
-            <button type="submit" class="btn primary" [disabled]="busy()">
-              Submeter voto
-            </button>
+            <div class="form-section plan-submit-wrap">
+              <button type="submit" class="btn primary" [disabled]="busy()">
+                Criar rascunho
+              </button>
+            </div>
           </form>
-        }
+        </section>
+      }
 
-        @if (isMgmt() && results(); as r) {
-          <div class="results">
-            <h3>Resultados</h3>
-            <ul>
-              @for (o of r.options; track o.id) {
-                <li>{{ o.label }}: {{ o.votes }}</li>
+      <section class="form-card plan-list-card">
+          <div class="form-card__head">
+            <h2 class="form-card__title">Pautas</h2>
+            <p class="form-card__lede">Selecione para ver detalhe, votar ou gerir.</p>
+          </div>
+          <div class="plan-list-body">
+            @if (polls().length === 0) {
+              <p class="muted plan-list-empty">Nenhuma pauta ainda.</p>
+            } @else {
+              <ul class="plan-poll-list">
+                @for (p of polls(); track p.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="plan-poll-tile"
+                      [class.plan-poll-tile--active]="selected()?.id === p.id"
+                      (click)="selectPoll(p)"
+                    >
+                      <span class="plan-poll-tile__title">{{ p.title }}</span>
+                      <span class="plan-poll-tile__meta">
+                        <span class="plan-pill plan-pill--{{ p.status }}">{{
+                          statusLabel(p.status)
+                        }}</span>
+                        <span class="plan-pill plan-pill--neutral">{{
+                          assemblyLabel(p.assemblyType)
+                        }}</span>
+                        @if (pollAllowsMulti(p)) {
+                          <span class="plan-pill plan-pill--multi">Múltipla</span>
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        </section>
+
+      @if (selected(); as p) {
+        <section class="form-card plan-detail">
+            <div class="form-card__head plan-detail__head">
+              <div>
+                <h2 class="form-card__title">{{ p.title }}</h2>
+                <p class="form-card__lede plan-detail__lede">
+                  {{ fmtDate(p.opensAt) }} — {{ fmtDate(p.closesAt) }}
+                </p>
+              </div>
+              <div class="plan-detail__badges">
+                <span class="plan-pill plan-pill--{{ p.status }}">{{
+                  statusLabel(p.status)
+                }}</span>
+                @if (pollAllowsMulti(p)) {
+                  <span class="plan-pill plan-pill--multi">Escolha múltipla</span>
+                } @else {
+                  <span class="plan-pill plan-pill--neutral">Escolha única</span>
+                }
+              </div>
+            </div>
+
+            <div class="plan-detail__body">
+              @if (!editingBody() && p.body) {
+                <div class="poll-body-html" [innerHTML]="p.body"></div>
               }
-            </ul>
-            <p class="muted">Total de votos: {{ r.totalVotes }}</p>
-          </div>
-        }
+              @if (canEditPollContent(p)) {
+                @if (!editingBody()) {
+                  <div class="plan-body-actions">
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="startEditBody()"
+                    >
+                      Editar descrição
+                    </button>
+                  </div>
+                } @else {
+                  <form
+                    class="plan-body-edit"
+                    [formGroup]="bodyEditForm"
+                    (ngSubmit)="saveBody(p)"
+                  >
+                    <app-poll-body-editor formControlName="body"></app-poll-body-editor>
+                    <div class="plan-body-edit__actions">
+                      <button type="submit" class="btn primary sm" [disabled]="busy()">
+                        Guardar descrição
+                      </button>
+                      <button
+                        type="button"
+                        class="btn ghost sm"
+                        [disabled]="busy()"
+                        (click)="cancelEditBody()"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                }
+              }
 
-        @if (isSyndicOrOwner()) {
-          <div class="mgmt-actions">
-            @if (p.status === 'draft') {
-              <button
-                type="button"
-                class="btn primary"
-                [disabled]="busy()"
-                (click)="openPoll(p)"
-              >
-                Abrir votação
-              </button>
-            }
-            @if (p.status === 'open') {
-              <button
-                type="button"
-                class="btn ghost"
-                [disabled]="busy()"
-                (click)="closePoll(p)"
-              >
-                Encerrar
-              </button>
-            }
-            @if (p.status === 'closed') {
-              <form [formGroup]="decideForm" (ngSubmit)="decide(p)" class="row">
-                <select class="input" formControlName="optionId">
-                  <option value="">Opção decidida</option>
+              <div class="plan-attachments">
+                <h3 class="plan-subtitle">Anexos</h3>
+                @if ((p.attachments?.length ?? 0) === 0) {
+                  <p class="muted plan-attachments__empty">Nenhum anexo.</p>
+                } @else {
+                  <ul class="plan-attachments__list">
+                    @for (a of p.attachments ?? []; track a.id) {
+                      <li class="plan-attachments__row">
+                        <button
+                          type="button"
+                          class="plan-attachments__link"
+                          (click)="downloadAttachment(p, a)"
+                        >
+                          {{ a.originalFilename }}
+                        </button>
+                        <span class="muted sm plan-attachments__meta"
+                          >{{ formatBytes(a.sizeBytes) }}</span
+                        >
+                        @if (canEditPollContent(p)) {
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            [disabled]="busy()"
+                            (click)="removeAttachment(p, a)"
+                          >
+                            Remover
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (canEditPollContent(p)) {
+                  <label class="btn ghost sm plan-attachments__add">
+                    Adicionar ficheiro
+                    <input
+                      type="file"
+                      class="sr-only"
+                      [disabled]="busy()"
+                      accept=".pdf,.doc,.docx,.txt,image/*"
+                      (change)="onAttachmentSelected(p, $event)"
+                    />
+                  </label>
+                  <p class="form-section__hint plan-hint-tight">
+                    PDF, Word, texto ou imagem. Pode anexar quantos precisar (máx. 20 MB
+                    cada). Disponível em rascunho ou votação aberta.
+                  </p>
+                }
+              </div>
+
+              <div class="plan-options-preview">
+                <h3 class="plan-subtitle">Opções</h3>
+                <ol class="plan-options-preview__list">
                   @for (o of p.options ?? []; track o.id) {
-                    <option [value]="o.id">{{ o.label }}</option>
+                    <li>{{ o.label }}</li>
                   }
-                </select>
-                <button type="submit" class="btn primary" [disabled]="busy()">
-                  Registar decisão
-                </button>
-              </form>
-            }
-            @if (p.status === 'closed' || p.status === 'decided') {
-              <button
-                type="button"
-                class="btn ghost"
-                [disabled]="busy()"
-                (click)="generateMinutes(p)"
-              >
-                Gerar PDF da ata
-              </button>
-            }
-          </div>
-        }
-      </section>
-    }
+                </ol>
+              </div>
+
+              @if (p.status === 'open') {
+                <div class="plan-vote-block">
+                  <h3 class="plan-subtitle">O seu voto</h3>
+                  <p class="form-section__hint">
+                    @if (pollAllowsMulti(p)) {
+                      Pode assinalar várias opções. Submeter substitui o voto anterior desta
+                      unidade.
+                    } @else {
+                      Toque numa opção para escolher. Submeter substitui o voto anterior.
+                    }
+                  </p>
+                  <form [formGroup]="voteForm" (ngSubmit)="castVote(p)">
+                    <label class="field field--block">
+                      <span class="field__label">Unidade</span>
+                      <select class="input" formControlName="unitId">
+                        <option value="">—</option>
+                        @for (u of myUnits(); track u.id) {
+                          <option [value]="u.id">{{ u.identifier }}</option>
+                        }
+                      </select>
+                    </label>
+                    <div
+                      class="plan-choice-grid"
+                      role="group"
+                      [attr.aria-label]="
+                        pollAllowsMulti(p)
+                          ? 'Opções (múltipla escolha)'
+                          : 'Opções (escolha única)'
+                      "
+                    >
+                      @for (o of p.options ?? []; track o.id) {
+                        <button
+                          type="button"
+                          class="plan-choice-card"
+                          [class.plan-choice-card--on]="isVoteOptionSelected(o.id)"
+                          (click)="toggleVoteOption(p, o.id)"
+                        >
+                          <span
+                            class="plan-choice-card__check"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="plan-choice-card__label">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
+                    <button type="submit" class="btn primary plan-vote-submit" [disabled]="busy()">
+                      Submeter voto
+                    </button>
+                  </form>
+                </div>
+              }
+
+              @if (isMgmt() && results(); as r) {
+                <div class="plan-results">
+                  <h3 class="plan-subtitle">Resultados</h3>
+                  <p class="plan-results__summary muted">
+                    {{ r.unitsVoted }} unidade(s) votaram ·
+                    {{ r.totalOptionSelections }} marcações no total
+                    @if (r.allowMultiple) {
+                      <span class="plan-results__note"> (pauta de escolha múltipla)</span>
+                    }
+                  </p>
+                  <ul class="plan-result-bars">
+                    @for (o of r.options; track o.id) {
+                      <li class="plan-result-row">
+                        <div class="plan-result-row__top">
+                          <span class="plan-result-row__label">{{ o.label }}</span>
+                          <span class="plan-result-row__n">{{ o.votes }}</span>
+                        </div>
+                        <div class="plan-result-bar" aria-hidden="true">
+                          <div
+                            class="plan-result-bar__fill"
+                            [style.width.%]="resultBarPercent(o.votes, r)"
+                          ></div>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (isSyndicOrOwner()) {
+                <div class="plan-mgmt">
+                  @if (p.status === 'draft') {
+                    <button
+                      type="button"
+                      class="btn primary"
+                      [disabled]="busy()"
+                      (click)="openPoll(p)"
+                    >
+                      Abrir votação
+                    </button>
+                  }
+                  @if (p.status === 'open') {
+                    <button
+                      type="button"
+                      class="btn ghost"
+                      [disabled]="busy()"
+                      (click)="closePoll(p)"
+                    >
+                      Encerrar
+                    </button>
+                  }
+                  @if (p.status === 'closed') {
+                    <form
+                      [formGroup]="decideForm"
+                      (ngSubmit)="decide(p)"
+                      class="plan-decide"
+                    >
+                      <label class="field field--grow">
+                        <span class="field__label">Opção decidida (ata)</span>
+                        <select class="input" formControlName="optionId">
+                          <option value="">—</option>
+                          @for (o of p.options ?? []; track o.id) {
+                            <option [value]="o.id">{{ o.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <button type="submit" class="btn primary" [disabled]="busy()">
+                        Registar decisão
+                      </button>
+                    </form>
+                  }
+                  @if (p.status === 'closed' || p.status === 'decided') {
+                    <button
+                      type="button"
+                      class="btn ghost"
+                      [disabled]="busy()"
+                      (click)="generateMinutes(p)"
+                    >
+                      Gerar PDF da ata
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+        </section>
+      }
+    </div>
   }
 </div>

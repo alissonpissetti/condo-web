@@ -1,9 +1,14 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
-export type GovernanceRole = 'owner' | 'syndic' | 'admin';
+export type GovernanceRole =
+  | 'owner'
+  | 'syndic'
+  | 'sub_syndic'
+  | 'admin'
+  | 'member';
 
 export type CondoAccess =
   | { kind: 'owner' }
@@ -30,6 +35,18 @@ export interface PlanningPollOption {
   sortOrder: number;
 }
 
+export interface PlanningPollAttachment {
+  id: string;
+  pollId: string;
+  storageKey: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  uploadedByUserId: string;
+  createdAt: string;
+}
+
 export interface PlanningPoll {
   id: string;
   condominiumId: string;
@@ -39,9 +56,12 @@ export interface PlanningPoll {
   closesAt: string;
   status: PollStatus;
   assemblyType: AssemblyType;
+  /** Escolha múltipla por unidade (assembleias ordinárias). */
+  allowMultiple?: boolean;
   decidedOptionId: string | null;
   createdByUserId: string;
   options?: PlanningPollOption[];
+  attachments?: PlanningPollAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -49,8 +69,12 @@ export interface PlanningPoll {
 export interface PollResults {
   pollId: string;
   status: PollStatus;
+  allowMultiple?: boolean;
   options: { id: string; label: string; votes: number }[];
-  totalVotes: number;
+  /** Unidades distintas que submeteram voto. */
+  unitsVoted: number;
+  /** Soma das marcações em todas as opções (≥ unidades se multi). */
+  totalOptionSelections: number;
 }
 
 export interface CondominiumDocumentRow {
@@ -84,12 +108,34 @@ export class PlanningApiService {
     );
   }
 
+  lookupParticipantUser(
+    condominiumId: string,
+    email: string,
+  ): Observable<{
+    userId: string;
+    email: string;
+    personId: string | null;
+    fullName: string | null;
+    isOwner: boolean;
+  }> {
+    const params = new HttpParams().set('email', email.trim());
+    return this.http.get<{
+      userId: string;
+      email: string;
+      personId: string | null;
+      fullName: string | null;
+      isOwner: boolean;
+    }>(`${this.base}/condominiums/${condominiumId}/participants/lookup-user`, {
+      params,
+    });
+  }
+
   createParticipant(
     condominiumId: string,
     body: {
       userId: string;
       personId?: string | null;
-      role: Exclude<GovernanceRole, 'owner'>;
+      role: 'syndic' | 'sub_syndic' | 'admin';
     },
   ): Observable<CondominiumParticipant> {
     return this.http.post<CondominiumParticipant>(
@@ -144,6 +190,7 @@ export class PlanningApiService {
       opensAt: string;
       closesAt: string;
       assemblyType: AssemblyType;
+      allowMultiple?: boolean;
       options: { label: string }[];
     },
   ): Observable<PlanningPoll> {
@@ -181,11 +228,61 @@ export class PlanningApiService {
   castVote(
     condominiumId: string,
     pollId: string,
-    body: { unitId: string; optionId: string },
+    body: { unitId: string; optionIds: string[] },
   ): Observable<unknown> {
     return this.http.post(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/votes`,
       body,
+    );
+  }
+
+  updatePoll(
+    condominiumId: string,
+    pollId: string,
+    patch: {
+      body?: string;
+      title?: string;
+      opensAt?: string;
+      closesAt?: string;
+    },
+  ): Observable<PlanningPoll> {
+    return this.http.patch<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}`,
+      patch,
+    );
+  }
+
+  uploadPollAttachment(
+    condominiumId: string,
+    pollId: string,
+    file: File,
+  ): Observable<PlanningPoll> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return this.http.post<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/attachments`,
+      fd,
+    );
+  }
+
+  deletePollAttachment(
+    condominiumId: string,
+    pollId: string,
+    attachmentId: string,
+  ): Observable<PlanningPoll> {
+    return this.http.delete<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/attachments/${attachmentId}`,
+    );
+  }
+
+  downloadPollAttachmentBlob(
+    condominiumId: string,
+    pollId: string,
+    attachmentId: string,
+  ): Observable<Blob> {
+    return this.http.get(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/attachments/${attachmentId}/file`,
+      { responseType: 'blob' },
     );
   }
 

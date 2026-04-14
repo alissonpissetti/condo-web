@@ -4,8 +4,9 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface InvitePreview {
+  inviteKind: 'unit' | 'condominium';
   condominiumName: string;
-  unitIdentifier: string;
+  unitIdentifier?: string;
   emailMasked: string;
   roles: string[];
   expiresAt: string;

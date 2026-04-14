@@ -4,7 +4,7 @@
     <p class="page__intro">
       Agrupamentos, blocos, torres, internos, externos e suas unidades, você
       modela seu condomínio aqui. Convites por email usam o registo com token
-      (<code>?inviteToken=</code> na API e no link enviado); titular, síndico ou
+      (<code>?inviteToken=</code> na API e no link enviado); síndico ou
       administrador podem listar convites pendentes em
       <code>GET …/units/:id/people/invitations</code>.
     </p>
@@ -106,7 +106,7 @@
               <thead>
                 <tr>
                   <th>Identificador</th>
-                  <th>Piso</th>
+                  <th>Responsável</th>
                   <th>Notas</th>
                   <th class="th-actions">
                     <span class="sr-only">Ações</span>
@@ -130,17 +130,7 @@
                           [disabled]="busy()"
                         />
                       </td>
-                      <td>
-                        <input
-                          type="text"
-                          class="input table-input"
-                          [value]="unitDraft().floor"
-                          (input)="
-                            patchUnitDraft({ floor: $any($event.target).value })
-                          "
-                          [disabled]="busy()"
-                        />
-                      </td>
+                      <td class="muted">—</td>
                       <td>
                         <input
                           type="text"
@@ -174,7 +164,9 @@
                       </td>
                     } @else {
                       <td>{{ u.identifier }}</td>
-                      <td>{{ u.floor || '—' }}</td>
+                      <td class="person-cell">
+                        {{ u.responsiblePerson?.fullName || '—' }}
+                      </td>
                       <td class="notes">{{ u.notes || '—' }}</td>
                       <td class="td-actions">
                         <div class="td-actions__inner">
@@ -242,16 +234,6 @@
                 patchNewUnit(g.id, {
                   identifier: $any($event.target).value,
                 })
-              "
-              [disabled]="busy()"
-            />
-            <input
-              type="text"
-              class="input narrow"
-              placeholder="Piso"
-              [value]="newUnitFor(g.id).floor"
-              (input)="
-                patchNewUnit(g.id, { floor: $any($event.target).value })
               "
               [disabled]="busy()"
             />

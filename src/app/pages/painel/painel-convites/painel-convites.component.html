@@ -1,0 +1,236 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Convites</h1>
+    <p class="page__intro">
+      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o e-mail da <strong>responsável</strong> por essa unidade após aceitar o convite.
+      Use “Identificar” para ver o nome se já existir cadastro; o convite fica pendente até o
+      registro.
+    </p>
+  </header>
+
+  @if (pageError(); as pe) {
+    <p class="banner banner--error" role="alert">{{ pe }}</p>
+  } @else {
+  @if (actionError(); as ae) {
+    <p class="banner banner--error" role="alert">{{ ae }}</p>
+  }
+  @if (actionOk(); as ok) {
+    <p class="banner banner--ok" role="status">{{ ok }}</p>
+  }
+
+  @if (navData.loading() && navData.tree().length === 0) {
+    <p class="muted">Carregando agrupamentos…</p>
+  }
+
+  <section class="card">
+    <h2 class="card__title">Novo convite</h2>
+    <form
+      class="invite-form"
+      [formGroup]="form"
+      (ngSubmit)="$event.preventDefault()"
+      novalidate
+    >
+      <div class="form-row form-row--2">
+        <label class="field">
+          <span class="field__label">Agrupamento</span>
+          <select
+            class="input"
+            formControlName="groupingId"
+            [disabled]="selectsLocked()"
+          >
+            <option value="">—</option>
+            @for (g of navData.tree(); track g.id) {
+              <option [value]="g.id">{{ g.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">Unidade</span>
+          <select
+            class="input"
+            formControlName="unitId"
+            [disabled]="selectsLocked()"
+          >
+            <option value="">—</option>
+            @for (u of unitOptions(); track u.id) {
+              <option [value]="u.id">{{ u.identifier }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <label class="field">
+        <span class="field__label">E-mail</span>
+        <input
+          type="email"
+          class="input"
+          formControlName="email"
+          autocomplete="email"
+          [disabled]="busy()"
+        />
+      </label>
+      <div class="row-actions">
+        <button
+          type="button"
+          class="btn ghost"
+          (click)="runLookup()"
+          [disabled]="busy() || lookupBusy()"
+        >
+          {{ lookupBusy() ? 'Pesquisando…' : 'Identificar' }}
+        </button>
+      </div>
+
+      @if (lookup(); as lu) {
+        <div class="lookup" [class.lookup--warn]="!lu.canInvite">
+          @if (lu.found && lu.fullName) {
+            <p>
+              <strong>Nome na base de dados:</strong> {{ lu.fullName }}
+            </p>
+          } @else if (lu.found && !lu.fullName) {
+            <p class="muted">Ficha encontrada sem nome preenchido.</p>
+          } @else {
+            <p class="muted">E-mail ainda não associado a uma pessoa.</p>
+          }
+          @if (lu.message) {
+            <p class="lookup__msg">{{ lu.message }}</p>
+          }
+          @if (!lu.canInvite) {
+            <p class="lookup__msg">Não é possível enviar convite de registro para este e-mail.</p>
+          }
+        </div>
+      }
+
+      <label class="field">
+        <span class="field__label">Nome completo (para o convite)</span>
+        <input
+          type="text"
+          class="input"
+          formControlName="fullName"
+          autocomplete="name"
+          [disabled]="busy()"
+        />
+        <span class="field__hint">
+          Obrigatório se o e-mail ainda não estiver no sistema; caso contrário
+          pode ajustar antes de enviar.
+        </span>
+      </label>
+
+      <button
+        type="button"
+        class="btn primary"
+        (click)="sendInvite()"
+        [disabled]="busy() || lookupBusy()"
+      >
+        {{ busy() ? 'Enviando…' : 'Enviar convite por e-mail' }}
+      </button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 class="card__title">Pendentes neste condomínio</h2>
+    @if (pendingError(); as perr) {
+      <p class="banner banner--error" role="alert">{{ perr }}</p>
+    }
+    @if (pendingLoading()) {
+      <p class="muted">Carregando convites…</p>
+    } @else if (pending().length === 0) {
+      <p class="muted">Nenhum convite pendente.</p>
+    } @else {
+      <ul class="pending-list">
+        @for (p of pending(); track p.id) {
+          <li class="pending-item">
+            <div class="pending-item__top">
+              <span class="pending-item__place">
+                <span class="pending-item__group">{{ p.groupingName }}</span>
+                <span class="pending-item__dot" aria-hidden="true">·</span>
+                <span class="pending-item__unit">{{ p.unitIdentifier }}</span>
+              </span>
+            </div>
+            <div class="pending-item__email">{{ p.email }}</div>
+            <div class="pending-item__name">{{ p.personFullName }}</div>
+            <div class="pending-item__footer">
+              @if (p.pendingRegistration) {
+                <span class="pill pill--wait">Aguarda registro</span>
+              } @else {
+                <span class="pill pill--ok">Conta criada (convite antigo)</span>
+              }
+              <span class="pending-item__expires">
+                Expira em {{ formatPendingExpiresAt(p.expiresAt) }}
+              </span>
+            </div>
+            <div class="pending-item__actions">
+              @if (p.inviteUrl) {
+                <button
+                  type="button"
+                  class="btn ghost sm"
+                  [disabled]="removingInviteId() !== null"
+                  (click)="copyPendingInviteLink(p.id, p.inviteUrl)"
+                >
+                  {{
+                    copiedInviteId() === p.id
+                      ? 'Link copiado!'
+                      : 'Copiar link do convite'
+                  }}
+                </button>
+              } @else {
+                <span class="pending-item__no-link muted">
+                  Link indisponível para convites criados antes desta atualização.
+                </span>
+              }
+              <button
+                type="button"
+                class="btn danger sm"
+                [disabled]="removingInviteId() !== null"
+                (click)="removePendingInvite(p.id)"
+              >
+                {{
+                  removingInviteId() === p.id ? 'Removendo…' : 'Remover convite'
+                }}
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="card">
+    <h2 class="card__title">Histórico — convites aceitos</h2>
+    <p class="card__lead muted">
+      Registros concluídos por link de convite neste condomínio (mais recentes primeiro).
+    </p>
+    @if (historyError(); as herr) {
+      <p class="banner banner--error" role="alert">{{ herr }}</p>
+    }
+    @if (historyLoading()) {
+      <p class="muted">Carregando histórico…</p>
+    } @else if (history().length === 0) {
+      <p class="muted">Nenhum convite aceito ainda neste condomínio.</p>
+    } @else {
+      <ul class="pending-list history-list">
+        @for (h of history(); track h.id) {
+          <li class="pending-item history-item">
+            <div class="pending-item__top">
+              <span class="pending-item__place">
+                <span class="pending-item__group">{{ h.groupingName }}</span>
+                <span class="pending-item__dot" aria-hidden="true">·</span>
+                <span class="pending-item__unit">{{ h.unitIdentifier }}</span>
+              </span>
+            </div>
+            <div class="pending-item__email">{{ h.email }}</div>
+            <div class="pending-item__name">{{ h.personFullName }}</div>
+            <div class="pending-item__footer history-item__footer">
+              <span class="pill pill--accepted">Aceito</span>
+              <span class="pending-item__expires history-item__meta">
+                Aceito em {{ formatPendingExpiresAt(h.acceptedAt) }}
+              </span>
+            </div>
+            <div class="history-item__sub muted">
+              Convite enviado em {{ formatPendingExpiresAt(h.createdAt) }}
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+  }
+</div>

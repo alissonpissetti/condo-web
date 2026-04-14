@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, map, of, switchMap } from 'rxjs';
+import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import type { Condominium } from './auth.service';
 
@@ -11,6 +11,11 @@ export interface GroupingRow {
   createdAt: string;
 }
 
+export interface UnitPersonRef {
+  id: string;
+  fullName: string;
+}
+
 export interface UnitRow {
   id: string;
   groupingId: string;
@@ -19,6 +24,8 @@ export interface UnitRow {
   notes: string | null;
   ownerPersonId: string | null;
   responsiblePersonId: string | null;
+  ownerPerson?: UnitPersonRef | null;
+  responsiblePerson?: UnitPersonRef | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,6 +161,121 @@ export class CondominiumManagementService {
     );
   }
 
+  lookupCondominiumInviteEmail(
+    condominiumId: string,
+    email: string,
+  ): Observable<{
+    found: boolean;
+    fullName: string | null;
+    hasUserAccount: boolean;
+    canInvite: boolean;
+    message?: string;
+  }> {
+    const params = new HttpParams().set('email', email.trim());
+    return this.http.get<{
+      found: boolean;
+      fullName: string | null;
+      hasUserAccount: boolean;
+      canInvite: boolean;
+      message?: string;
+    }>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/invitations/lookup`,
+      { params },
+    );
+  }
+
+  listCondominiumInvitationsPending(condominiumId: string): Observable<
+    {
+      id: string;
+      email: string;
+      expiresAt: string;
+      createdAt: string;
+      personFullName: string;
+      pendingRegistration: boolean;
+      groupingName: string;
+      unitIdentifier: string;
+      /** Mesmo link do e-mail; `null` em convites antigos (antes de persistir o token). */
+      inviteUrl: string | null;
+    }[]
+  > {
+    return this.http.get<
+      {
+        id: string;
+        email: string;
+        expiresAt: string;
+        createdAt: string;
+        personFullName: string;
+        pendingRegistration: boolean;
+        groupingName: string;
+        unitIdentifier: string;
+        inviteUrl: string | null;
+      }[]
+    >(`${environment.apiUrl}/condominiums/${condominiumId}/invitations/pending`, {
+      params: new HttpParams().set('_', String(Date.now())),
+    });
+  }
+
+  listCondominiumInvitationsHistory(condominiumId: string): Observable<
+    {
+      id: string;
+      email: string;
+      createdAt: string;
+      acceptedAt: string;
+      expiresAt: string;
+      personFullName: string;
+      groupingName: string;
+      unitIdentifier: string;
+    }[]
+  > {
+    return this.http.get<
+      {
+        id: string;
+        email: string;
+        createdAt: string;
+        acceptedAt: string;
+        expiresAt: string;
+        personFullName: string;
+        groupingName: string;
+        unitIdentifier: string;
+      }[]
+    >(`${environment.apiUrl}/condominiums/${condominiumId}/invitations/history`, {
+      params: new HttpParams().set('_', String(Date.now())),
+    });
+  }
+
+  createCondominiumInvite(
+    condominiumId: string,
+    body: {
+      groupingId: string;
+      unitId: string;
+      email: string;
+      fullName?: string;
+    },
+  ): Observable<{
+    outcome: string;
+    personId: string;
+    email: string;
+    unitId: string;
+    inviteUrl: string;
+  }> {
+    return this.http.post<{
+      outcome: string;
+      personId: string;
+      email: string;
+      unitId: string;
+      inviteUrl: string;
+    }>(`${environment.apiUrl}/condominiums/${condominiumId}/invitations`, body);
+  }
+
+  deleteCondominiumInvitation(
+    condominiumId: string,
+    invitationId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/invitations/${invitationId}`,
+    );
+  }
+
   listPendingInvitations(
     condominiumId: string,
     groupingId: string,
@@ -181,18 +303,8 @@ export class CondominiumManagementService {
   loadGroupingsWithUnits(
     condominiumId: string,
   ): Observable<GroupingWithUnits[]> {
-    return this.listGroupings(condominiumId).pipe(
-      switchMap((groupings) =>
-        groupings.length === 0
-          ? of([])
-          : forkJoin(
-              groupings.map((g) =>
-                this.listUnits(condominiumId, g.id).pipe(
-                  map((units) => ({ ...g, units })),
-                ),
-              ),
-            ),
-      ),
+    return this.http.get<GroupingWithUnits[]>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/with-units`,
     );
   }
 }

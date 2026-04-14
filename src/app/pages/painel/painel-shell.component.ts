@@ -1,5 +1,13 @@
-import { Component, effect, inject, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, DestroyRef, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { AuthService } from '../../core/auth.service';
 import { CondominiumNavDataService } from '../../core/condominium-nav-data.service';
 import { SelectedCondominiumService } from '../../core/selected-condominium.service';
@@ -38,6 +46,8 @@ function writeSidebarBool(key: string, value: boolean): void {
 })
 export class PainelShellComponent {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly selectedCondo = inject(SelectedCondominiumService);
   protected readonly navData = inject(CondominiumNavDataService);
 
@@ -59,6 +69,45 @@ export class PainelShellComponent {
       const id = this.selectedCondo.selectedId();
       this.navData.refresh(id);
     });
+
+    this.router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        const url = this.router.url;
+        if (
+          /\/painel\/condominio\/[^/]+\/(editar|unidades|convites|membros)(\/|$|\?|#)/.test(
+            url,
+          )
+        ) {
+          if (!this.gestaoExpanded()) {
+            this.gestaoExpanded.set(true);
+            writeSidebarBool(SK_GESTAO, true);
+          }
+        }
+        if (
+          /\/painel\/condominio\/[^/]+\/(transacoes|extrato|fundos|taxas-condominiais)(\/|$|\?|#)/.test(
+            url,
+          )
+        ) {
+          if (!this.financeiroExpanded()) {
+            this.financeiroExpanded.set(true);
+            writeSidebarBool(SK_FINANCEIRO, true);
+          }
+        }
+        if (
+          /\/painel\/condominio\/[^/]+\/(planejamento|documentos)(\/|$|\?|#)/.test(
+            url,
+          )
+        ) {
+          if (!this.planejamentoExpanded()) {
+            this.planejamentoExpanded.set(true);
+            writeSidebarBool(SK_PLANEJAMENTO, true);
+          }
+        }
+      });
   }
 
   toggleGestao(): void {

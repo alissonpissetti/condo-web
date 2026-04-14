@@ -39,12 +39,11 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   protected readonly editingUnitId = signal<string | null>(null);
   protected readonly unitDraft = signal<{
     identifier: string;
-    floor: string;
     notes: string;
-  }>({ identifier: '', floor: '', notes: '' });
+  }>({ identifier: '', notes: '' });
 
   protected readonly newUnitDraft = signal<
-    Record<string, { identifier: string; floor: string; notes: string }>
+    Record<string, { identifier: string; notes: string }>
   >({});
 
   private condominiumId = '';
@@ -103,7 +102,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         this.newGroupingName.set('');
         this.busy.set(false);
         this.reload();
-        this.navData.refresh(this.condominiumId);
+        this.navData.refresh(this.condominiumId, { force: true });
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -126,7 +125,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   }
 
   patchUnitDraft(
-    patch: Partial<{ identifier: string; floor: string; notes: string }>,
+    patch: Partial<{ identifier: string; notes: string }>,
   ): void {
     this.unitDraft.update((d) => ({ ...d, ...patch }));
   }
@@ -143,7 +142,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
           this.editingGroupingId.set(null);
           this.busy.set(false);
           this.reload();
-          this.navData.refresh(this.condominiumId);
+          this.navData.refresh(this.condominiumId, { force: true });
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
@@ -164,7 +163,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(false);
         this.reload();
-        this.navData.refresh(this.condominiumId);
+        this.navData.refresh(this.condominiumId, { force: true });
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -173,17 +172,17 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     });
   }
 
-  newUnitFor(groupingId: string): { identifier: string; floor: string; notes: string } {
+  newUnitFor(groupingId: string): { identifier: string; notes: string } {
     const map = this.newUnitDraft();
-    return map[groupingId] ?? { identifier: '', floor: '', notes: '' };
+    return map[groupingId] ?? { identifier: '', notes: '' };
   }
 
   patchNewUnit(
     groupingId: string,
-    patch: Partial<{ identifier: string; floor: string; notes: string }>,
+    patch: Partial<{ identifier: string; notes: string }>,
   ): void {
     const map = { ...this.newUnitDraft() };
-    const cur = map[groupingId] ?? { identifier: '', floor: '', notes: '' };
+    const cur = map[groupingId] ?? { identifier: '', notes: '' };
     map[groupingId] = { ...cur, ...patch };
     this.newUnitDraft.set(map);
   }
@@ -194,12 +193,10 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     if (!identifier) return;
     this.clearActionError();
     this.busy.set(true);
-    const floor = d.floor.trim() || null;
     const notes = d.notes.trim() || null;
     this.api
       .createUnit(this.condominiumId, groupingId, {
         identifier,
-        floor,
         notes,
       })
       .subscribe({
@@ -209,7 +206,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
           this.newUnitDraft.set(map);
           this.busy.set(false);
           this.reload();
-          this.navData.refresh(this.condominiumId);
+          this.navData.refresh(this.condominiumId, { force: true });
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
@@ -222,7 +219,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     this.editingUnitId.set(u.id);
     this.unitDraft.set({
       identifier: u.identifier,
-      floor: u.floor ?? '',
       notes: u.notes ?? '',
     });
   }
@@ -240,7 +236,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     this.api
       .updateUnit(this.condominiumId, groupingId, unitId, {
         identifier,
-        floor: d.floor.trim() || null,
         notes: d.notes.trim() || null,
       })
       .subscribe({
@@ -248,7 +243,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
           this.editingUnitId.set(null);
           this.busy.set(false);
           this.reload();
-          this.navData.refresh(this.condominiumId);
+          this.navData.refresh(this.condominiumId, { force: true });
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
@@ -266,7 +261,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(false);
         this.reload();
-        this.navData.refresh(this.condominiumId);
+        this.navData.refresh(this.condominiumId, { force: true });
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);

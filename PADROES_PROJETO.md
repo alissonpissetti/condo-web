@@ -2,6 +2,16 @@
 
 ## Textos de interface em português (PT-BR)
 
+Todo o texto voltado ao **usuário** final deve seguir **português do Brasil (pt-BR)**, não português de Portugal (pt-PT). Exemplos de vocabulário:
+
+| Evitar (pt-PT / mistura) | Usar (pt-BR) |
+|--------------------------|--------------|
+| registo, registado       | registro, registrado |
+| A carregar… | Carregando… |
+| A enviar… / A pesquisar… | Enviando… / Pesquisando… |
+| utilizador               | usuário |
+| email (rótulo pode manter) | E-mail (preferível em rótulos formais) |
+
 ### Premissa: salvar, nunca guardar
 
 Este projeto usa **português do Brasil (pt-BR)**, não português de Portugal (pt-PT).
@@ -28,7 +38,8 @@ Quando o verbo for “persistir escolha” em frases (não só no botão), usar 
 
 ## Datas na interface (pt-BR)
 
-- **Sempre** exibir datas ao utilizador no formato **DD/MM/AAAA** (ex.: `11/04/2026`).
-- Usar a função partilhada `formatDateDdMmYyyy` em `src/app/core/date-display.ts` (ou equivalente aprovado) para valores vindos da API em ISO (`YYYY-MM-DD` ou com hora), evitando mostrar `YYYY-MM-DD` em tabelas, cartões ou rótulos.
-- **Valores enviados à API** podem continuar em **ISO** (`YYYY-MM-DD`) quando o contrato do backend assim exigir (ex.: query params, corpos JSON); a regra acima aplica-se à **apresentação** na UI.
-- Campos nativos `type="date"` seguem o controlo do browser para edição; o valor em memória pode permanecer ISO; ao mostrar a mesma data fora do input (listas, resumos), preferir **DD/MM/AAAA**.
+- **Sempre** exibir datas ao usuário no formato **dd/mm/aaaa** (ex.: `11/04/2026`).
+- Usar a função compartilhada `formatDateDdMmYyyy` em `src/app/core/date-display.ts` (ou equivalente aprovado) para valores vindos da API em ISO (`YYYY-MM-DD` ou com hora), evitando mostrar `YYYY-MM-DD` em tabelas, cartões ou rótulos.
+- Quando a UI mostrar **data e hora** (ex.: expiração de convite, eventos), usar o formato **`dd/mm/aaaa HH:MM`** em **24 horas** (ex.: `21/04/2026 00:28`), via `formatDateTimeDdMmYyyyHhMm` no mesmo ficheiro. **Não** usar o `DatePipe` com `'short'` ou locale en-US (evita `M/D/yy` e `AM/PM`).
+- **Valores enviados à API** podem continuar em **ISO** (`YYYY-MM-DD` ou instante completo) quando o contrato do backend assim exigir; as regras acima aplicam-se à **apresentação** na UI.
+- Campos nativos `type="date"` seguem o controle do navegador para edição; o valor em memória pode permanecer ISO; ao mostrar a mesma data fora do input (listas, resumos), preferir **dd/mm/aaaa**.

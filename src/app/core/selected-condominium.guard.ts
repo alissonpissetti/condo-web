@@ -1,15 +1,37 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, Router, UrlTree } from '@angular/router';
+import { Observable, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import { AuthService } from './auth.service';
 import { SelectedCondominiumService } from './selected-condominium.service';
 
-/** Só permite aceder a rotas do condomínio atualmente selecionado no painel. */
-export const selectedCondominiumGuard: CanActivateFn = (route) => {
+/**
+ * Permite rotas `/painel/condominio/:id/...` se o utilizador tiver acesso ao `id`.
+ * Alinha a seleção do painel ao `id` da URL (não exige ter clicado na estrela antes).
+ */
+export const selectedCondominiumGuard: CanActivateFn = (
+  route,
+): boolean | UrlTree | Observable<boolean | UrlTree> => {
   const selected = inject(SelectedCondominiumService);
   const router = inject(Router);
+  const auth = inject(AuthService);
   const paramId = route.paramMap.get('condominiumId');
-  const sel = selected.selectedId();
-  if (!paramId || !sel || paramId !== sel) {
+  if (!paramId) {
     return router.createUrlTree(['/painel/condominios']);
   }
-  return true;
+  const sel = selected.selectedId();
+  if (sel === paramId) {
+    return true;
+  }
+  return auth.listCondominiums().pipe(
+    map((list) => {
+      const ok = list.some((c) => c.id === paramId);
+      if (!ok) {
+        return router.createUrlTree(['/painel/condominios']);
+      }
+      selected.setSelected(paramId);
+      return true;
+    }),
+    catchError(() => of(router.createUrlTree(['/painel/condominios']))),
+  );
 };

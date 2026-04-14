@@ -1,0 +1,203 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Membros</h1>
+    <p class="page__intro">
+      Titular da conta, síndico, subsíndico e administradores. Para atribuir papéis, a pessoa precisa de
+      <strong>conta registada</strong> e vínculo ao condomínio (ex.: convite aceite ou unidade). O síndico
+      só é alterado por <strong>troca</strong> (atribuir novo síndico substitui o anterior).
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="banner banner--error" role="alert">{{ loadError() }}</p>
+  } @else if (!isMgmt()) {
+    <p class="banner banner--error" role="alert">
+      Sem permissão para ver a equipa de gestão deste condomínio.
+    </p>
+  } @else {
+    @if (condoName()) {
+      <p class="condo-label"><strong>{{ condoName() }}</strong></p>
+    }
+
+    @if (actionError()) {
+      <p class="banner banner--error" role="alert">{{ actionError() }}</p>
+    }
+    @if (actionOk()) {
+      <p class="banner banner--ok" role="status">{{ actionOk() }}</p>
+    }
+
+    <section class="card">
+      <h2 class="card__title">Titular (conta)</h2>
+      @if (ownerRow(); as o) {
+        <p class="row-line">
+          <span class="row-line__name">{{ displayName(o) }}</span>
+          @if (o.user?.email) {
+            <span class="row-line__meta">{{ o.user!.email }}</span>
+          }
+        </p>
+      } @else {
+        <p class="muted">—</p>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="card__title">Síndico</h2>
+      @if (syndicRow(); as s) {
+        <p class="row-line">
+          <span class="row-line__name">{{ displayName(s) }}</span>
+          @if (s.user?.email) {
+            <span class="row-line__meta">{{ s.user!.email }}</span>
+          }
+        </p>
+      } @else {
+        <p class="muted">Nenhum síndico definido.</p>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="card__title">Subsíndico</h2>
+      @if (subSyndicRow(); as ss) {
+        <div class="row-line row-line--with-action">
+          <div>
+            <span class="row-line__name">{{ displayName(ss) }}</span>
+            @if (ss.user?.email) {
+              <span class="row-line__meta">{{ ss.user!.email }}</span>
+            }
+          </div>
+          @if (canAssignRoles()) {
+            <button
+              type="button"
+              class="btn ghost btn--sm"
+              (click)="removeParticipant(ss)"
+              [disabled]="removingId() === ss.id"
+            >
+              {{ removingId() === ss.id ? 'Removendo…' : 'Remover' }}
+            </button>
+          }
+        </div>
+      } @else {
+        <p class="muted">Nenhum subsíndico.</p>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="card__title">Administradores</h2>
+      @if (adminRows().length === 0) {
+        <p class="muted">Nenhum administrador extra.</p>
+      } @else {
+        <ul class="list">
+          @for (a of adminRows(); track a.id) {
+            <li class="list__item row-line row-line--with-action">
+              <div>
+                <span class="row-line__name">{{ displayName(a) }}</span>
+                @if (a.user?.email) {
+                  <span class="row-line__meta">{{ a.user!.email }}</span>
+                }
+              </div>
+              @if (canAssignRoles()) {
+                <button
+                  type="button"
+                  class="btn ghost btn--sm"
+                  (click)="removeParticipant(a)"
+                  [disabled]="removingId() === a.id"
+                >
+                  {{ removingId() === a.id ? 'Removendo…' : 'Remover' }}
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    @if (memberRows().length > 0) {
+      <section class="card">
+        <h2 class="card__title">Membros (onboarding)</h2>
+        <p class="card__hint">
+          Contas com papel de membro após aceitar convite ao condomínio. Não conferem gestão.
+        </p>
+        <ul class="list">
+          @for (m of memberRows(); track m.id) {
+            <li class="list__item row-line">
+              <span class="row-line__name">{{ displayName(m) }}</span>
+              @if (m.user?.email) {
+                <span class="row-line__meta">{{ m.user!.email }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    @if (canAssignRoles()) {
+      <section class="card">
+        <h2 class="card__title">Atribuir papel</h2>
+        <form
+          class="assign-form"
+          [formGroup]="assignForm"
+          (ngSubmit)="$event.preventDefault()"
+          novalidate
+        >
+          <label class="field">
+            <span class="field__label">E-mail da conta</span>
+            <input
+              type="email"
+              class="input"
+              formControlName="email"
+              autocomplete="email"
+              [disabled]="busy()"
+            />
+          </label>
+          <div class="form-row form-row--2">
+            <label class="field">
+              <span class="field__label">Papel</span>
+              <select class="input" formControlName="role" [disabled]="busy()">
+                <option value="syndic">Síndico (substitui o atual)</option>
+                <option value="sub_syndic">Subsíndico</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+          </div>
+          <div class="row-actions">
+            <button
+              type="button"
+              class="btn ghost"
+              (click)="runLookup()"
+              [disabled]="busy() || lookupBusy()"
+            >
+              {{ lookupBusy() ? 'A pesquisar…' : 'Identificar' }}
+            </button>
+            <button
+              type="button"
+              class="btn"
+              (click)="confirmAssign()"
+              [disabled]="busy() || !lookupResult()"
+            >
+              Confirmar atribuição
+            </button>
+          </div>
+        </form>
+
+        @if (lookupResult(); as lu) {
+          <div class="lookup-box" role="status">
+            <p class="lookup-box__title">Conta identificada</p>
+            <p class="lookup-box__line">
+              {{ lu.fullName?.trim() || '(sem nome no perfil)' }}
+            </p>
+            <p class="lookup-box__line muted">{{ lu.email }}</p>
+            @if (lu.isOwner) {
+              <p class="lookup-box__badge">Titular da conta do condomínio</p>
+            }
+          </div>
+        }
+      </section>
+    } @else {
+      <p class="muted note-readonly">
+        Apenas o titular ou o síndico podem alterar papéis. Os restantes perfis de gestão veem esta lista
+        em leitura.
+      </p>
+    }
+  }
+</div>

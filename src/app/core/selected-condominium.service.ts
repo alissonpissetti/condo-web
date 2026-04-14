@@ -20,6 +20,11 @@ export class SelectedCondominiumService {
       this.clear();
       return;
     }
+    this.setSelected(id);
+  }
+
+  /** Define o condomínio ativo (ex.: ao abrir uma rota `/painel/condominio/:id/...`). */
+  setSelected(id: string): void {
     this.selectedId.set(id);
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, id);

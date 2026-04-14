@@ -20,9 +20,21 @@
     @if (inviteToken()) {
       @if (invitePreview(); as pr) {
         <p class="sub">
-          Está a concluir o convite para o condomínio
-          <strong>{{ pr.condominiumName }}</strong>, unidade
-          <strong>{{ pr.unitIdentifier }}</strong>. Email: {{ pr.emailMasked }}
+          @if (pr.inviteKind === 'unit') {
+            Está a concluir o convite para o condomínio
+            <strong>{{ pr.condominiumName }}</strong>, unidade
+            <strong>{{ pr.unitIdentifier }}</strong
+            >. Email: {{ pr.emailMasked }}
+          } @else {
+            Está a concluir o convite como <strong>responsável</strong>
+            @if (pr.unitIdentifier) {
+              pela unidade <strong>{{ pr.unitIdentifier }}</strong> do condomínio
+            } @else {
+              do condomínio
+            }
+            <strong>{{ pr.condominiumName }}</strong
+            >. Email: {{ pr.emailMasked }}
+          }
         </p>
       } @else if (!invitePreviewError()) {
         <p class="muted">A carregar dados do convite…</p>
