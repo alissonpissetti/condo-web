@@ -24,6 +24,8 @@ export class PainelCondominiosComponent implements OnInit {
   protected readonly formError = signal<string | null>(null);
   protected readonly loadingList = signal(true);
   protected readonly saving = signal(false);
+  protected readonly deletingId = signal<string | null>(null);
+  protected readonly deleteError = signal<string | null>(null);
 
   protected readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(1)]],
@@ -35,6 +37,7 @@ export class PainelCondominiosComponent implements OnInit {
 
   refresh(): void {
     this.loadError.set(null);
+    this.deleteError.set(null);
     this.loadingList.set(true);
     this.auth.listCondominiums().subscribe({
       next: (rows) => {
@@ -76,6 +79,35 @@ export class PainelCondominiosComponent implements OnInit {
 
   isSelected(id: string): boolean {
     return this.selectedCondo.selectedId() === id;
+  }
+
+  remove(c: Condominium): void {
+    this.deleteError.set(null);
+    if (
+      !confirm(
+        `Eliminar o condomínio "${c.name}"? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.deletingId.set(c.id);
+    this.auth.deleteCondominium(c.id).subscribe({
+      next: () => {
+        this.deletingId.set(null);
+        if (this.selectedCondo.selectedId() === c.id) {
+          this.selectedCondo.clear();
+        }
+        this.refresh();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.deletingId.set(null);
+        this.deleteError.set(this.messageFromHttp(err));
+      },
+    });
+  }
+
+  isDeleting(id: string): boolean {
+    return this.deletingId() === id;
   }
 
   private messageFromHttp(err: HttpErrorResponse): string {

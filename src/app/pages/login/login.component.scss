@@ -137,6 +137,16 @@ input.readonly-like {
   margin-bottom: 1rem;
 }
 
+.success {
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, #22c55e 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, #22c55e 35%, var(--border));
+  color: var(--text);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
 form {
   display: flex;
   flex-direction: column;
@@ -228,6 +238,22 @@ label {
   margin: 1.25rem 0 0;
   font-size: 0.9rem;
   color: var(--muted);
+
+  a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.forgot-line {
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-size: 0.88rem;
 
   a {
     color: var(--accent);

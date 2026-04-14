@@ -1,28 +1,30 @@
 <header class="topbar">
-  <div class="brand">
-    <img
-      class="brand-logo"
-      src="/logo-white.png"
-      width="677"
-      height="369"
-      alt="Meu Condomínio"
-    />
+  <div class="layout-box topbar__inner">
+    <div class="brand">
+      <img
+        class="brand-logo"
+        src="/logo-white.png"
+        width="677"
+        height="369"
+        alt="Meu Condomínio"
+      />
+    </div>
+    <nav class="actions">
+      @if (auth.isAuthenticated()) {
+        <a routerLink="/painel" class="btn ghost">Painel</a>
+        <button type="button" class="btn primary" (click)="auth.logout()">
+          Sair
+        </button>
+      } @else {
+        <a routerLink="/auth/login" class="btn ghost">Entrar</a>
+        <a routerLink="/auth/register" class="btn primary">Criar conta</a>
+      }
+    </nav>
   </div>
-  <nav class="actions">
-    @if (auth.isAuthenticated()) {
-      <a routerLink="/painel" class="btn ghost">Painel</a>
-      <button type="button" class="btn primary" (click)="auth.logout()">
-        Sair
-      </button>
-    } @else {
-      <a routerLink="/auth/login" class="btn ghost">Entrar</a>
-      <a routerLink="/auth/register" class="btn primary">Criar conta</a>
-    }
-  </nav>
 </header>
 
 <main>
-  <section class="hero">
+  <section class="hero layout-box">
     <div class="hero__inner">
       <div class="hero__logo-slot">
         <img
@@ -63,7 +65,7 @@
     </div>
   </section>
 
-  <section class="features">
+  <section class="features layout-box">
     <article>
       <h2>Conta e acesso</h2>
       <p>
@@ -89,9 +91,11 @@
 </main>
 
 <footer class="footer">
-  <div class="footer-brand">
-    <span class="footer-name">Meu Condomínio</span>
-    <span class="footer-year">· {{ year }}</span>
+  <div class="footer__inner layout-box">
+    <div class="footer-brand">
+      <span class="footer-name">Meu Condomínio</span>
+      <span class="footer-year">· {{ year }}</span>
+    </div>
+    <span class="muted">Plataforma em evolução contínua</span>
   </div>
-  <span class="muted">Plataforma em evolução contínua</span>
 </footer>

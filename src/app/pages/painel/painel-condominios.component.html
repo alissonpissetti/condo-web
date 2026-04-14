@@ -7,9 +7,12 @@
   @if (loadError()) {
     <div class="alert">{{ loadError() }}</div>
   }
+  @if (deleteError()) {
+    <div class="alert" role="alert">{{ deleteError() }}</div>
+  }
 
   @if (loadingList()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (!condominiums().length && !loadError()) {
     <p class="muted">Nenhum condomínio encontrado no seu cadastro</p>
   } @else {
@@ -20,32 +23,60 @@
             <span class="title">{{ c.name }}</span>
             <span class="meta">{{ c.id }}</span>
           </div>
-          <button
-            type="button"
-            class="pin"
-            [class.pin--on]="isSelected(c.id)"
-            (click)="selectCondominium(c.id)"
-            [attr.aria-pressed]="isSelected(c.id)"
-            [attr.aria-label]="
-              isSelected(c.id)
-                ? 'Remover seleção guardada para este condomínio'
-                : 'Salvar este condomínio como selecionado ao iniciar sessão'
-            "
-            title="Manter selecionado ao iniciar sessão"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="22"
-              height="22"
-              aria-hidden="true"
-              focusable="false"
+          <div class="row-actions">
+            <button
+              type="button"
+              class="pin"
+              [class.pin--on]="isSelected(c.id)"
+              (click)="selectCondominium(c.id)"
+              [disabled]="!!deletingId()"
+              [attr.aria-pressed]="isSelected(c.id)"
+              [attr.aria-label]="
+                isSelected(c.id)
+                  ? 'Remover seleção salva para este condomínio'
+                  : 'Salvar este condomínio como selecionado ao iniciar sessão'
+              "
+              title="Manter selecionado ao iniciar sessão"
             >
-              <path
-                fill="currentColor"
-                d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-              />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  fill="currentColor"
+                  d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="btn-remove"
+              (click)="remove(c)"
+              [disabled]="deletingId() !== null"
+              [attr.aria-busy]="isDeleting(c.id)"
+              [attr.aria-label]="'Eliminar condomínio ' + c.name"
+              title="Eliminar condomínio"
+            >
+              @if (isDeleting(c.id)) {
+                <span class="sr-only">Eliminando…</span>
+              }
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  fill="currentColor"
+                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                />
+              </svg>
+            </button>
+          </div>
         </li>
       }
     </ul>
@@ -70,7 +101,7 @@
       }
     </label>
     <button type="submit" class="btn primary" [disabled]="saving()">
-      {{ saving() ? 'A criar…' : 'Criar' }}
+      {{ saving() ? 'Criando…' : 'Criar' }}
     </button>
   </form>
 </section>

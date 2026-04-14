@@ -7,6 +7,7 @@ import {
   type FinancialFund,
   type FinancialStatement,
 } from '../../../core/financial-api.service';
+import { formatDateDdMmYyyy } from '../../../core/date-display';
 import { formatCentsBrl } from '../../../core/money-brl';
 
 @Component({
@@ -19,6 +20,7 @@ export class PainelExtratoComponent implements OnInit {
   private readonly api = inject(FinancialApiService);
 
   protected readonly formatCentsBrl = formatCentsBrl;
+  protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
   protected readonly funds = signal<FinancialFund[]>([]);
   protected readonly statement = signal<FinancialStatement | null>(null);
   protected readonly loadError = signal<string | null>(null);

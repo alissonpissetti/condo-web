@@ -14,3 +14,15 @@ export function formatCentsBrl(cents: string | number): string {
 export function reaisToCents(reais: number): number {
   return Math.round(reais * 100);
 }
+
+/** Centavos (string ou número da API) para texto em reais em formulários (ex.: "12.50"). */
+export function centsToReaisInput(cents: string | number | null | undefined): string {
+  if (cents == null || cents === '') {
+    return '';
+  }
+  const n = typeof cents === 'string' ? parseInt(cents, 10) : cents;
+  if (!Number.isFinite(n)) {
+    return '';
+  }
+  return (n / 100).toFixed(2);
+}

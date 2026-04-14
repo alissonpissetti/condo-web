@@ -1,12 +1,16 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { Observable, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   CondominiumManagementService,
@@ -18,6 +22,7 @@ import {
   type FinancialFund,
   type FinancialTransaction,
 } from '../../../core/financial-api.service';
+import { formatDateDdMmYyyy } from '../../../core/date-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
 
 type AllocKind =
@@ -38,6 +43,7 @@ export class PainelTransacoesComponent implements OnInit {
   private readonly condoApi = inject(CondominiumManagementService);
 
   protected readonly formatCentsBrl = formatCentsBrl;
+  protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
 
   protected readonly transactions = signal<FinancialTransaction[]>([]);
   protected readonly funds = signal<FinancialFund[]>([]);
@@ -59,6 +65,12 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly selectedGroupingIds = signal<string[]>([]);
   protected readonly excludeUnitIds = signal<string[]>([]);
   protected readonly editingId = signal<string | null>(null);
+  protected readonly pendingReceiptFile = signal<File | null>(null);
+  protected readonly receiptRemoved = signal(false);
+  protected readonly editingReceiptKey = signal<string | null>(null);
+
+  private readonly receiptInputEl =
+    viewChild<ElementRef<HTMLInputElement>>('receiptInput');
 
   private condoId = '';
 
@@ -233,6 +245,10 @@ export class PainelTransacoesComponent implements OnInit {
     this.selectedUnitIds.set([]);
     this.selectedGroupingIds.set([]);
     this.excludeUnitIds.set([]);
+    this.pendingReceiptFile.set(null);
+    this.receiptRemoved.set(false);
+    this.editingReceiptKey.set(null);
+    this.clearReceiptFileInput();
     this.formError.set(null);
   }
 
@@ -259,7 +275,62 @@ export class PainelTransacoesComponent implements OnInit {
       this.allocKind.set('all_units_except');
       this.excludeUnitIds.set([...r.excludeUnitIds].sort());
     }
+    this.pendingReceiptFile.set(null);
+    this.receiptRemoved.set(false);
+    this.editingReceiptKey.set(t.receiptStorageKey ?? null);
+    this.clearReceiptFileInput();
     this.formError.set(null);
+  }
+
+  onReceiptFileChange(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0] ?? null;
+    this.pendingReceiptFile.set(f);
+    if (f) {
+      this.receiptRemoved.set(false);
+    }
+  }
+
+  removeReceipt(): void {
+    this.pendingReceiptFile.set(null);
+    this.receiptRemoved.set(true);
+    this.clearReceiptFileInput();
+  }
+
+  private clearReceiptFileInput(): void {
+    const el = this.receiptInputEl()?.nativeElement;
+    if (el) {
+      el.value = '';
+    }
+  }
+
+  downloadEditingReceipt(): void {
+    const id = this.editingId();
+    const key = this.editingReceiptKey();
+    if (!id || !key) return;
+    this.downloadReceiptByKey(key, id);
+  }
+
+  downloadRowReceipt(t: FinancialTransaction): void {
+    const key = t.receiptStorageKey;
+    if (!key) return;
+    this.downloadReceiptByKey(key, t.id);
+  }
+
+  private downloadReceiptByKey(key: string, txId: string): void {
+    this.api.downloadTransactionReceipt(this.condoId, key).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `comprovante-${txId.slice(0, 8)}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.formError.set(this.msg(err));
+      },
+    });
   }
 
   submit(): void {
@@ -287,7 +358,7 @@ export class PainelTransacoesComponent implements OnInit {
       this.formError.set('Despesa exige rateio (não pode ser «sem repartição»).');
       return;
     }
-    const body = {
+    const baseBody = {
       kind: this.txKind(),
       amountCents: reaisToCents(ar),
       occurredOn: this.occurredOn(),
@@ -296,10 +367,39 @@ export class PainelTransacoesComponent implements OnInit {
       fundId: this.fundIdForm() || null,
       allocationRule: rule,
     };
-    this.saving.set(true);
+
+    const pending = this.pendingReceiptFile();
     const editId = this.editingId();
-    if (editId) {
-      this.api.updateTransaction(this.condoId, editId, body).subscribe({
+
+    this.saving.set(true);
+    const upload$: Observable<{ receiptStorageKey: string } | null> = pending
+      ? this.api.uploadTransactionReceipt(this.condoId, pending)
+      : of(null as { receiptStorageKey: string } | null);
+
+    upload$
+      .pipe(
+        switchMap((uploadRes: { receiptStorageKey: string } | null) => {
+          if (editId) {
+            const patch: Parameters<
+              FinancialApiService['updateTransaction']
+            >[2] = { ...baseBody };
+            if (uploadRes?.receiptStorageKey) {
+              patch.receiptStorageKey = uploadRes.receiptStorageKey;
+            } else if (this.receiptRemoved()) {
+              patch.receiptStorageKey = null;
+            }
+            return this.api.updateTransaction(this.condoId, editId, patch);
+          }
+          const createBody: Parameters<
+            FinancialApiService['createTransaction']
+          >[1] = { ...baseBody };
+          if (uploadRes?.receiptStorageKey) {
+            createBody.receiptStorageKey = uploadRes.receiptStorageKey;
+          }
+          return this.api.createTransaction(this.condoId, createBody);
+        }),
+      )
+      .subscribe({
         next: () => {
           this.saving.set(false);
           this.resetForm();
@@ -310,19 +410,6 @@ export class PainelTransacoesComponent implements OnInit {
           this.formError.set(this.msg(err));
         },
       });
-    } else {
-      this.api.createTransaction(this.condoId, body).subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.resetForm();
-          this.refreshList();
-        },
-        error: (err: HttpErrorResponse) => {
-          this.saving.set(false);
-          this.formError.set(this.msg(err));
-        },
-      });
-    }
   }
 
   remove(t: FinancialTransaction): void {

@@ -1,0 +1,60 @@
+.page__intro {
+  color: var(--muted);
+}
+
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.file-label {
+  cursor: pointer;
+  margin: 0;
+}
+
+.sm {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.pub-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 36rem;
+}
+
+.pub-form .full {
+  grid-column: 1 / -1;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

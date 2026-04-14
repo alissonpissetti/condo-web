@@ -15,6 +15,15 @@ export interface SmsLoginRequestResponse {
   message: string;
 }
 
+export interface PasswordResetRequestResponse {
+  ok: true;
+  message: string;
+}
+
+export interface PasswordResetVerifyResponse {
+  reset_token: string;
+}
+
 export interface RegisterResponse {
   id: string;
   email: string;
@@ -127,6 +136,38 @@ export class AuthService {
     );
   }
 
+  requestPasswordReset(
+    body:
+      | { channel: 'email'; email: string }
+      | { channel: 'sms'; phone: string },
+  ): Observable<PasswordResetRequestResponse> {
+    return this.http.post<PasswordResetRequestResponse>(
+      `${environment.apiUrl}/auth/password-reset/request`,
+      body,
+    );
+  }
+
+  verifyPasswordReset(
+    body:
+      | { channel: 'email'; email: string; code: string }
+      | { channel: 'sms'; phone: string; code: string },
+  ): Observable<PasswordResetVerifyResponse> {
+    return this.http.post<PasswordResetVerifyResponse>(
+      `${environment.apiUrl}/auth/password-reset/verify`,
+      body,
+    );
+  }
+
+  completePasswordReset(
+    resetToken: string,
+    newPassword: string,
+  ): Observable<{ ok: true }> {
+    return this.http.post<{ ok: true }>(
+      `${environment.apiUrl}/auth/password-reset/complete`,
+      { reset_token: resetToken, newPassword },
+    );
+  }
+
   getMe(): Observable<MeProfile> {
     return this.http.get<MeProfile>(`${environment.apiUrl}/users/me`);
   }
@@ -155,5 +196,9 @@ export class AuthService {
     return this.http.post<Condominium>(`${environment.apiUrl}/condominiums`, {
       name,
     });
+  }
+
+  deleteCondominium(id: string): Observable<void> {
+    return this.http.delete<void>(`${environment.apiUrl}/condominiums/${id}`);
   }
 }

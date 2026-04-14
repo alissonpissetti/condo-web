@@ -20,6 +20,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'auth/forgot-password',
+    loadComponent: () =>
+      import('./pages/forgot-password/forgot-password.component').then(
+        (m) => m.ForgotPasswordComponent,
+      ),
+  },
+  {
     path: 'painel',
     canActivate: [authGuard],
     loadChildren: () =>

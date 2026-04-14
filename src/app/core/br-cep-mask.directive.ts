@@ -10,7 +10,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { formatCepDisplay, toCepDigits } from './br-cep-mask';
 
 /**
- * CEP com máscara 00000-000; o FormControl guarda só 8 dígitos.
+ * CEP com máscara 00000-000; o FormControl armazena só 8 dígitos.
  */
 @Directive({
   standalone: true,

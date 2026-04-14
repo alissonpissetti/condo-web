@@ -2,8 +2,8 @@
   <header class="page__header">
     <h1>Fundos</h1>
     <p class="page__intro">
-      Fundos temporários ou permanentes (obras, internet, etc.) para associar às
-      transações e filtrar extratos.
+      Defina fundos parcelados (obra, reserva) ou permanentes (taxa contínua), com
+      rateio por unidades ou agrupamentos.
     </p>
   </header>
 
@@ -12,68 +12,470 @@
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <section class="card">
-      <h2 class="card__title">Novo fundo</h2>
-      <form class="form" (ngSubmit)="create()" novalidate>
+    <section class="form-card">
+      <div class="form-card__head">
+        <h2 class="form-card__title">
+          {{ editingId() ? 'Editar fundo' : 'Criar fundo' }}
+        </h2>
+        <p class="form-card__lede">
+          @if (editingId()) {
+            Altere os blocos abaixo e salve. O período do modo parcelado é
+            recalculado a partir do total, parcelas e 1.ª mensalidade.
+          } @else {
+            Preencha por blocos. O modo <strong>parcelado</strong> calcula o período
+            nas mensalidades a partir da 1.ª data e do número de parcelas.
+          }
+        </p>
+      </div>
+
+      <form class="fund-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         @if (formError(); as fe) {
-          <p class="error" role="alert">{{ fe }}</p>
+          <p class="error error--form" role="alert">{{ fe }}</p>
         }
-        <div class="row wrap">
-          <input
-            type="text"
-            class="input grow"
-            formControlName="name"
-            placeholder="Nome do fundo"
-          />
-          <label class="check">
-            <input type="checkbox" formControlName="isTemporary" />
-            Temporário
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">1</span>
+            <div>
+              <h3 class="form-section__title">Nome</h3>
+              <p class="form-section__hint">Identificação na lista e nas transações.</p>
+            </div>
+          </div>
+          <label class="field field--block">
+            <span class="field__label">Designação do fundo</span>
+            <input
+              type="text"
+              class="input input--lg"
+              formControlName="name"
+              placeholder="Ex.: Reforma hall, Fundo reserva, Elevador"
+              autocomplete="off"
+            />
           </label>
-          <input
-            type="date"
-            class="input"
-            formControlName="endsAt"
-            title="Data fim (opcional)"
-          />
-          <button type="submit" class="btn primary" [disabled]="saving()">
-            {{ saving() ? 'A salvar…' : 'Adicionar' }}
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">2</span>
+            <div>
+              <h3 class="form-section__title">Tipo</h3>
+              <p class="form-section__hint">
+                Parcelado: total por unidade em várias mensalidades. Permanente: o
+                mesmo valor todo mês (ad aeternum).
+              </p>
+            </div>
+          </div>
+          <div
+            class="mode-tabs"
+            role="tablist"
+            aria-label="Tipo de fundo"
+          >
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="!form.controls.isPermanent.value"
+              [class.mode-tab--active]="!form.controls.isPermanent.value"
+              (click)="setFundMode(false)"
+            >
+              <span class="mode-tab__name">Parcelado</span>
+              <span class="mode-tab__desc">Total em X mensalidades</span>
+            </button>
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="form.controls.isPermanent.value"
+              [class.mode-tab--active]="form.controls.isPermanent.value"
+              (click)="setFundMode(true)"
+            >
+              <span class="mode-tab__name">Permanente</span>
+              <span class="mode-tab__desc">Débito mensal fixo</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-section form-section--alloc">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">3</span>
+            <div>
+              <h3 class="form-section__title">Rateio</h3>
+              <p class="form-section__hint">
+                Quem entra no cálculo deste fundo (mesma lógica das transações).
+                No modo <strong>parcelado · obra</strong>, o custo total reparte-se em
+                partes iguais por estas unidades.
+              </p>
+            </div>
+          </div>
+          <label class="field field--block">
+            <span class="field__label">Critério</span>
+            <select
+              class="input input--lg"
+              [value]="allocKind()"
+              (change)="onAllocKindChange($any($event.target).value)"
+            >
+              <option value="all_units_equal">Todas as unidades (partes iguais)</option>
+              <option value="unit_ids">Apenas unidades selecionadas</option>
+              <option value="grouping_ids">Apenas agrupamentos selecionados</option>
+              <option value="all_units_except">Todas exceto as selecionadas</option>
+            </select>
+          </label>
+
+          @if (allocKind() === 'unit_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades incluídas</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades neste condomínio.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInInclude(u.id)"
+                        (change)="toggleUnit(u.id, 'include')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'grouping_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Agrupamentos incluídos</span>
+              @if (tree().length === 0) {
+                <p class="pick-panel__empty">Sem agrupamentos.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (g of tree(); track g.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="groupingSelected(g.id)"
+                        (change)="toggleGrouping(g.id)"
+                      />
+                      <span class="pick-row__text">{{ g.name }}</span>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'all_units_except') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades excluídas do rateio</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInExclude(u.id)"
+                        (change)="toggleUnit(u.id, 'exclude')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">4</span>
+            <div>
+              <h3 class="form-section__title">Valores</h3>
+              <p class="form-section__hint">
+                @if (form.controls.isPermanent.value) {
+                  Valor cobrado <strong>por unidade</strong> em cada mês.
+                } @else {
+                  Parcelado manual: total por unidade e número de parcelas. Modo
+                  <strong>obra</strong>: custo global e teto de mensalidade por
+                  unidade — o sistema calcula o total por unidade e quantas
+                  mensalidades são precisas.
+                }
+              </p>
+            </div>
+          </div>
+
+          @if (form.controls.isPermanent.value) {
+            <label class="field field--block field--money">
+              <span class="field__label">Débito mensal por unidade (R$)</span>
+              <div class="input-money">
+                <span class="input-money__prefix" aria-hidden="true">R$</span>
+                <input
+                  type="number"
+                  class="input input--lg input--money"
+                  step="0.01"
+                  min="0.01"
+                  formControlName="permanentMonthlyReais"
+                  placeholder="0,00"
+                />
+              </div>
+            </label>
+          } @else {
+            <div
+              class="mode-tabs mode-tabs--sub"
+              role="tablist"
+              aria-label="Forma de lançamento parcelado"
+            >
+              <button
+                type="button"
+                class="mode-tab"
+                role="tab"
+                [attr.aria-selected]="parcelEntryMode() === 'byInstallments'"
+                [class.mode-tab--active]="parcelEntryMode() === 'byInstallments'"
+                (click)="setParcelEntryMode('byInstallments')"
+              >
+                <span class="mode-tab__name">Manual</span>
+                <span class="mode-tab__desc">Total e n.º de parcelas</span>
+              </button>
+              <button
+                type="button"
+                class="mode-tab"
+                role="tab"
+                [attr.aria-selected]="parcelEntryMode() === 'byObra'"
+                [class.mode-tab--active]="parcelEntryMode() === 'byObra'"
+                (click)="setParcelEntryMode('byObra')"
+              >
+                <span class="mode-tab__name">Obra</span>
+                <span class="mode-tab__desc">Custo total + mensalidade desejada</span>
+              </button>
+            </div>
+
+            @if (parcelEntryMode() === 'byInstallments') {
+              <div class="values-grid">
+                <label class="field field--block field--money">
+                  <span class="field__label">Total por unidade (R$)</span>
+                  <div class="input-money">
+                    <span class="input-money__prefix" aria-hidden="true">R$</span>
+                    <input
+                      type="number"
+                      class="input input--lg input--money"
+                      step="0.01"
+                      min="0.01"
+                      formControlName="termTotalPerUnitReais"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </label>
+                <label class="field field--block">
+                  <span class="field__label">N.º de mensalidades</span>
+                  <input
+                    type="number"
+                    class="input input--lg"
+                    step="1"
+                    min="1"
+                    formControlName="termInstallmentCount"
+                    placeholder="12"
+                  />
+                </label>
+                <label class="field field--block">
+                  <span class="field__label">1.ª mensalidade</span>
+                  <input
+                    type="month"
+                    class="input input--lg"
+                    formControlName="termFirstMonthYm"
+                  />
+                </label>
+              </div>
+              @if (termPreviewFromForm(); as pv) {
+                <div class="preview-card" role="status">
+                  <div class="preview-card__eyebrow">Pré-visualização</div>
+                  <p class="preview-card__main">
+                    <strong>{{ formatCentsBrl(pv.monthlyCents) }}</strong>
+                    <span class="preview-card__per">/ mês · por unidade</span>
+                  </p>
+                  <p class="preview-card__meta">
+                    Competência:
+                    <strong
+                      >{{ formatYmDisplay(form.controls.termFirstMonthYm.value) }} —
+                      {{ formatYmDisplay(pv.endYm) }}</strong
+                    >
+                    · nas futuras taxas condominiais
+                  </p>
+                </div>
+              }
+            } @else {
+              <p class="form-section__inline-hint">
+                O custo total da obra reparte-se em partes iguais por
+                <strong>{{ countPayingUnits() }}</strong> unidade(s) conforme o
+                rateio acima. A mensalidade desejada é um teto: o número de
+                mensalidades sobe o necessário para cobrir o total por unidade.
+              </p>
+              <div class="values-grid">
+                <label class="field field--block field--money">
+                  <span class="field__label">Valor total da obra (R$)</span>
+                  <div class="input-money">
+                    <span class="input-money__prefix" aria-hidden="true">R$</span>
+                    <input
+                      type="number"
+                      class="input input--lg input--money"
+                      step="0.01"
+                      min="0.01"
+                      formControlName="obraTotalReais"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </label>
+                <label class="field field--block field--money">
+                  <span class="field__label">Mensalidade desejada por unidade (R$)</span>
+                  <div class="input-money">
+                    <span class="input-money__prefix" aria-hidden="true">R$</span>
+                    <input
+                      type="number"
+                      class="input input--lg input--money"
+                      step="0.01"
+                      min="0.01"
+                      formControlName="obraDesiredMonthlyReais"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </label>
+                <label class="field field--block">
+                  <span class="field__label">1.ª mensalidade</span>
+                  <input
+                    type="month"
+                    class="input input--lg"
+                    formControlName="termFirstMonthYm"
+                  />
+                </label>
+              </div>
+              @if (countPayingUnits() < 1) {
+                <p class="muted" role="status">
+                  Ajuste o rateio para incluir pelo menos uma unidade.
+                </p>
+              }
+              @if (obraPreviewFromForm(); as op) {
+                <div class="preview-card" role="status">
+                  <div class="preview-card__eyebrow">Pré-visualização (calculado)</div>
+                  <p class="preview-card__main">
+                    <strong>{{ formatCentsBrl(op.monthlyCents) }}</strong>
+                    <span class="preview-card__per">/ mês · por unidade (efetivo)</span>
+                  </p>
+                  <p class="preview-card__meta">
+                    Total por unidade:
+                    <strong>{{ formatCentsBrl(op.totalPerUnitCents) }}</strong>
+                    ·
+                    <strong>{{ op.installmentCount }}</strong> mensalidade(s)
+                  </p>
+                  <p class="preview-card__meta">
+                    Competência:
+                    <strong
+                      >{{ formatYmDisplay(form.controls.termFirstMonthYm.value) }} —
+                      {{ formatYmDisplay(op.endYm) }}</strong
+                    >
+                    · nas futuras taxas condominiais
+                  </p>
+                </div>
+              }
+            }
+          }
+        </div>
+
+        <div class="form-footer form-footer--split">
+          @if (editingId()) {
+            <button
+              type="button"
+              class="btn btn--ghost"
+              [disabled]="saving()"
+              (click)="cancelEdit()"
+            >
+              Cancelar edição
+            </button>
+          }
+          <button type="submit" class="btn btn--submit" [disabled]="saving()">
+            {{
+              saving()
+                ? 'Salvando…'
+                : editingId()
+                  ? 'Salvar alterações'
+                  : 'Criar fundo'
+            }}
           </button>
         </div>
       </form>
     </section>
 
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>Tipo</th>
-            <th>Fim</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (f of funds(); track f.id) {
-            <tr>
-              <td>{{ f.name }}</td>
-              <td>{{ f.isTemporary ? 'Temporário' : 'Permanente' }}</td>
-              <td>{{ f.endsAt || '—' }}</td>
-              <td class="td-right">
-                <button
-                  type="button"
-                  class="btn danger sm"
-                  (click)="remove(f)"
-                >
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <section class="list-section" aria-labelledby="fundos-lista-titulo">
+      <h2 id="fundos-lista-titulo" class="list-section__title">Fundos registados</h2>
+      <p class="list-section__lede">
+        Cada cartão resume um fundo: valor por unidade, período de competências e quem
+        entra no rateio.
+      </p>
+
       @if (funds().length === 0) {
-        <p class="empty">Nenhum fundo cadastrado.</p>
+        <div class="fund-list fund-list--empty">
+          <p class="empty empty--card">Nenhum fundo cadastrado ainda.</p>
+        </div>
+      } @else {
+        <ul class="fund-list" role="list">
+          @for (f of funds(); track f.id) {
+            <li>
+              <article
+                class="fund-card"
+                [class.fund-card--editing]="editingId() === f.id"
+              >
+                <div class="fund-card__top">
+                  <h3 class="fund-card__name">{{ f.name }}</h3>
+                  <span
+                    class="fund-card__badge"
+                    [class.fund-card__badge--permanent]="f.isPermanent"
+                    [class.fund-card__badge--term]="!f.isPermanent"
+                  >
+                    {{ f.isPermanent ? 'Permanente' : 'Parcelado' }}
+                  </span>
+                </div>
+
+                <dl class="fund-card__meta">
+                  <div class="fund-card__kv">
+                    <dt>Mensalidade por unidade</dt>
+                    <dd>{{ monthlyLabel(f) }}</dd>
+                  </div>
+                  <div class="fund-card__kv">
+                    <dt>Período (competências)</dt>
+                    <dd>{{ formatPeriod(f) }}</dd>
+                  </div>
+                  <div class="fund-card__kv fund-card__kv--full">
+                    <dt>Rateio</dt>
+                    <dd>{{ formatAlloc(f) }}</dd>
+                  </div>
+                </dl>
+
+                <div class="fund-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="startEdit(f)"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    class="btn danger sm"
+                    (click)="remove(f)"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </article>
+            </li>
+          }
+        </ul>
       }
-    </div>
+    </section>
   }
 </div>

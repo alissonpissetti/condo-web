@@ -3,7 +3,7 @@
     <a routerLink="/" class="brand" aria-label="Meu Condomínio — início">
       <img
         class="brand-logo"
-        src="/logo-dark.png"
+        src="/logo-white.png"
         width="677"
         height="369"
         alt=""
@@ -26,58 +26,144 @@
 
       @if (selectedCondo.selectedId(); as condoId) {
         <div class="nav-divider" role="separator" aria-hidden="true"></div>
-        <div class="nav-section">
-          <span class="nav-section__label">Gestão</span>
-          <a
-            [routerLink]="['/painel/condominio', condoId, 'editar']"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Editar</a
+        <div class="nav-section nav-section--collapsible">
+          <button
+            type="button"
+            class="nav-section__toggle"
+            [attr.aria-expanded]="gestaoExpanded()"
+            aria-controls="sidebar-gestao-panel"
+            (click)="toggleGestao()"
           >
-          <a
-            [routerLink]="['/painel/condominio', condoId, 'unidades']"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Unidades</a
-          >
-          @if (navData.tree().length > 0) {
-            <div class="nav-nested" aria-label="Atalhos por agrupamento">
-              @for (g of navData.tree(); track g.id) {
-                <span class="nav-nested__label">{{ g.name }}</span>
-                @for (u of g.units; track u.id) {
-                  <a
-                    [routerLink]="['/painel/condominio', condoId, 'unidades']"
-                    [fragment]="u.id"
-                    class="nav-nested__link"
-                    >{{ u.identifier }}</a
+            <span class="nav-section__toggle-label">Gestão</span>
+            <span class="nav-section__chevron" aria-hidden="true"></span>
+          </button>
+          @if (gestaoExpanded()) {
+            <div id="sidebar-gestao-panel" class="nav-section__panel">
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'editar']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Editar</a
+              >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'unidades']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Unidades</a
+              >
+              @if (navData.tree().length > 0) {
+                <div class="nav-subsection">
+                  <button
+                    type="button"
+                    class="nav-subsection__toggle"
+                    [attr.aria-expanded]="unidadesNestedExpanded()"
+                    aria-controls="sidebar-unidades-nested-panel"
+                    (click)="toggleUnidadesNested()"
                   >
-                }
+                    <span class="nav-subsection__toggle-label"
+                      >Atalhos por unidade</span
+                    >
+                    <span class="nav-subsection__chevron" aria-hidden="true"></span>
+                  </button>
+                  @if (unidadesNestedExpanded()) {
+                    <div
+                      id="sidebar-unidades-nested-panel"
+                      class="nav-nested"
+                      aria-label="Atalhos por agrupamento"
+                    >
+                      @for (g of navData.tree(); track g.id) {
+                        <span class="nav-nested__label">{{ g.name }}</span>
+                        @for (u of g.units; track u.id) {
+                          <a
+                            [routerLink]="['/painel/condominio', condoId, 'unidades']"
+                            [fragment]="u.id"
+                            class="nav-nested__link"
+                            >{{ u.identifier }}</a
+                          >
+                        }
+                      }
+                    </div>
+                  }
+                </div>
               }
             </div>
           }
         </div>
 
         <div class="nav-divider" role="separator" aria-hidden="true"></div>
-        <div class="nav-section">
-          <span class="nav-section__label">Financeiro</span>
-          <a
-            [routerLink]="['/painel/condominio', condoId, 'transacoes']"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Transações</a
+        <div class="nav-section nav-section--collapsible">
+          <button
+            type="button"
+            class="nav-section__toggle"
+            [attr.aria-expanded]="financeiroExpanded()"
+            aria-controls="sidebar-financeiro-panel"
+            (click)="toggleFinanceiro()"
           >
-          <a
-            [routerLink]="['/painel/condominio', condoId, 'extrato']"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Extrato</a
+            <span class="nav-section__toggle-label">Financeiro</span>
+            <span class="nav-section__chevron" aria-hidden="true"></span>
+          </button>
+          @if (financeiroExpanded()) {
+            <div id="sidebar-financeiro-panel" class="nav-section__panel">
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'transacoes']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Transações</a
+              >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'extrato']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Extrato</a
+              >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'fundos']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Fundos</a
+              >
+              <a
+                [routerLink]="[
+                  '/painel/condominio',
+                  condoId,
+                  'taxas-condominiais',
+                ]"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Taxas condominiais</a
+              >
+            </div>
+          }
+        </div>
+
+        <div class="nav-divider" role="separator" aria-hidden="true"></div>
+        <div class="nav-section nav-section--collapsible">
+          <button
+            type="button"
+            class="nav-section__toggle"
+            [attr.aria-expanded]="planejamentoExpanded()"
+            aria-controls="sidebar-planejamento-panel"
+            (click)="togglePlanejamento()"
           >
-          <a
-            [routerLink]="['/painel/condominio', condoId, 'fundos']"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-            >Fundos</a
-          >
+            <span class="nav-section__toggle-label">Planejamento</span>
+            <span class="nav-section__chevron" aria-hidden="true"></span>
+          </button>
+          @if (planejamentoExpanded()) {
+            <div id="sidebar-planejamento-panel" class="nav-section__panel">
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'planejamento']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Pautas</a
+              >
+              <a
+                [routerLink]="['/painel/condominio', condoId, 'documentos']"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+                >Documentos</a
+              >
+            </div>
+          }
         </div>
       }
     </nav>

@@ -60,6 +60,30 @@ export const painelRoutes: Routes = [
             (m) => m.PainelFundosComponent,
           ),
       },
+      {
+        path: 'condominio/:condominiumId/taxas-condominiais',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import(
+            './painel-taxas-condominiais/painel-taxas-condominiais.component'
+          ).then((m) => m.PainelTaxasCondominiaisComponent),
+      },
+      {
+        path: 'condominio/:condominiumId/planejamento',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-planejamento/painel-planejamento.component').then(
+            (m) => m.PainelPlanejamentoComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/documentos',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-documentos/painel-documentos.component').then(
+            (m) => m.PainelDocumentosComponent,
+          ),
+      },
     ],
   },
 ];

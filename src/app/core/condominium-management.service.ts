@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, forkJoin, map, of, switchMap } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -120,6 +120,61 @@ export class CondominiumManagementService {
   ): Observable<void> {
     return this.http.delete<void>(
       `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}`,
+    );
+  }
+
+  personCandidate(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+    q: { cpf?: string; email?: string },
+  ): Observable<unknown> {
+    let params = new HttpParams();
+    if (q.cpf) {
+      params = params.set('cpf', q.cpf);
+    }
+    if (q.email) {
+      params = params.set('email', q.email);
+    }
+    return this.http.get<unknown>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/candidate`,
+      { params },
+    );
+  }
+
+  assignUnitPerson(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+    body: Record<string, unknown>,
+  ): Observable<unknown> {
+    return this.http.post<unknown>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/assign`,
+      body,
+    );
+  }
+
+  listPendingInvitations(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+  ): Observable<
+    {
+      id: string;
+      email: string;
+      expiresAt: string;
+      person?: { fullName: string };
+    }[]
+  > {
+    return this.http.get<
+      {
+        id: string;
+        email: string;
+        expiresAt: string;
+        person?: { fullName: string };
+      }[]
+    >(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/invitations`,
     );
   }
 

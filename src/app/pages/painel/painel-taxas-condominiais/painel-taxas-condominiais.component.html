@@ -1,0 +1,136 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Taxas condominiais</h1>
+    <p class="page__intro">
+      Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês, com o
+      mesmo valor para todas as unidades do mesmo agrupamento (nivelado para o
+      máximo do grupo, para evitar diferenças de centavos). Vencimento no dia 10 do
+      mês seguinte.
+    </p>
+  </header>
+
+  <div class="filters card">
+    <div class="row wrap">
+      <label class="field">
+        <span>Competência</span>
+        <input
+          type="month"
+          class="input"
+          [value]="competenceYm()"
+          (input)="setCompetenceYm($any($event.target).value)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn primary"
+        (click)="load()"
+        [disabled]="loading()"
+      >
+        Atualizar
+      </button>
+    </div>
+  </div>
+
+  <div class="card gestao">
+    <h2 class="section-title">Gestão do fechamento</h2>
+    <p class="muted small">
+      O fechamento automático corre no dia 1 de cada mês (servidor). Use os
+      botões abaixo para repetir o processo ou regenerar cobranças após corrigir
+      transações.
+    </p>
+    <div class="row wrap">
+      <button
+        type="button"
+        class="btn primary"
+        (click)="closeMonth()"
+        [disabled]="actionBusy() || loading()"
+      >
+        Executar fechamento
+      </button>
+      <button
+        type="button"
+        class="btn danger"
+        (click)="regenerateMonth()"
+        [disabled]="actionBusy() || loading()"
+      >
+        Regenerar cobranças
+      </button>
+    </div>
+  </div>
+
+  @if (formError()) {
+    <p class="error" role="alert">{{ formError() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Unidade</th>
+            <th>Agrupamento</th>
+            <th class="num">Valor</th>
+            <th>Vencimento</th>
+            <th>Situação</th>
+            <th>Quitar</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of charges(); track c.id) {
+            <tr>
+              <td>{{ c.unitIdentifier }}</td>
+              <td>{{ c.groupingName }}</td>
+              <td class="num">{{ formatCentsBrl(c.amountDueCents) }}</td>
+              <td>{{ formatDateDdMmYyyy(c.dueOn) }}</td>
+              <td>
+                {{ c.status === 'paid' ? 'Pago' : 'Em aberto' }}
+                @if (c.status === 'paid' && c.paidAt) {
+                  <span class="muted"> ({{ formatDateDdMmYyyy(c.paidAt) }})</span>
+                }
+              </td>
+              <td>
+                @if (c.status === 'open') {
+                  <div class="settle-row">
+                    <input
+                      type="text"
+                      class="input flex"
+                      placeholder="UUID da receita"
+                      autocomplete="off"
+                      (input)="updateSettleDraft(c.id, $event)"
+                    />
+                    <button
+                      type="button"
+                      class="btn primary sm"
+                      (click)="settle(c)"
+                      [disabled]="actionBusy()"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+        @if (charges().length > 0) {
+          <tfoot>
+            <tr class="table__footer">
+              <td colspan="2"><strong>Total</strong></td>
+              <td class="num"><strong>{{ totalChargesFormatted() }}</strong></td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        }
+      </table>
+      @if (charges().length === 0) {
+        <p class="empty">Sem cobranças para esta competência.</p>
+      }
+    </div>
+  }
+</div>

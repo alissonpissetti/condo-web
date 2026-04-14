@@ -5,11 +5,16 @@
   </header>
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <form class="form" (ngSubmit)="save()" novalidate>
+    <form
+      class="form"
+      [formGroup]="form"
+      (ngSubmit)="save()"
+      novalidate
+    >
       @if (formError(); as fe) {
         <p class="error" role="alert">{{ fe }}</p>
       }
@@ -31,7 +36,7 @@
 
       <div class="actions">
         <button type="submit" class="btn primary" [disabled]="saving()">
-          {{ saving() ? 'A salvar…' : 'Salvar' }}
+          {{ saving() ? 'Salvando…' : 'Salvar' }}
         </button>
       </div>
     </form>

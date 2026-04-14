@@ -1,0 +1,182 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Planejamento</h1>
+    <p class="page__intro">
+      Pautas de assembleia, votação por unidade e geração de atas (PDF).
+    </p>
+  </header>
+
+  @if (actionError(); as ae) {
+    <p class="error" role="alert">{{ ae }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    @if (isSyndicOrOwner()) {
+      <section class="card">
+        <h2 class="card__title">Nova pauta</h2>
+        <form [formGroup]="createForm" (ngSubmit)="createPoll()" class="form-grid">
+          <label>
+            <span>Título</span>
+            <input class="input" type="text" formControlName="title" />
+          </label>
+          <label class="full">
+            <span>Texto (opcional)</span>
+            <textarea class="input" rows="3" formControlName="body"></textarea>
+          </label>
+          <label>
+            <span>Abre em</span>
+            <input class="input" type="datetime-local" formControlName="opensAt" />
+          </label>
+          <label>
+            <span>Encerra em</span>
+            <input class="input" type="datetime-local" formControlName="closesAt" />
+          </label>
+          <label>
+            <span>Tipo de assembleia</span>
+            <select class="input" formControlName="assemblyType">
+              <option value="ordinary">Ordinária</option>
+              <option value="election">Eleição</option>
+            </select>
+          </label>
+          <label>
+            <span>Opção A</span>
+            <input class="input" type="text" formControlName="optionA" />
+          </label>
+          <label>
+            <span>Opção B</span>
+            <input class="input" type="text" formControlName="optionB" />
+          </label>
+          <div class="full">
+            <button type="submit" class="btn primary" [disabled]="busy()">
+              Criar rascunho
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+
+    <section class="card">
+      <h2 class="card__title">Pautas</h2>
+      @if (polls().length === 0) {
+        <p class="muted">Nenhuma pauta ainda.</p>
+      } @else {
+        <ul class="poll-list">
+          @for (p of polls(); track p.id) {
+            <li>
+              <button type="button" class="poll-item" (click)="selectPoll(p)">
+                <span class="poll-item__title">{{ p.title }}</span>
+                <span class="muted sm">{{ p.status }} · {{ p.assemblyType }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    @if (selected(); as p) {
+      <section class="card">
+        <h2 class="card__title">{{ p.title }}</h2>
+        <p class="muted">Estado: {{ p.status }}</p>
+        @if (p.body) {
+          <p>{{ p.body }}</p>
+        }
+        <ul>
+          @for (o of p.options ?? []; track o.id) {
+            <li>{{ o.label }}</li>
+          }
+        </ul>
+
+        @if (p.status === 'open') {
+          <form [formGroup]="voteForm" (ngSubmit)="castVote(p)" class="vote-form">
+            <h3>O seu voto (por unidade)</h3>
+            <label>
+              <span>Unidade</span>
+              <select class="input" formControlName="unitId">
+                <option value="">—</option>
+                @for (u of myUnits(); track u.id) {
+                  <option [value]="u.id">{{ u.identifier }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Opção</span>
+              <select class="input" formControlName="optionId">
+                <option value="">—</option>
+                @for (o of p.options ?? []; track o.id) {
+                  <option [value]="o.id">{{ o.label }}</option>
+                }
+              </select>
+            </label>
+            <button type="submit" class="btn primary" [disabled]="busy()">
+              Submeter voto
+            </button>
+          </form>
+        }
+
+        @if (isMgmt() && results(); as r) {
+          <div class="results">
+            <h3>Resultados</h3>
+            <ul>
+              @for (o of r.options; track o.id) {
+                <li>{{ o.label }}: {{ o.votes }}</li>
+              }
+            </ul>
+            <p class="muted">Total de votos: {{ r.totalVotes }}</p>
+          </div>
+        }
+
+        @if (isSyndicOrOwner()) {
+          <div class="mgmt-actions">
+            @if (p.status === 'draft') {
+              <button
+                type="button"
+                class="btn primary"
+                [disabled]="busy()"
+                (click)="openPoll(p)"
+              >
+                Abrir votação
+              </button>
+            }
+            @if (p.status === 'open') {
+              <button
+                type="button"
+                class="btn ghost"
+                [disabled]="busy()"
+                (click)="closePoll(p)"
+              >
+                Encerrar
+              </button>
+            }
+            @if (p.status === 'closed') {
+              <form [formGroup]="decideForm" (ngSubmit)="decide(p)" class="row">
+                <select class="input" formControlName="optionId">
+                  <option value="">Opção decidida</option>
+                  @for (o of p.options ?? []; track o.id) {
+                    <option [value]="o.id">{{ o.label }}</option>
+                  }
+                </select>
+                <button type="submit" class="btn primary" [disabled]="busy()">
+                  Registar decisão
+                </button>
+              </form>
+            }
+            @if (p.status === 'closed' || p.status === 'decided') {
+              <button
+                type="button"
+                class="btn ghost"
+                [disabled]="busy()"
+                (click)="generateMinutes(p)"
+              >
+                Gerar PDF da ata
+              </button>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+</div>

@@ -14,7 +14,7 @@ import {
 
 /**
  * Número do endereço: dígitos, opcionalmente uma letra (ex.: 123-A) ou S/N.
- * O FormControl guarda valor normalizado (sem hífen entre número e letra).
+ * O FormControl armazena valor normalizado (sem hífen entre número e letra).
  */
 @Directive({
   standalone: true,

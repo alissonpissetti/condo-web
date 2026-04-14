@@ -6,11 +6,17 @@
   background: var(--bg);
 }
 
+.layout-box {
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  box-sizing: border-box;
+}
+
 .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem 1.25rem 0.65rem 1.5rem;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -19,6 +25,14 @@
   color: #0f172a;
   border-bottom: 1px solid #e2e8f0;
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+
+  &__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
 
   .btn.ghost {
     color: #334155;
@@ -91,9 +105,8 @@ main {
 .hero {
   display: grid;
   gap: 2.5rem;
-  padding: 3rem 1.5rem 4rem;
-  max-width: 1100px;
-  margin: 0 auto;
+  padding-top: 3rem;
+  padding-bottom: 4rem;
   align-items: center;
 
   @media (min-width: 900px) {
@@ -183,9 +196,7 @@ h1 {
 .features {
   display: grid;
   gap: 1.25rem;
-  padding: 0 1.5rem 4rem;
-  max-width: 1100px;
-  margin: 0 auto;
+  padding-bottom: 4rem;
 
   @media (min-width: 720px) {
     grid-template-columns: repeat(3, 1fr);
@@ -212,15 +223,19 @@ h1 {
 }
 
 .footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.5rem;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.25rem 1.5rem 2rem;
   border-top: 1px solid var(--border);
   font-size: 0.9rem;
   color: var(--muted);
+
+  &__inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1.25rem;
+    padding-bottom: 2rem;
+  }
 }
 
 .footer-brand {

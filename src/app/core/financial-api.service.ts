@@ -14,8 +14,14 @@ export interface FinancialFund {
   id: string;
   condominiumId: string;
   name: string;
-  isTemporary: boolean;
-  endsAt: string | null;
+  isPermanent: boolean;
+  allocationRule: AllocationRule | null;
+  permanentMonthlyDebitCents: string | null;
+  termTotalPerUnitCents: string | null;
+  termInstallmentCount: number | null;
+  termMonthlyPerUnitCents: string | null;
+  periodStartYm?: string | null;
+  periodEndYm?: string | null;
   createdAt: string;
 }
 
@@ -36,6 +42,8 @@ export interface FinancialTransaction {
   title: string;
   description: string | null;
   allocationRule: AllocationRule;
+  /** Chave relativa no armazenamento do condomínio (comprovante). */
+  receiptStorageKey?: string | null;
   fund?: FinancialFund | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
@@ -66,6 +74,19 @@ export interface FinancialStatement {
   transactions: StatementTransactionRow[];
 }
 
+export interface CondominiumFeeCharge {
+  id: string;
+  competenceYm: string;
+  unitId: string;
+  unitIdentifier: string;
+  groupingName: string;
+  amountDueCents: string;
+  dueOn: string;
+  status: 'open' | 'paid';
+  paidAt: string | null;
+  incomeTransactionId: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinancialApiService {
   private readonly http = inject(HttpClient);
@@ -80,7 +101,15 @@ export class FinancialApiService {
 
   createFund(
     condoId: string,
-    body: { name: string; isTemporary?: boolean; endsAt?: string | null },
+    body: {
+      name: string;
+      isPermanent?: boolean;
+      allocationRule: AllocationRule;
+      permanentMonthlyDebitCents?: number;
+      termTotalPerUnitCents?: number;
+      termInstallmentCount?: number;
+      termFirstMonthYm?: string;
+    },
   ): Observable<FinancialFund> {
     return this.http.post<FinancialFund>(`${this.base(condoId)}/funds`, body);
   }
@@ -90,8 +119,12 @@ export class FinancialApiService {
     fundId: string,
     body: Partial<{
       name: string;
-      isTemporary: boolean;
-      endsAt: string | null;
+      isPermanent: boolean;
+      allocationRule: AllocationRule;
+      permanentMonthlyDebitCents: number;
+      termTotalPerUnitCents: number;
+      termInstallmentCount: number;
+      termFirstMonthYm: string;
     }>,
   ): Observable<FinancialFund> {
     return this.http.patch<FinancialFund>(
@@ -118,6 +151,26 @@ export class FinancialApiService {
     );
   }
 
+  uploadTransactionReceipt(
+    condoId: string,
+    file: File,
+  ): Observable<{ receiptStorageKey: string }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return this.http.post<{ receiptStorageKey: string }>(
+      `${this.base(condoId)}/transaction-receipts`,
+      fd,
+    );
+  }
+
+  downloadTransactionReceipt(condoId: string, key: string): Observable<Blob> {
+    const params = new HttpParams().set('key', key);
+    return this.http.get(`${this.base(condoId)}/transaction-receipts/file`, {
+      params,
+      responseType: 'blob',
+    });
+  }
+
   createTransaction(
     condoId: string,
     body: {
@@ -128,6 +181,7 @@ export class FinancialApiService {
       description?: string | null;
       fundId?: string | null;
       allocationRule: AllocationRule;
+      receiptStorageKey?: string;
     },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
@@ -147,6 +201,7 @@ export class FinancialApiService {
       description: string | null;
       fundId: string | null;
       allocationRule: AllocationRule;
+      receiptStorageKey: string | null;
     }>,
   ): Observable<FinancialTransaction> {
     return this.http.patch<FinancialTransaction>(
@@ -174,6 +229,48 @@ export class FinancialApiService {
     return this.http.get<FinancialStatement>(
       `${this.base(condoId)}/financial-statement`,
       { params },
+    );
+  }
+
+  listCondominiumFees(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<CondominiumFeeCharge[]> {
+    const params = new HttpParams().set('competenceYm', competenceYm);
+    return this.http.get<CondominiumFeeCharge[]>(
+      `${this.base(condoId)}/condominium-fees`,
+      { params },
+    );
+  }
+
+  closeCondominiumFeeMonth(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<CondominiumFeeCharge[]> {
+    return this.http.post<CondominiumFeeCharge[]>(
+      `${this.base(condoId)}/condominium-fees/close-month`,
+      { competenceYm },
+    );
+  }
+
+  regenerateCondominiumFeeMonth(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<CondominiumFeeCharge[]> {
+    return this.http.post<CondominiumFeeCharge[]>(
+      `${this.base(condoId)}/condominium-fees/regenerate-month`,
+      { competenceYm },
+    );
+  }
+
+  settleCondominiumFee(
+    condoId: string,
+    chargeId: string,
+    incomeTransactionId: string,
+  ): Observable<CondominiumFeeCharge> {
+    return this.http.post<CondominiumFeeCharge>(
+      `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
+      { incomeTransactionId },
     );
   }
 }

@@ -91,7 +91,7 @@
         <tbody>
           @for (t of statement()!.transactions; track t.id) {
             <tr>
-              <td>{{ t.occurredOn }}</td>
+              <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
               <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
               <td>{{ t.title }}</td>
               <td>{{ t.fundName || '—' }}</td>

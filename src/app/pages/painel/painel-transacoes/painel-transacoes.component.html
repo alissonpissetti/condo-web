@@ -2,22 +2,21 @@
   <header class="page__header">
     <h1>Transações</h1>
     <p class="page__intro">
-      Despesas e receitas com rateio entre unidades (igualitário, por unidade,
-      por agrupamento ou todos exceto selecionados). Receitas podem ser sem
-      repartição.
+      Despesas e receitas com rateio entre unidades. Receitas podem ser sem repartição.
+      Opcionalmente anexe um comprovante (PDF ou imagem).
     </p>
   </header>
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <div class="filters row wrap">
-      <label class="field grow">
-        <span>Filtrar por fundo</span>
+    <div class="filters-toolbar">
+      <label class="field field--block">
+        <span class="field__label">Filtrar por fundo</span>
         <select
-          class="input"
+          class="input input--lg"
           [value]="fundFilter()"
           (change)="setFundFilter($any($event.target).value)"
         >
@@ -29,162 +28,335 @@
       </label>
     </div>
 
-    <section class="card form-card">
-      <h2 class="card__title">
-        {{ editingId() ? 'Editar transação' : 'Nova transação' }}
-      </h2>
-      @if (formError(); as fe) {
-        <p class="error" role="alert">{{ fe }}</p>
-      }
-      <div class="grid">
-        <label class="field">
-          <span>Tipo</span>
-          <select
-            class="input"
-            [value]="txKind()"
-            (change)="onTxKindChange($any($event.target).value)"
-          >
-            <option value="expense">Despesa</option>
-            <option value="income">Receita</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Valor (R$)</span>
-          <input
-            type="number"
-            class="input"
-            step="0.01"
-            min="0.01"
-            [value]="amountReais() || ''"
-            (input)="setAmountFromInput($any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span>Data</span>
-          <input
-            type="date"
-            class="input"
-            [value]="occurredOn()"
-            (input)="occurredOn.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field grow">
-          <span>Fundo (opcional)</span>
-          <select
-            class="input"
-            [value]="fundIdForm()"
-            (change)="fundIdForm.set($any($event.target).value)"
-          >
-            <option value="">—</option>
-            @for (f of funds(); track f.id) {
-              <option [value]="f.id">{{ f.name }}</option>
-            }
-          </select>
-        </label>
-        <label class="field grow2">
-          <span>Título</span>
-          <input
-            type="text"
-            class="input"
-            [value]="titleTx()"
-            (input)="titleTx.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field grow2">
-          <span>Descrição</span>
-          <input
-            type="text"
-            class="input"
-            [value]="descriptionTx()"
-            (input)="descriptionTx.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field grow2">
-          <span>Rateio</span>
-          <select
-            class="input"
-            [value]="allocKind()"
-            (change)="onAllocKindChange($any($event.target).value)"
-          >
-            <option value="all_units_equal">Todas as unidades (igual)</option>
-            <option value="unit_ids">Unidades selecionadas</option>
-            <option value="grouping_ids">Agrupamentos selecionados</option>
-            <option value="all_units_except">Todas exceto selecionadas</option>
-            @if (txKind() === 'income') {
-              <option value="none">Sem repartição por unidade</option>
-            }
-          </select>
-        </label>
+    <section class="form-card">
+      <div class="form-card__head">
+        <h2 class="form-card__title">
+          {{ editingId() ? 'Editar transação' : 'Nova transação' }}
+        </h2>
+        <p class="form-card__lede">
+          @if (editingId()) {
+            Altere os blocos abaixo e salve. Envie um novo arquivo para substituir o
+            comprovante, ou remova-o com o botão correspondente.
+          } @else {
+            Preencha por blocos: identificação, tipo, rateio, valores e, se quiser,
+            comprovante.
+          }
+        </p>
       </div>
 
-      @if (allocKind() === 'unit_ids') {
-        <div class="pick-list">
-          <span class="pick-list__label">Unidades incluídas</span>
-          <div class="pick-list__items">
-            @for (u of flatUnits(); track u.id) {
-              <label class="pick">
-                <input
-                  type="checkbox"
-                  [checked]="unitInInclude(u.id)"
-                  (change)="toggleUnit(u.id, 'include')"
-                />
-                {{ u.groupingName }} — {{ u.identifier }}
-              </label>
-            }
-          </div>
-        </div>
+      @if (formError(); as fe) {
+        <p class="error error--form" role="alert">{{ fe }}</p>
       }
 
-      @if (allocKind() === 'grouping_ids') {
-        <div class="pick-list">
-          <span class="pick-list__label">Agrupamentos incluídos</span>
-          <div class="pick-list__items">
-            @for (g of tree(); track g.id) {
-              <label class="pick">
-                <input
-                  type="checkbox"
-                  [checked]="groupingSelected(g.id)"
-                  (change)="toggleGrouping(g.id)"
-                />
-                {{ g.name }}
-              </label>
-            }
+      <div class="tx-form">
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">1</span>
+            <div>
+              <h3 class="form-section__title">Identificação</h3>
+              <p class="form-section__hint">
+                Título e descrição aparecem no extrato e na lista.
+              </p>
+            </div>
+          </div>
+          <div class="values-grid">
+            <label class="field field--block">
+              <span class="field__label">Título</span>
+              <input
+                type="text"
+                class="input input--lg"
+                [value]="titleTx()"
+                (input)="titleTx.set($any($event.target).value)"
+                placeholder="Ex.: Conta de luz, Taxa extra"
+                autocomplete="off"
+              />
+            </label>
+            <label class="field field--block">
+              <span class="field__label">Descrição (opcional)</span>
+              <input
+                type="text"
+                class="input input--lg"
+                [value]="descriptionTx()"
+                (input)="descriptionTx.set($any($event.target).value)"
+                placeholder="Detalhes adicionais"
+                autocomplete="off"
+              />
+            </label>
           </div>
         </div>
-      }
 
-      @if (allocKind() === 'all_units_except') {
-        <div class="pick-list">
-          <span class="pick-list__label">Unidades excluídas do rateio</span>
-          <div class="pick-list__items">
-            @for (u of flatUnits(); track u.id) {
-              <label class="pick">
-                <input
-                  type="checkbox"
-                  [checked]="unitInExclude(u.id)"
-                  (change)="toggleUnit(u.id, 'exclude')"
-                />
-                {{ u.groupingName }} — {{ u.identifier }}
-              </label>
-            }
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">2</span>
+            <div>
+              <h3 class="form-section__title">Tipo</h3>
+              <p class="form-section__hint">
+                Despesa reparte custo; receita pode não repartir por unidade.
+              </p>
+            </div>
+          </div>
+          <div class="mode-tabs" role="tablist" aria-label="Tipo de transação">
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="txKind() === 'expense'"
+              [class.mode-tab--active]="txKind() === 'expense'"
+              (click)="onTxKindChange('expense')"
+            >
+              <span class="mode-tab__name">Despesa</span>
+              <span class="mode-tab__desc">Custo para o condomínio</span>
+            </button>
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="txKind() === 'income'"
+              [class.mode-tab--active]="txKind() === 'income'"
+              (click)="onTxKindChange('income')"
+            >
+              <span class="mode-tab__name">Receita</span>
+              <span class="mode-tab__desc">Entrada de valores</span>
+            </button>
           </div>
         </div>
-      }
 
-      <div class="actions">
-        <button
-          type="button"
-          class="btn primary"
-          (click)="submit()"
-          [disabled]="saving()"
-        >
-          {{ saving() ? 'A salvar…' : editingId() ? 'Salvar' : 'Adicionar' }}
-        </button>
-        @if (editingId()) {
-          <button type="button" class="btn ghost" (click)="resetForm()">
-            Cancelar edição
+        <div class="form-section form-section--alloc">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">3</span>
+            <div>
+              <h3 class="form-section__title">Rateio</h3>
+              <p class="form-section__hint">
+                Quem entra no cálculo desta transação (mesma lógica dos fundos).
+              </p>
+            </div>
+          </div>
+          <label class="field field--block">
+            <span class="field__label">Critério</span>
+            <select
+              class="input input--lg"
+              [value]="allocKind()"
+              (change)="onAllocKindChange($any($event.target).value)"
+            >
+              <option value="all_units_equal">Todas as unidades (partes iguais)</option>
+              <option value="unit_ids">Apenas unidades selecionadas</option>
+              <option value="grouping_ids">Apenas agrupamentos selecionados</option>
+              <option value="all_units_except">Todas exceto as selecionadas</option>
+              @if (txKind() === 'income') {
+                <option value="none">Sem repartição por unidade</option>
+              }
+            </select>
+          </label>
+
+          @if (allocKind() === 'unit_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades incluídas</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades neste condomínio.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInInclude(u.id)"
+                        (change)="toggleUnit(u.id, 'include')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'grouping_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Agrupamentos incluídos</span>
+              @if (tree().length === 0) {
+                <p class="pick-panel__empty">Sem agrupamentos.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (g of tree(); track g.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="groupingSelected(g.id)"
+                        (change)="toggleGrouping(g.id)"
+                      />
+                      <span class="pick-row__text">{{ g.name }}</span>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'all_units_except') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades excluídas do rateio</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInExclude(u.id)"
+                        (change)="toggleUnit(u.id, 'exclude')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">4</span>
+            <div>
+              <h3 class="form-section__title">Valores e competência</h3>
+              <p class="form-section__hint">
+                Valor total da transação e data. Fundo opcional para filtrar no painel.
+              </p>
+            </div>
+          </div>
+          <div class="values-grid">
+            <label class="field field--block field--money">
+              <span class="field__label">Valor (R$)</span>
+              <div class="input-money">
+                <span class="input-money__prefix" aria-hidden="true">R$</span>
+                <input
+                  type="number"
+                  class="input input--lg input--money"
+                  step="0.01"
+                  min="0.01"
+                  [value]="amountReais() || ''"
+                  (input)="setAmountFromInput($any($event.target).value)"
+                  placeholder="0,00"
+                />
+              </div>
+            </label>
+            <label class="field field--block">
+              <span class="field__label">Data (ocorrência)</span>
+              <input
+                type="date"
+                class="input input--lg"
+                [value]="occurredOn()"
+                (input)="occurredOn.set($any($event.target).value)"
+              />
+            </label>
+            <label class="field field--block">
+              <span class="field__label">Fundo (opcional)</span>
+              <select
+                class="input input--lg"
+                [value]="fundIdForm()"
+                (change)="fundIdForm.set($any($event.target).value)"
+              >
+                <option value="">—</option>
+                @for (f of funds(); track f.id) {
+                  <option [value]="f.id">{{ f.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">5</span>
+            <div>
+              <h3 class="form-section__title">Comprovante</h3>
+              <p class="form-section__hint">
+                PDF, JPG, PNG ou WEBP, até 8 MB. O arquivo fica no armazenamento do
+                servidor (pasta configurável; futuro: S3 compatível).
+              </p>
+            </div>
+          </div>
+          <div class="receipt-field">
+            @if (
+              editingId() &&
+              editingReceiptKey() &&
+              !receiptRemoved() &&
+              !pendingReceiptFile()
+            ) {
+              <p class="form-section__inline-hint">
+                Comprovante atual anexo.
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="downloadEditingReceipt()"
+                >
+                  Baixar atual
+                </button>
+              </p>
+            }
+            <input
+              #receiptInput
+              type="file"
+              class="receipt-field__input"
+              accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+              (change)="onReceiptFileChange($event)"
+            />
+            <div class="receipt-field__box">
+              <button
+                type="button"
+                class="btn btn--ghost sm"
+                (click)="receiptInput.click()"
+              >
+                Escolher arquivo…
+              </button>
+              <span class="receipt-field__name">{{
+                pendingReceiptFile()?.name || 'Nenhum arquivo selecionado'
+              }}</span>
+              @if (pendingReceiptFile() || (editingId() && editingReceiptKey() && !receiptRemoved())) {
+                <button type="button" class="btn btn--ghost sm" (click)="removeReceipt()">
+                  Remover
+                </button>
+              }
+            </div>
+            <p class="receipt-field__hint">
+              Ao salvar, o arquivo é enviado primeiro e vinculado à transação.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-footer form-footer--split">
+          @if (editingId()) {
+            <button
+              type="button"
+              class="btn btn--ghost"
+              [disabled]="saving()"
+              (click)="resetForm()"
+            >
+              Cancelar edição
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn--submit"
+            [disabled]="saving()"
+            (click)="submit()"
+          >
+            {{
+              saving()
+                ? 'Salvando…'
+                : editingId()
+                  ? 'Salvar alterações'
+                  : 'Adicionar transação'
+            }}
           </button>
-        }
+        </div>
       </div>
     </section>
 
@@ -197,21 +369,35 @@
             <th>Título</th>
             <th>Fundo</th>
             <th class="num">Valor</th>
-            <th></th>
+            <th>Comprovante</th>
+            <th class="td-actions"></th>
           </tr>
         </thead>
         <tbody>
           @for (t of transactions(); track t.id) {
-            <tr>
-              <td>{{ t.occurredOn.slice(0, 10) }}</td>
+            <tr [class.row--editing]="editingId() === t.id">
+              <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
               <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
               <td>{{ t.title }}</td>
               <td>{{ t.fund?.name || '—' }}</td>
               <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
+              <td>
+                @if (t.receiptStorageKey) {
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="downloadRowReceipt(t)"
+                  >
+                    Baixar
+                  </button>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
               <td class="td-actions">
                 <button
                   type="button"
-                  class="btn ghost sm"
+                  class="btn btn--ghost sm"
                   (click)="startEdit(t)"
                 >
                   Editar

@@ -10,6 +10,35 @@ const EXACT: Record<string, string> = {
   'Invalid credentials': 'Email ou senha incorretos.',
   'Número de telefone inválido.': 'Número de telefone inválido.',
   'Código inválido ou expirado.': 'Código inválido ou expirado.',
+  'Sessão de recuperação inválida ou expirada.':
+    'Sessão de recuperação inválida ou expirada. Volte a pedir o código.',
+  'Recuperação por email indisponível neste ambiente.':
+    'Recuperação por email indisponível neste ambiente.',
+  'Recuperação por SMS indisponível neste ambiente.':
+    'Recuperação por SMS indisponível neste ambiente.',
+  'Indique o email.': 'Indique o email.',
+  'Indique o mês/ano inicial e o mês/ano final do período, ou deixe os dois em branco.':
+    'Indique o mês/ano inicial e o final do período, ou deixe os dois em branco.',
+  'Período inválido. Use o formato AAAA-MM em ambos os campos.':
+    'Período inválido. Use o formato AAAA-MM em ambos os campos.',
+  'O mês/ano inicial não pode ser posterior ao mês/ano final.':
+    'O mês/ano inicial não pode ser posterior ao mês/ano final.',
+  'Regra de rateio inválida.': 'Regra de rateio inválida.',
+  'Fundo deve ter rateio entre unidades (não use «sem repartição»).':
+    'Fundo deve ter rateio entre unidades (não use «sem repartição»).',
+  'O rateio selecionado não inclui nenhuma unidade.':
+    'O rateio selecionado não inclui nenhuma unidade.',
+  'Indique o débito mensal em centavos (valor inteiro ≥ 1).':
+    'Indique o débito mensal (valor válido).',
+  'Indique o total por unidade a arrecadar (centavos, ≥ 1).':
+    'Indique o total por unidade a arrecadar.',
+  'Indique em quantas mensalidades parcelar (≥ 1).':
+    'Indique em quantas mensalidades parcelar.',
+  'Indique o mês/ano da primeira mensalidade (AAAA-MM).':
+    'Indique o mês/ano da primeira mensalidade.',
+  'O valor total por unidade é baixo demais para o número de parcelas.':
+    'O total por unidade é baixo demais para o número de parcelas.',
+  'Regra de rateio em falta.': 'Regra de rateio em falta.',
   'Login por SMS indisponível neste ambiente.':
     'Login por SMS indisponível neste ambiente.',
   'Não foi possível contactar o serviço de SMS.':
@@ -68,6 +97,17 @@ const EXACT: Record<string, string> = {
   'Invalid date range': 'Intervalo de datas inválido.',
   'from must be before or equal to to':
     'A data inicial deve ser anterior ou igual à final.',
+  'Invalid competenceYm': 'Competência inválida. Use o formato AAAA-MM.',
+  'competenceYm query is required': 'Indique a competência (AAAA-MM).',
+  'Cannot regenerate: there are paid charges for this month. Unlink payments first.':
+    'Não é possível regenerar: existem cobranças já pagas neste mês. Desvincule os pagamentos primeiro.',
+  'Charge is not open': 'Esta cobrança não está em aberto.',
+  'Charge not found': 'Cobrança não encontrada.',
+  'Income transaction has no allocation for this unit':
+    'A receita não tem rateio para esta unidade.',
+  'Income amount allocated to this unit does not match charge':
+    'O valor da receita rateado para esta unidade não coincide com a cobrança.',
+  'Transaction must be income': 'A transação tem de ser uma receita.',
 };
 
 function translateApiMessage(raw: string): string {

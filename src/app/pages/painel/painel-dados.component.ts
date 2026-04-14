@@ -236,7 +236,7 @@ export class PainelDadosComponent implements OnInit {
     this.auth.updateMe(body).subscribe({
       next: (me) => {
         this.saving.set(false);
-        this.saveSuccess.set('Dados guardados com sucesso.');
+        this.saveSuccess.set('Dados salvos com sucesso.');
         this.hasPersonProfile.set(!!me.person);
         this.initialPersonCpf.set(me.person?.cpf ?? null);
         this.personRecordId.set(me.person?.id ?? null);

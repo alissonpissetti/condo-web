@@ -10,7 +10,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { formatCpfDisplay, toCpfDigits } from './br-cpf-mask';
 
 /**
- * CPF com máscara 000.000.000-00; o FormControl guarda só dígitos (até 11).
+ * CPF com máscara 000.000.000-00; o FormControl armazena só dígitos (até 11).
  */
 @Directive({
   standalone: true,

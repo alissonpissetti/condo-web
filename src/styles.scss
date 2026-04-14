@@ -1,3 +1,5 @@
+@use './styles/painel-form-ui.scss';
+
 :root {
   color-scheme: light dark;
   --bg: #0b1020;
@@ -29,8 +31,13 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  min-height: 100%;
   font-family:
     'Inter',
     system-ui,
