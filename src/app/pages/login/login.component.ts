@@ -147,8 +147,8 @@ export class LoginComponent {
   private messageFromHttp(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Não foi possível contactar o servidor. Verifique a ligação à internet e tente novamente.',
-      default: 'Não foi possível iniciar sessão.',
+        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
+      default: 'Não foi possível fazer login.',
     });
   }
 }

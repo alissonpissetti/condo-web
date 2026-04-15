@@ -591,7 +591,7 @@ export class PainelFundosComponent implements OnInit {
   }
 
   remove(f: FinancialFund): void {
-    if (!confirm(`Eliminar o fundo «${f.name}»?`)) return;
+    if (!confirm(`Excluir o fundo «${f.name}»?`)) return;
     if (this.editingId() === f.id) {
       this.cancelEdit();
     }
@@ -659,7 +659,7 @@ export class PainelFundosComponent implements OnInit {
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

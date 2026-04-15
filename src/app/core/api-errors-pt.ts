@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
 const EXACT: Record<string, string> = {
-  'Email already registered': 'Este email já está registado.',
-  'Phone already registered': 'Este telefone já está registado.',
+  'Email already registered': 'Este e-mail já está cadastrado.',
+  'Phone already registered': 'Este telefone já está cadastrado.',
   'Utilizador não encontrado.': 'Conta não encontrada.',
   'Senha atual incorreta.': 'Senha atual incorreta.',
   'Indique a senha atual para definir uma nova.':
@@ -11,7 +11,7 @@ const EXACT: Record<string, string> = {
   'Número de telefone inválido.': 'Número de telefone inválido.',
   'Código inválido ou expirado.': 'Código inválido ou expirado.',
   'Sessão de recuperação inválida ou expirada.':
-    'Sessão de recuperação inválida ou expirada. Volte a pedir o código.',
+    'Etapa de recuperação inválida ou expirada. Solicite o código novamente.',
   'Recuperação por email indisponível neste ambiente.':
     'Recuperação por email indisponível neste ambiente.',
   'Recuperação por SMS indisponível neste ambiente.':
@@ -42,7 +42,7 @@ const EXACT: Record<string, string> = {
   'Login por SMS indisponível neste ambiente.':
     'Login por SMS indisponível neste ambiente.',
   'Não foi possível contactar o serviço de SMS.':
-    'Não foi possível contactar o serviço de SMS.',
+    'Não foi possível contatar o serviço de SMS.',
   'O serviço de SMS recusou o envio.': 'O serviço de SMS recusou o envio.',
   Unauthorized: 'Não autorizado.',
   Forbidden: 'Acesso negado.',
@@ -58,20 +58,20 @@ const EXACT: Record<string, string> = {
     'Agrupamento não encontrado neste condomínio.',
   'Unit not found': 'Unidade não encontrada.',
   'Cannot delete the last grouping':
-    'Não é possível eliminar o último agrupamento.',
+    'Não é possível excluir o último agrupamento.',
   'Email já está associado a outra ficha de pessoa.':
     'Email já está associado a outra ficha de pessoa.',
   'CPF já registado noutra ficha de pessoa.':
-    'CPF já registado noutra ficha de pessoa.',
+    'CPF já cadastrado em outra ficha de pessoa.',
   'Email ou CPF já registado noutra ficha de pessoa.':
-    'Email ou CPF já registado noutra ficha de pessoa.',
+    'E-mail ou CPF já cadastrado em outra ficha de pessoa.',
   'CEP inválido: são necessários 8 dígitos quando indicar endereço.':
     'CEP inválido: são necessários 8 dígitos quando indicar endereço.',
   'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.':
     'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.',
   'UF deve ter 2 letras.': 'UF deve ter 2 letras.',
   'Indique o nome completo para registar o endereço na ficha.':
-    'Indique o nome completo para registar o endereço na ficha.',
+    'Indique o nome completo para cadastrar o endereço na ficha.',
   'Expense transactions require an allocation rule':
     'Despesas exigem uma regra de rateio.',
   'Invalid allocation rule': 'Regra de rateio inválida.',

@@ -47,7 +47,7 @@
   </div>
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else if (statement()) {

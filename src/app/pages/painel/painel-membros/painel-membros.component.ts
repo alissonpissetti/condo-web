@@ -19,6 +19,7 @@ import {
   PlanningApiService,
   type CondominiumParticipant,
   type CondoAccess,
+  type GovernanceRole,
 } from '../../../core/planning-api.service';
 
 @Component({
@@ -116,6 +117,37 @@ export class PainelMembrosComponent implements OnInit {
     const name = p.person?.fullName?.trim();
     if (name) return name;
     return p.user?.email ?? '—';
+  }
+
+  protected initials(p: CondominiumParticipant): string {
+    const name = p.person?.fullName?.trim();
+    if (name) {
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return (
+          parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+        ).toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
+    const email = p.user?.email;
+    if (email) return email.slice(0, 2).toUpperCase();
+    return '?';
+  }
+
+  protected roleLabel(role: GovernanceRole): string {
+    switch (role) {
+      case 'owner':
+        return 'Titular';
+      case 'syndic':
+        return 'Síndico';
+      case 'sub_syndic':
+        return 'Subsíndico';
+      case 'admin':
+        return 'Administrador';
+      case 'member':
+        return 'Membro';
+    }
   }
 
   protected reloadAll(): void {
@@ -234,7 +266,7 @@ export class PainelMembrosComponent implements OnInit {
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

@@ -335,7 +335,7 @@ export class PainelDadosComponent implements OnInit {
   private messageFromHttp(err: HttpErrorResponse, fallback: string): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: fallback,
     });
   }

@@ -25,7 +25,7 @@ export class InvitesPublicService {
 
   accept(
     token: string,
-    body: { password: string; fullName?: string },
+    body: { password?: string; fullName?: string },
   ): Observable<{ message: string; userId: string }> {
     return this.http.post<{ message: string; userId: string }>(
       `${environment.apiUrl}/invitations/accept/${encodeURIComponent(token)}`,

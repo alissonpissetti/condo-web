@@ -69,8 +69,18 @@ export interface Condominium {
   id: string;
   name: string;
   ownerId: string;
+  /** Plano SaaS gravado no condomínio; ausente ou null = fallback (titular / padrão). */
+  saasPlanId?: number | null;
+  /** Plano efectivo para faturação (listagem enriquecida). */
+  billingPlanId?: number;
+  billingPlanName?: string;
+  billingPricePerUnitCents?: number;
   createdAt: string;
   updatedAt: string;
+  /** Listagem: existe participante com papel síndico. */
+  hasSyndic?: boolean;
+  /** Nome completo no perfil da pessoa; nunca e-mail. */
+  syndicName?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -192,10 +202,21 @@ export class AuthService {
     return this.http.get<Condominium[]>(`${environment.apiUrl}/condominiums`);
   }
 
-  createCondominium(name: string): Observable<Condominium> {
+  createCondominium(name: string, planId: number): Observable<Condominium> {
     return this.http.post<Condominium>(`${environment.apiUrl}/condominiums`, {
       name,
+      planId,
     });
+  }
+
+  patchCondominium(
+    id: string,
+    body: { name?: string; planId?: number },
+  ): Observable<Condominium> {
+    return this.http.patch<Condominium>(
+      `${environment.apiUrl}/condominiums/${id}`,
+      body,
+    );
   }
 
   deleteCondominium(id: string): Observable<void> {

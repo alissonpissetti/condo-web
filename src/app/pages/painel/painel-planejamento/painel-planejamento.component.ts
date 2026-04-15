@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { DestroyRef, Component, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormArray,
   FormBuilder,
@@ -7,7 +8,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   PlanningApiService,
@@ -15,18 +16,20 @@ import {
   type PlanningPoll,
   type PlanningPollAttachment,
   type PollResults,
+  type PollUnitVoteRow,
 } from '../../../core/planning-api.service';
 import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.component';
 
 @Component({
   selector: 'app-painel-planejamento',
   standalone: true,
-  imports: [ReactiveFormsModule, PollBodyEditorComponent],
+  imports: [ReactiveFormsModule, RouterLink, PollBodyEditorComponent],
   templateUrl: './painel-planejamento.component.html',
   styleUrl: './painel-planejamento.component.scss',
 })
 export class PainelPlanejamentoComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(PlanningApiService);
   private readonly fb = inject(FormBuilder);
 
@@ -39,7 +42,14 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected readonly loadError = signal<string | null>(null);
   protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
-  protected readonly loading = signal(true);
+  /** Carregamento da lista (todas as rotas pedem a lista em fundo). */
+  protected readonly listLoading = signal(true);
+  /** Detalhe: pedido GET quando não há cache na lista. */
+  protected readonly detailLoading = signal(false);
+  protected readonly detailError = signal<string | null>(null);
+  protected readonly detailPollId = signal<string | null>(null);
+  /** Formulário “Nova pauta” recolhido por defeito. */
+  protected readonly createExpanded = signal(false);
   protected readonly access = signal<{ kind: string; role?: string } | null>(
     null,
   );
@@ -76,7 +86,7 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   protected readonly editingBody = signal(false);
 
-  private condominiumId = '';
+  protected condominiumId = '';
 
   protected get optionsArray(): FormArray<FormControl<string>> {
     return this.createForm.controls.options;
@@ -85,7 +95,7 @@ export class PainelPlanejamentoComponent implements OnInit {
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
-      this.loading.set(false);
+      this.listLoading.set(false);
       this.loadError.set('Condomínio inválido.');
       return;
     }
@@ -105,6 +115,28 @@ export class PainelPlanejamentoComponent implements OnInit {
       next: (u) => this.myUnits.set(u),
       error: () => this.myUnits.set([]),
     });
+
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((pm) => {
+        const pollId = pm.get('pollId');
+        this.detailPollId.set(pollId);
+        if (pollId) {
+          this.loadPollDetail(pollId);
+        } else {
+          this.detailError.set(null);
+          this.detailLoading.set(false);
+          this.selected.set(null);
+          this.results.set(null);
+          this.editingBody.set(false);
+          this.voteOptionIds.set([]);
+          this.voteForm.reset({ unitId: '' });
+        }
+      });
+  }
+
+  protected toggleCreateExpanded(): void {
+    this.createExpanded.update((v) => !v);
   }
 
   protected newOptionControl(): FormControl<string> {
@@ -145,6 +177,24 @@ export class PainelPlanejamentoComponent implements OnInit {
     return a.kind === 'participant' && a.role === 'syndic';
   }
 
+  /**
+   * Moradores: painel de voto só com pauta aberta e dentro de opensAt/closesAt.
+   * Titular ou síndico: qualquer altura (sem respeitar as datas «Abre/Encerra»),
+   * em rascunho, votação aberta ou encerrada — até à decisão final.
+   */
+  protected canShowVotePanel(p: PlanningPoll): boolean {
+    if (this.isSyndicOrOwner()) {
+      return (
+        p.status === 'draft' || p.status === 'open' || p.status === 'closed'
+      );
+    }
+    if (p.status !== 'open') return false;
+    const now = Date.now();
+    const t0 = new Date(p.opensAt).getTime();
+    const t1 = new Date(p.closesAt).getTime();
+    return now >= t0 && now <= t1;
+  }
+
   protected canEditPollContent(p: PlanningPoll): boolean {
     if (!this.isSyndicOrOwner()) return false;
     return p.status === 'draft' || p.status === 'open';
@@ -175,7 +225,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       .subscribe({
         next: (x) => {
           this.busy.set(false);
-          this.patchPollInList(x);
+          this.upsertPollInList(x);
           this.selected.set(x);
           this.editingBody.set(false);
         },
@@ -196,7 +246,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.api.uploadPollAttachment(this.condominiumId, p.id, file).subscribe({
       next: (x) => {
         this.busy.set(false);
-        this.patchPollInList(x);
+        this.upsertPollInList(x);
         this.selected.set(x);
       },
       error: (err: HttpErrorResponse) => {
@@ -206,7 +256,22 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
   }
 
-  protected removeAttachment(p: PlanningPoll, a: PlanningPollAttachment): void {
+  protected requestRemoveAttachment(
+    p: PlanningPoll,
+    a: PlanningPollAttachment,
+  ): void {
+    const name = (a.originalFilename ?? '').trim() || 'este arquivo';
+    if (
+      !confirm(
+        `Remover o arquivo «${name}»?\n\nEsta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.removeAttachment(p, a);
+  }
+
+  private removeAttachment(p: PlanningPoll, a: PlanningPollAttachment): void {
     this.busy.set(true);
     this.actionError.set(null);
     this.api
@@ -214,7 +279,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       .subscribe({
         next: (x) => {
           this.busy.set(false);
-          this.patchPollInList(x);
+          this.upsertPollInList(x);
           this.selected.set(x);
         },
         error: (err: HttpErrorResponse) => {
@@ -250,6 +315,17 @@ export class PainelPlanejamentoComponent implements OnInit {
     if (n < 1024) return `${n} B`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  protected attachmentKindLabel(a: PlanningPollAttachment): string {
+    const m = (a.mimeType ?? '').toLowerCase();
+    if (m.includes('pdf')) return 'PDF';
+    if (m.includes('word') || m.includes('msword') || m.includes('document')) {
+      return 'DOC';
+    }
+    if (m.startsWith('image/')) return 'IMG';
+    if (m.startsWith('text/')) return 'TXT';
+    return 'FIC';
   }
 
   protected pollAllowsMulti(p: PlanningPoll): boolean {
@@ -307,22 +383,59 @@ export class PainelPlanejamentoComponent implements OnInit {
     return Math.round((votes / max) * 100);
   }
 
+  protected formatUnitVoteChoices(row: PollUnitVoteRow): string {
+    const labels = row.choices.map((c) => c.label.trim()).filter(Boolean);
+    if (labels.length === 0) return '—';
+    return labels.join('; ');
+  }
+
   reload(): void {
     this.loadError.set(null);
-    this.loading.set(true);
+    this.listLoading.set(true);
     this.api.listPolls(this.condominiumId).subscribe({
       next: (list) => {
         this.polls.set(list);
-        this.loading.set(false);
+        this.listLoading.set(false);
+        const pid = this.detailPollId();
+        if (pid) {
+          const hit = list.find((q) => q.id === pid);
+          if (hit) this.applySelectedPoll(hit);
+        }
       },
       error: (err: HttpErrorResponse) => {
-        this.loading.set(false);
+        this.listLoading.set(false);
         this.loadError.set(this.msg(err));
       },
     });
   }
 
-  selectPoll(p: PlanningPoll): void {
+  private loadPollDetail(pollId: string): void {
+    this.detailError.set(null);
+    const cached = this.polls().find((q) => q.id === pollId);
+    if (cached) {
+      this.detailLoading.set(false);
+      this.applySelectedPoll(cached);
+      return;
+    }
+    this.selected.set(null);
+    this.results.set(null);
+    this.detailLoading.set(true);
+    this.api.getPoll(this.condominiumId, pollId).subscribe({
+      next: (p) => {
+        this.detailLoading.set(false);
+        this.upsertPollInList(p);
+        this.applySelectedPoll(p);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.detailLoading.set(false);
+        this.detailError.set(this.msg(err));
+        this.selected.set(null);
+        this.results.set(null);
+      },
+    });
+  }
+
+  private applySelectedPoll(p: PlanningPoll): void {
     this.selected.set(p);
     this.results.set(null);
     this.actionError.set(null);
@@ -393,10 +506,10 @@ export class PainelPlanejamentoComponent implements OnInit {
   openPoll(p: PlanningPoll): void {
     this.busy.set(true);
     this.api.openPoll(this.condominiumId, p.id).subscribe({
-      next: (x) => {
+           next: (x) => {
         this.busy.set(false);
-        this.patchPollInList(x);
-        this.selected.set(x);
+        this.upsertPollInList(x);
+        this.applySelectedPoll(x);
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -410,9 +523,8 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.api.closePoll(this.condominiumId, p.id).subscribe({
       next: (x) => {
         this.busy.set(false);
-        this.patchPollInList(x);
-        this.selected.set(x);
-        this.selectPoll(x);
+        this.upsertPollInList(x);
+        this.applySelectedPoll(x);
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -428,9 +540,8 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.api.decidePoll(this.condominiumId, p.id, oid).subscribe({
       next: (x) => {
         this.busy.set(false);
-        this.patchPollInList(x);
-        this.selected.set(x);
-        this.selectPoll(x);
+        this.upsertPollInList(x);
+        this.applySelectedPoll(x);
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -479,7 +590,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         next: () => {
           this.busy.set(false);
           this.actionError.set(null);
-          this.selectPoll(p);
+          this.applySelectedPoll(p);
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
@@ -488,8 +599,12 @@ export class PainelPlanejamentoComponent implements OnInit {
       });
   }
 
-  private patchPollInList(x: PlanningPoll): void {
-    this.polls.update((list) => list.map((q) => (q.id === x.id ? x : q)));
+  private upsertPollInList(x: PlanningPoll): void {
+    this.polls.update((list) => {
+      const i = list.findIndex((q) => q.id === x.id);
+      if (i < 0) return [x, ...list];
+      return list.map((q) => (q.id === x.id ? x : q));
+    });
   }
 
   private normalizeBodyForApi(raw: string | undefined): string | undefined {
@@ -503,7 +618,7 @@ export class PainelPlanejamentoComponent implements OnInit {
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

@@ -3,7 +3,7 @@
     <h1>Unidades</h1>
     <p class="page__intro">
       Agrupamentos, blocos, torres, internos, externos e suas unidades, você
-      modela seu condomínio aqui. Convites por email usam o registo com token
+      modela seu condomínio aqui. Convites por e-mail usam o cadastro com token
       (<code>?inviteToken=</code> na API e no link enviado); síndico ou
       administrador podem listar convites pendentes em
       <code>GET …/units/:id/people/invitations</code>.
@@ -15,7 +15,7 @@
   }
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
@@ -93,7 +93,7 @@
                       : ''
                   "
                 >
-                  Eliminar agrupamento
+                  Excluir agrupamento
                 </button>
               </div>
             </div>
@@ -165,7 +165,22 @@
                     } @else {
                       <td>{{ u.identifier }}</td>
                       <td class="person-cell">
-                        {{ u.responsiblePerson?.fullName || '—' }}
+                        <div class="person-cell__inner">
+                          <span class="person-cell__name">{{
+                            u.responsiblePerson?.fullName || '—'
+                          }}</span>
+                          @if (u.responsiblePersonId) {
+                            <button
+                              type="button"
+                              class="btn-unassign"
+                              (click)="clearResponsible(g.id, u)"
+                              [disabled]="busy()"
+                              title="Remover responsável para poder associar outra pessoa"
+                            >
+                              Remover responsável
+                            </button>
+                          }
+                        </div>
                       </td>
                       <td class="notes">{{ u.notes || '—' }}</td>
                       <td class="td-actions">
@@ -196,7 +211,7 @@
                             (click)="deleteUnit(g.id, u)"
                             [disabled]="busy()"
                             [attr.aria-label]="
-                              'Eliminar unidade ' + u.identifier
+                              'Excluir unidade ' + u.identifier
                             "
                           >
                             <svg

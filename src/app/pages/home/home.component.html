@@ -65,12 +65,110 @@
     </div>
   </section>
 
+  <section class="plans layout-box" aria-labelledby="plans-heading">
+    <h2 id="plans-heading" class="plans__title">Planos</h2>
+    <p class="plans__intro">
+      A mensalidade da plataforma é por <strong>unidade condominal</strong> —
+      o mesmo núcleo de funcionalidades para todos; o preço por unidade é o que
+      diferencia cada oferta. Ao criar o condomínio, o
+      <strong>plano padrão</strong> (definido pela equipe) vem pré-selecionado;
+      pode mudar
+      antes de confirmar.
+    </p>
+    @if (plansError()) {
+      <p class="plans__error" role="alert">{{ plansError() }}</p>
+    } @else if (!plans().length && !plansError()) {
+      <p class="muted">Carregando planos…</p>
+    } @else {
+      <div class="plans-sim" aria-labelledby="plans-sim-label">
+        <div class="plans-sim__header">
+          <label id="plans-sim-label" class="plans-sim__label" for="plans-sim-range"
+            >Quantas unidades no condomínio?</label
+          >
+          <div class="plans-sim__readout">
+            <output class="plans-sim__output" for="plans-sim-range">{{
+              simulatedUnits()
+            }}</output>
+            <span class="plans-sim__unit-word">unidades</span>
+          </div>
+        </div>
+        <input
+          id="plans-sim-range"
+          class="plans-sim__range"
+          type="range"
+          min="1"
+          max="1000"
+          step="1"
+          [value]="simulatedUnits()"
+          (input)="onSimulatedUnitsInput($event)"
+          aria-valuemin="1"
+          aria-valuemax="1000"
+          [attr.aria-valuenow]="simulatedUnits()"
+          [attr.aria-valuetext]="simulatedUnits() + ' unidades'"
+        />
+        <div class="plans-sim__ticks" aria-hidden="true">
+          <span>1</span><span>250</span><span>500</span><span>750</span
+          ><span>1000</span>
+        </div>
+        <p class="plans-sim__hint">
+          O valor abaixo em cada plano é o <strong>total mensal estimado</strong>
+          (preço por unidade da faixa correspondente ×
+          {{ simulatedUnits() }} unidades, quando houver
+          <strong>preço por volume</strong>). Não inclui descontos, vouchers ou
+          proratas.
+        </p>
+      </div>
+      <ul class="plans__grid" role="list">
+        @for (p of plans(); track p.id) {
+          <li class="plan-card" [class.plan-card--default]="p.isDefault">
+            @if (p.isDefault) {
+              <span class="plan-card__badge">Padrão ao criar conta</span>
+            }
+            <h3 class="plan-card__name">{{ p.name }}</h3>
+            <p class="plan-card__price">
+              <span class="plan-card__amount">{{
+                formatBrlFromCents(unitPriceForDisplay(p))
+              }}</span>
+              <span class="plan-card__per">por unidade / mês (nesta simulação)</span>
+            </p>
+            <p class="plan-card__total" aria-live="polite">
+              <span class="plan-card__total-label">Total mensal estimado</span>
+              <span class="plan-card__total-value">{{
+                formatBrlFromCents(totalMonthlyCents(p))
+              }}</span>
+            </p>
+            @if (plans().length >= 2) {
+              <p class="plan-card__delta">{{ compareVsCheapest(p) }}</p>
+            }
+            @if (planBullets(p.catalogBlurb).length) {
+              <ul class="plan-card__bullets" aria-label="Destaques do plano">
+                @for (line of planBullets(p.catalogBlurb); track line) {
+                  <li>{{ line }}</li>
+                }
+              </ul>
+            } @else {
+              <p class="plan-card__fallback">
+                Destaques personalizados podem ser configurados pela equipe
+                para este plano.
+              </p>
+            }
+          </li>
+        }
+      </ul>
+      <p class="plans__footnote">
+        Todos os planos ativos incluem o mesmo conjunto base da plataforma
+        (condomínios, unidades, agrupamentos, participantes, etc.). Use a barra
+        acima para ver o impacto do tamanho do condomínio e compare o
+        <strong>preço por unidade</strong> e os destaques em cada cartão.
+      </p>
+    }
+  </section>
+
   <section class="features layout-box">
     <article>
       <h2>Conta e acesso</h2>
       <p>
-        Registo e início de sessão seguros, para aceder ao painel com o seu
-        email e senha.
+        Cadastro e login seguros, para acessar o painel com seu e-mail e senha.
       </p>
     </article>
     <article>

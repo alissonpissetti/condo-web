@@ -2,9 +2,10 @@
   <header class="page__header">
     <h1>Convites</h1>
     <p class="page__intro">
-      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o e-mail da <strong>responsável</strong> por essa unidade após aceitar o convite.
-      Use “Identificar” para ver o nome se já existir cadastro; o convite fica pendente até o
-      registro.
+      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o e-mail de quem vai ser
+      <strong>responsável</strong> por essa unidade. Use “Identificar” para ver se já existe cadastro: pode
+      convidar tanto quem ainda não tem conta (convite com cadastro) como quem já tem (link para confirmar a
+      ocupação da unidade).
     </p>
   </header>
 
@@ -80,7 +81,7 @@
       </div>
 
       @if (lookup(); as lu) {
-        <div class="lookup" [class.lookup--warn]="!lu.canInvite">
+        <div class="lookup" [class.lookup--warn]="!lu.found">
           @if (lu.found && lu.fullName) {
             <p>
               <strong>Nome na base de dados:</strong> {{ lu.fullName }}
@@ -92,9 +93,6 @@
           }
           @if (lu.message) {
             <p class="lookup__msg">{{ lu.message }}</p>
-          }
-          @if (!lu.canInvite) {
-            <p class="lookup__msg">Não é possível enviar convite de registro para este e-mail.</p>
           }
         </div>
       }
@@ -109,8 +107,8 @@
           [disabled]="busy()"
         />
         <span class="field__hint">
-          Obrigatório se o e-mail ainda não estiver no sistema; caso contrário
-          pode ajustar antes de enviar.
+          Obrigatório para e-mail novo; se a pessoa já tem conta e ainda não tem ficha de pessoa, também é
+          necessário para criar a ficha. Caso contrário pode ajustar o nome antes de enviar.
         </span>
       </label>
 
@@ -149,9 +147,9 @@
             <div class="pending-item__name">{{ p.personFullName }}</div>
             <div class="pending-item__footer">
               @if (p.pendingRegistration) {
-                <span class="pill pill--wait">Aguarda registro</span>
+                <span class="pill pill--wait">Aguardando cadastro (nova conta)</span>
               } @else {
-                <span class="pill pill--ok">Conta criada (convite antigo)</span>
+                <span class="pill pill--wait">Aguardando confirmação (conta existente)</span>
               }
               <span class="pending-item__expires">
                 Expira em {{ formatPendingExpiresAt(p.expiresAt) }}
@@ -196,7 +194,7 @@
   <section class="card">
     <h2 class="card__title">Histórico — convites aceitos</h2>
     <p class="card__lead muted">
-      Registros concluídos por link de convite neste condomínio (mais recentes primeiro).
+      Cadastros concluídos por link de convite neste condomínio (mais recentes primeiro).
     </p>
     @if (historyError(); as herr) {
       <p class="banner banner--error" role="alert">{{ herr }}</p>

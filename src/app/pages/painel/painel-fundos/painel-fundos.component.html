@@ -8,7 +8,7 @@
   </header>
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <p class="muted">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
@@ -468,7 +468,7 @@
                     class="btn danger sm"
                     (click)="remove(f)"
                   >
-                    Eliminar
+                    Excluir
                   </button>
                 </div>
               </article>

@@ -154,7 +154,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   deleteGrouping(g: GroupingWithUnits): void {
     if (this.rows().length <= 1) return;
     const ok = confirm(
-      `Eliminar o agrupamento «${g.name}» e todas as suas unidades?`,
+      `Excluir o agrupamento «${g.name}» e todas as suas unidades?`,
     );
     if (!ok) return;
     this.clearActionError();
@@ -253,7 +253,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   }
 
   deleteUnit(groupingId: string, u: UnitRow): void {
-    const ok = confirm(`Eliminar a unidade «${u.identifier}»?`);
+    const ok = confirm(`Excluir a unidade «${u.identifier}»?`);
     if (!ok) return;
     this.clearActionError();
     this.busy.set(true);
@@ -268,6 +268,29 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         this.actionError.set(this.messageFromHttp(err));
       },
     });
+  }
+
+  clearResponsible(groupingId: string, u: UnitRow): void {
+    if (!u.responsiblePersonId) return;
+    const ok = confirm(
+      `Remover o responsável pela unidade «${u.identifier}»? Depois pode associar outra pessoa (por exemplo na página de convites).`,
+    );
+    if (!ok) return;
+    this.clearActionError();
+    this.busy.set(true);
+    this.api
+      .clearUnitResponsible(this.condominiumId, groupingId, u.id)
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.reload();
+          this.navData.refresh(this.condominiumId, { force: true });
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.messageFromHttp(err));
+        },
+      });
   }
 
   isEditingUnit(id: string): boolean {
@@ -285,7 +308,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   private messageFromHttp(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

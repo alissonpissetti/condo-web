@@ -48,7 +48,7 @@ export class RegisterComponent {
 
   protected readonly inviteForm = this.fb.nonNullable.group({
     password: ['', [Validators.required, Validators.minLength(8)]],
-    fullName: ['', [Validators.minLength(2), Validators.maxLength(255)]],
+    fullName: ['', [Validators.maxLength(255)]],
   });
 
   constructor() {
@@ -58,12 +58,16 @@ export class RegisterComponent {
       this.invites.preview(t).subscribe({
         next: (p) => {
           this.invitePreview.set(p);
+          if (!p.pendingRegistration) {
+            this.inviteForm.controls.password.clearValidators();
+            this.inviteForm.controls.password.updateValueAndValidity();
+          }
         },
         error: (err: HttpErrorResponse) => {
           this.invitePreviewError.set(
             translateHttpErrorMessage(err, {
               network:
-                'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+                'Sem conexão com o servidor. Verifique a internet e tente novamente.',
               default: 'Convite inválido ou expirado.',
             }),
           );
@@ -93,7 +97,7 @@ export class RegisterComponent {
       next: () => {
         this.submitting.set(false);
         this.success.set(
-          'Conta criada. Pode iniciar sessão com email e senha ou com o celular e o código por SMS.',
+          'Conta criada. Faça login com e-mail e senha ou com o celular e o código por SMS.',
         );
       },
       error: (err: HttpErrorResponse) => {
@@ -104,30 +108,44 @@ export class RegisterComponent {
   }
 
   private submitInvite(token: string): void {
-    if (this.inviteForm.invalid) {
+    const pr = this.invitePreview();
+    if (pr?.pendingRegistration && this.inviteForm.controls.password.invalid) {
+      this.inviteForm.markAllAsTouched();
+      return;
+    }
+    if (pr?.pendingRegistration && this.inviteForm.invalid) {
       this.inviteForm.markAllAsTouched();
       return;
     }
     this.submitting.set(true);
     const { password, fullName } = this.inviteForm.getRawValue();
     const fn = fullName.trim();
-    this.invites
-      .accept(token, {
-        password,
-        ...(fn.length >= 2 ? { fullName: fn } : {}),
-      })
-      .subscribe({
+    const body: { password?: string; fullName?: string } = {};
+    if (fn.length >= 2) {
+      body.fullName = fn;
+    }
+    if (pr?.pendingRegistration) {
+      body.password = password;
+    }
+    this.invites.accept(token, body).subscribe({
         next: () => {
           this.submitting.set(false);
-                   const pr = this.invitePreview();
           const kind = pr?.inviteKind;
           const uid = pr?.unitIdentifier;
+          if (kind === 'condominium' && pr && !pr.pendingRegistration) {
+            this.success.set(
+              uid
+                ? `Unidade vinculada à sua conta (responsável por ${uid}). Faça login para acessar o condomínio.`
+                : 'Associação ao condomínio confirmada. Faça login para continuar.',
+            );
+            return;
+          }
           this.success.set(
             kind === 'condominium'
               ? uid
-                ? `Conta criada. Ficou como responsável pela unidade ${uid}. Pode iniciar sessão.`
-                : 'Conta criada com acesso ao condomínio. Pode iniciar sessão.'
-              : 'Conta criada e unidade associada. Pode iniciar sessão.',
+                ? `Conta criada. Você é o responsável pela unidade ${uid}. Faça login para continuar.`
+                : 'Conta criada com acesso ao condomínio. Faça login para continuar.'
+              : 'Conta criada e unidade vinculada. Faça login para continuar.',
           );
         },
         error: (err: HttpErrorResponse) => {
@@ -144,7 +162,7 @@ export class RegisterComponent {
   private messageFromHttp(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Não foi possível contactar o servidor. Verifique a ligação à internet e tente novamente.',
+        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
       default: 'Não foi possível criar a conta.',
     });
   }

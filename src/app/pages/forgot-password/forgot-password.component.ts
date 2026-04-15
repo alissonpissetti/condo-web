@@ -166,7 +166,7 @@ export class ForgotPasswordComponent {
   submitNewPassword(): void {
     this.error.set(null);
     if (!this.resetToken) {
-      this.error.set('Sessão inválida. Volte ao início do processo.');
+      this.error.set('Etapa inválida. Volte ao início do processo.');
       return;
     }
     if (this.passwordForm.invalid) {
@@ -180,7 +180,9 @@ export class ForgotPasswordComponent {
       .subscribe({
         next: () => {
           this.completing.set(false);
-          this.success.set('Senha alterada com sucesso. Já pode iniciar sessão.');
+          this.success.set(
+            'Senha alterada com sucesso. Você já pode fazer login.',
+          );
           this.resetToken = null;
         },
         error: (err: HttpErrorResponse) => {
@@ -205,7 +207,7 @@ export class ForgotPasswordComponent {
   private messageFromHttp(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Não foi possível contactar o servidor. Verifique a ligação à internet e tente novamente.',
+        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

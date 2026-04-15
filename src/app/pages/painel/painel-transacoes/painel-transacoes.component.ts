@@ -413,7 +413,7 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   remove(t: FinancialTransaction): void {
-    if (!confirm(`Eliminar a transação «${t.title}»?`)) return;
+    if (!confirm(`Excluir a transação «${t.title}»?`)) return;
     this.api.deleteTransaction(this.condoId, t.id).subscribe({
       next: () => this.refreshList(),
       error: (err: HttpErrorResponse) => {
@@ -425,7 +425,7 @@ export class PainelTransacoesComponent implements OnInit {
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

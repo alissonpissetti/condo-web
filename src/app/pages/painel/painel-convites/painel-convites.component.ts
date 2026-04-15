@@ -332,7 +332,7 @@ export class PainelConvitesComponent implements OnInit {
         next: () => {
           this.busy.set(false);
           this.actionOk.set(
-            'Convite enviado por e-mail. Após o registro, a pessoa ficará como responsável pela unidade escolhida.',
+            'Convite enviado por e-mail. A pessoa confirma pelo link (conta nova ou existente) e fica como responsável pela unidade.',
           );
           this.form.patchValue({
             email: '',
@@ -351,7 +351,7 @@ export class PainelConvitesComponent implements OnInit {
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
-        'Sem ligação ao servidor. Verifique a internet e tente novamente.',
+        'Sem conexão com o servidor. Verifique a internet e tente novamente.',
       default: 'Não foi possível concluir o pedido.',
     });
   }

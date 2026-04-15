@@ -1,5 +1,5 @@
 <section class="panel">
-  <h1>Os seus condomínios</h1>
+  <h1>Seus condomínios</h1>
   <p class="lead">
     Condomínios associados à sua conta. Pode criar novos abaixo.
   </p>
@@ -21,7 +21,41 @@
         <li [class.is-selected]="isSelected(c.id)">
           <div class="row-main">
             <span class="title">{{ c.name }}</span>
-            <span class="meta">{{ c.id }}</span>
+            @if (c.billingPlanName != null && c.billingPricePerUnitCents != null) {
+              <div class="plan-block">
+                <p class="plan-block__line">
+                  <span class="plan-block__label">Plano atual</span>
+                  <span class="plan-block__value"
+                    >{{ c.billingPlanName }} —
+                    {{ formatBrl(c.billingPricePerUnitCents) }} por
+                    unidade/mês</span
+                  >
+                </p>
+                @if (
+                  isCondominiumOwner(c) &&
+                  !plansLoading() &&
+                  !plansError()
+                ) {
+                  <button
+                    type="button"
+                    class="btn-text"
+                    (click)="openPlanEditor(c)"
+                    [disabled]="deletingId() !== null || planSaveBusyId() === c.id"
+                  >
+                    Alterar plano
+                  </button>
+                }
+              </div>
+            }
+            <span class="meta">
+              @if (c.hasSyndic && c.syndicName) {
+                Síndico: {{ c.syndicName }}
+              } @else if (c.hasSyndic) {
+                Síndico: nome ainda não informado no perfil
+              } @else {
+                Sem síndico definido
+              }
+            </span>
           </div>
           <div class="row-actions">
             <button
@@ -34,9 +68,9 @@
               [attr.aria-label]="
                 isSelected(c.id)
                   ? 'Remover seleção salva para este condomínio'
-                  : 'Salvar este condomínio como selecionado ao iniciar sessão'
+                  : 'Salvar este condomínio como selecionado ao fazer login'
               "
-              title="Manter selecionado ao iniciar sessão"
+              title="Manter selecionado ao fazer login"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -57,8 +91,8 @@
               (click)="remove(c)"
               [disabled]="deletingId() !== null"
               [attr.aria-busy]="isDeleting(c.id)"
-              [attr.aria-label]="'Eliminar condomínio ' + c.name"
-              title="Eliminar condomínio"
+              [attr.aria-label]="'Excluir condomínio ' + c.name"
+              title="Excluir condomínio"
             >
               @if (isDeleting(c.id)) {
                 <span class="sr-only">Eliminando…</span>
@@ -83,8 +117,246 @@
   }
 </section>
 
+@if (planStudioCondo(); as studioCondo) {
+  <div
+    class="plan-studio-backdrop"
+    (click)="onStudioBackdropClick($event)"
+    role="presentation"
+  >
+    <div
+      class="plan-studio"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="plan-studio-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="plan-studio__header">
+        <div class="plan-studio__heading">
+          <h2 id="plan-studio-title" class="plan-studio__title">
+            Alterar plano e voucher
+          </h2>
+          <p class="plan-studio__subtitle">{{ studioCondo.name }}</p>
+        </div>
+        <button
+          type="button"
+          class="plan-studio__close"
+          (click)="closePlanStudio()"
+          aria-label="Fechar"
+        >
+          ×
+        </button>
+      </header>
+
+      @if (planPatchError()) {
+        <div class="plan-studio__alert" role="alert">{{ planPatchError() }}</div>
+      }
+
+      <div class="plan-studio__body">
+        @if (planStudioPreviewLoading() && !planStudioPreview()) {
+          <p class="muted">Carregando pré-visualização…</p>
+        }
+        @if (planStudioPreviewError()) {
+          <div class="plan-studio__alert" role="alert">
+            {{ planStudioPreviewError() }}
+          </div>
+        }
+
+        @if (planStudioPreview(); as pr) {
+          <div class="plan-studio__ref">
+            <label class="plan-studio__ref-label">
+              <span>Mês de referência (voucher e desconto)</span>
+              <input
+                type="month"
+                class="plan-studio__month"
+                [value]="planStudioRefMonth()"
+                (change)="onStudioRefMonthChange($event)"
+              />
+            </label>
+            <p class="plan-studio__ref-hint muted">
+              Com <strong>{{ pr.unitCount }}</strong> unidade(s) registadas e o
+              plano <strong>{{ pr.planName }}</strong> em vigor: total de referência
+              <strong>{{ formatBrl(pr.monthlyCents) }}</strong>
+              @if (pr.discountPercent > 0) {
+                <span>
+                  (inclui {{ pr.discountPercent }}% de desconto
+                  @if (pr.appliedLabels.length) {
+                    — {{ pr.appliedLabels.join(', ') }}
+                  }
+                  )</span
+                >
+              }
+              no mês {{ pr.referenceMonth }}.
+            </p>
+          </div>
+        }
+
+        <section class="plan-studio__voucher" aria-labelledby="voucher-heading">
+          <h3 id="voucher-heading" class="plan-studio__section-title">Voucher</h3>
+          <p class="plan-studio__section-lead muted">
+            Se tiver um código promocional, insira abaixo. O desconto aplica-se
+            quando o mês de referência intersecta a validade do voucher.
+          </p>
+          @if (voucherError()) {
+            <div class="plan-studio__alert" role="alert">{{ voucherError() }}</div>
+          }
+          @if (studioVoucher(); as v) {
+            <div class="plan-studio__voucher-active">
+              <p>
+                <strong>{{ v.name }}</strong>
+                <span class="muted"> · código {{ v.code }}</span>
+              </p>
+              <p class="muted small">
+                {{ v.discountPercent }}% · válido de {{ v.validFrom }} a
+                {{ v.validTo }}
+                @if (!v.active) {
+                  <span class="plan-studio__warn"> (inactivo)</span>
+                }
+              </p>
+              <button
+                type="button"
+                class="btn outline sm"
+                (click)="removeStudioVoucher()"
+                [disabled]="voucherBusy()"
+              >
+                {{ voucherBusy() ? '…' : 'Remover voucher' }}
+              </button>
+            </div>
+          } @else {
+            <div class="plan-studio__voucher-form">
+              <input
+                type="text"
+                class="plan-studio__voucher-input"
+                placeholder="Código do voucher"
+                autocomplete="off"
+                [value]="voucherCodeInput()"
+                (input)="onVoucherCodeInput($event)"
+                [disabled]="voucherBusy()"
+              />
+              <button
+                type="button"
+                class="btn primary sm"
+                (click)="applyStudioVoucher()"
+                [disabled]="voucherBusy() || !voucherCodeInput().trim()"
+              >
+                Aplicar
+              </button>
+            </div>
+          }
+        </section>
+
+        @if (!plansError() && plans().length) {
+          <div class="plan-studio__sim" aria-labelledby="studio-sim-label">
+            <div class="plan-studio__sim-header">
+              <label id="studio-sim-label" class="plan-studio__sim-label" for="studio-sim-range"
+                >Simular total mensal (unidades)</label
+              >
+              <div class="plan-studio__sim-readout">
+                <output class="plan-studio__sim-output" for="studio-sim-range">{{
+                  planStudioSimulatedUnits()
+                }}</output>
+                <span class="plan-studio__sim-unit-word">unidades</span>
+              </div>
+            </div>
+            <input
+              id="studio-sim-range"
+              class="plan-studio__sim-range"
+              type="range"
+              min="1"
+              max="1000"
+              step="1"
+              [value]="planStudioSimulatedUnits()"
+              (input)="onStudioSimulatedUnitsInput($event)"
+              aria-valuemin="1"
+              aria-valuemax="1000"
+              [attr.aria-valuenow]="planStudioSimulatedUnits()"
+              [attr.aria-valuetext]="planStudioSimulatedUnits() + ' unidades'"
+            />
+            <div class="plan-studio__sim-ticks" aria-hidden="true">
+              <span>1</span><span>250</span><span>500</span><span>750</span
+              ><span>1000</span>
+            </div>
+            <p class="plan-studio__sim-hint muted">
+              Os totais nos cartões usam o desconto do voucher para o mês
+              selecionado (quando aplicável), como na página inicial.
+            </p>
+          </div>
+
+          <ul class="plan-studio__grid" role="list">
+            @for (p of plans(); track p.id) {
+              <li>
+                <button
+                  type="button"
+                  class="plan-card plan-card--btn"
+                  [class.plan-card--selected]="p.id === planEditDraftId()"
+                  [class.plan-card--default]="p.isDefault"
+                  (click)="selectDraftPlan(p.id)"
+                >
+                  @if (p.isDefault) {
+                    <span class="plan-card__badge">Padrão</span>
+                  }
+                  <h3 class="plan-card__name">{{ p.name }}</h3>
+                  <p class="plan-card__price">
+                    <span class="plan-card__amount">{{
+                      formatBrl(studioUnitPriceForDisplay(p))
+                    }}</span>
+                    <span class="plan-card__per"
+                      >por unidade / mês (simulação)</span
+                    >
+                  </p>
+                  <p class="plan-card__total" aria-live="polite">
+                    <span class="plan-card__total-label">Total mensal estimado</span>
+                    <span class="plan-card__total-value">{{
+                      formatBrl(estimateMonthlyForPlan(p))
+                    }}</span>
+                  </p>
+                  @if (plans().length >= 2) {
+                    <p class="plan-card__delta">{{ compareVsCheapest(p) }}</p>
+                  }
+                  @if (planBullets(p.catalogBlurb).length) {
+                    <ul class="plan-card__bullets" aria-label="Destaques do plano">
+                      @for (line of planBullets(p.catalogBlurb); track line) {
+                        <li>{{ line }}</li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="plan-card__fallback">
+                      Destaques podem ser configurados pela equipe para este plano.
+                    </p>
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <footer class="plan-studio__footer">
+        <button
+          type="button"
+          class="btn-text"
+          (click)="closePlanStudio()"
+          [disabled]="isSavingPlanInStudio()"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn primary"
+          (click)="saveCondominiumPlanFromStudio()"
+          [disabled]="isSavingPlanInStudio() || planEditDraftId() == null"
+        >
+          {{ isSavingPlanInStudio() ? 'Salvando…' : 'Salvar plano' }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}
+
 <section class="panel">
   <h2>Novo condomínio</h2>
+  @if (plansError()) {
+    <div class="alert" role="alert">{{ plansError() }}</div>
+  }
   @if (formError()) {
     <div class="alert">{{ formError() }}</div>
   }
@@ -100,7 +372,31 @@
         <small class="field-error">{{ msg }}</small>
       }
     </label>
-    <button type="submit" class="btn primary" [disabled]="saving()">
+    <label>
+      <span>Plano SaaS</span>
+      <select formControlName="planId" [disabled]="plansLoading() || !!plansError()">
+        @if (plansLoading()) {
+          <option [ngValue]="null">Carregando planos…</option>
+        } @else {
+          @for (p of plans(); track p.id) {
+            <option [ngValue]="p.id">
+              {{ p.name }} — {{ formatUnitPrice(p) }}
+              @if (p.isDefault) {
+                (padrão)
+              }
+            </option>
+          }
+        }
+      </select>
+      @for (msg of fieldErrorsPt(form.controls.planId); track msg) {
+        <small class="field-error">{{ msg }}</small>
+      }
+    </label>
+    <button
+      type="submit"
+      class="btn primary"
+      [disabled]="saving() || plansLoading() || !!plansError()"
+    >
       {{ saving() ? 'Criando…' : 'Criar' }}
     </button>
   </form>

@@ -9,7 +9,7 @@
   }
 
   @if (loading()) {
-    <p class="dados__loading muted">A carregar…</p>
+    <p class="dados__loading muted">Carregando…</p>
   } @else if (!loadError()) {
     <div class="dados__layout">
       @if (accountSummary(); as sum) {

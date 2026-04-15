@@ -66,6 +66,12 @@ export interface PlanningPoll {
   updatedAt: string;
 }
 
+export interface PollUnitVoteRow {
+  unitId: string;
+  identifier: string;
+  choices: { id: string; label: string }[];
+}
+
 export interface PollResults {
   pollId: string;
   status: PollStatus;
@@ -75,6 +81,8 @@ export interface PollResults {
   unitsVoted: number;
   /** Soma das marcações em todas as opções (≥ unidades se multi). */
   totalOptionSelections: number;
+  /** Detalhe por unidade (gestão): que opção(ões) cada uma escolheu. */
+  votesByUnit?: PollUnitVoteRow[];
 }
 
 export interface CondominiumDocumentRow {

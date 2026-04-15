@@ -161,6 +161,16 @@ export class CondominiumManagementService {
     );
   }
 
+  clearUnitResponsible(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/responsible`,
+    );
+  }
+
   lookupCondominiumInviteEmail(
     condominiumId: string,
     email: string,

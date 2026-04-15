@@ -21,12 +21,12 @@
       @if (invitePreview(); as pr) {
         <p class="sub">
           @if (pr.inviteKind === 'unit') {
-            Está a concluir o convite para o condomínio
+            Você está concluindo o convite para o condomínio
             <strong>{{ pr.condominiumName }}</strong>, unidade
             <strong>{{ pr.unitIdentifier }}</strong
             >. Email: {{ pr.emailMasked }}
           } @else {
-            Está a concluir o convite como <strong>responsável</strong>
+            Você está concluindo o convite como <strong>responsável</strong>
             @if (pr.unitIdentifier) {
               pela unidade <strong>{{ pr.unitIdentifier }}</strong> do condomínio
             } @else {
@@ -34,10 +34,16 @@
             }
             <strong>{{ pr.condominiumName }}</strong
             >. Email: {{ pr.emailMasked }}
+            @if (!pr.pendingRegistration) {
+              <span class="sub__note">
+                Sua conta já existe: confirme abaixo para vincular esta unidade
+                (sem criar nova senha).
+              </span>
+            }
           }
         </p>
       } @else if (!invitePreviewError()) {
-        <p class="muted">A carregar dados do convite…</p>
+        <p class="muted">Carregando dados do convite…</p>
       }
       @if (invitePreviewError(); as pe) {
         <div class="alert" role="alert">{{ pe }}</div>
@@ -55,7 +61,8 @@
       <div class="success" role="status">{{ success() }}</div>
     }
 
-    @if (invitePreview() && !invitePreviewError()) {
+    @if (invitePreview(); as prIv) {
+      @if (!invitePreviewError()) {
       <form [formGroup]="inviteForm" (ngSubmit)="submit()" novalidate>
         <label>
           <span>Nome completo (opcional)</span>
@@ -64,21 +71,30 @@
             <small class="field-error">{{ msg }}</small>
           }
         </label>
-        <label>
-          <span>Senha</span>
-          <input
-            type="password"
-            formControlName="password"
-            autocomplete="new-password"
-          />
-          @for (msg of fieldErrorsPt(inviteForm.controls.password); track msg) {
-            <small class="field-error">{{ msg }}</small>
-          }
-        </label>
+        @if (prIv.pendingRegistration) {
+          <label>
+            <span>Senha</span>
+            <input
+              type="password"
+              formControlName="password"
+              autocomplete="new-password"
+            />
+            @for (msg of fieldErrorsPt(inviteForm.controls.password); track msg) {
+              <small class="field-error">{{ msg }}</small>
+            }
+          </label>
+        }
         <button type="submit" class="btn primary" [disabled]="submitting()">
-          {{ submitting() ? 'A criar…' : 'Aceitar convite' }}
+          {{
+            submitting()
+              ? 'A processar…'
+              : prIv.pendingRegistration
+                ? 'Aceitar convite e criar conta'
+                : 'Confirmar associação à unidade'
+          }}
         </button>
       </form>
+      }
     } @else if (!inviteToken()) {
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <label>
@@ -129,8 +145,8 @@
       </button>
     }
 
-    <p class="footer-line">
-      Já tem conta?
+      <p class="footer-line">
+      Já tem uma conta?
       <a routerLink="/auth/login">Entrar</a>
     </p>
   </div>

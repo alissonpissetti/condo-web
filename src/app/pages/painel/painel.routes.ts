@@ -85,6 +85,14 @@ export const painelRoutes: Routes = [
           ).then((m) => m.PainelTaxasCondominiaisComponent),
       },
       {
+        path: 'condominio/:condominiumId/planejamento/:pollId',
+        canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-planejamento/painel-planejamento.component').then(
+            (m) => m.PainelPlanejamentoComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/planejamento',
         canActivate: [selectedCondominiumGuard],
         loadComponent: () =>
