@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export type AllocationRule =
@@ -23,6 +24,8 @@ export interface FinancialFund {
   periodStartYm?: string | null;
   periodEndYm?: string | null;
   createdAt: string;
+  /** Saldo até hoje: receitas com o fundo somam; despesas e aplicações (investment) subtraem. */
+  accumulatedBalanceCents?: string;
 }
 
 export interface TransactionUnitShareRow {
@@ -36,18 +39,22 @@ export interface FinancialTransaction {
   id: string;
   condominiumId: string;
   fundId: string | null;
-  kind: 'expense' | 'income';
+  kind: 'expense' | 'income' | 'investment';
   amountCents: string;
   occurredOn: string;
   title: string;
   description: string | null;
   allocationRule: AllocationRule;
+  /** Parcelas criadas em lote compartilham o mesmo UUID de série. */
+  recurringSeriesId?: string | null;
   /** Chave relativa no armazenamento do condomínio (comprovante). */
   receiptStorageKey?: string | null;
   fund?: FinancialFund | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
   updatedAt: string;
+  /** Preenchido na listagem quando há filtro por fundo: saldo após o lançamento (ordem cronológica). */
+  runningBalanceCents?: string;
 }
 
 export interface StatementByUnitRow {
@@ -96,7 +103,30 @@ export class FinancialApiService {
   }
 
   listFunds(condoId: string): Observable<FinancialFund[]> {
-    return this.http.get<FinancialFund[]>(`${this.base(condoId)}/funds`);
+    return this.http
+      .get<
+        Array<
+          FinancialFund & { accumulated_balance_cents?: string | number }
+        >
+      >(`${this.base(condoId)}/funds`)
+      .pipe(
+        map((rows) =>
+          rows.map((r) => {
+            const raw =
+              r.accumulatedBalanceCents ?? r.accumulated_balance_cents;
+            const accumulatedBalanceCents =
+              raw === undefined || raw === null
+                ? undefined
+                : typeof raw === 'number'
+                  ? String(Math.trunc(raw))
+                  : String(raw).trim();
+            return {
+              ...r,
+              accumulatedBalanceCents,
+            } as FinancialFund;
+          }),
+        ),
+      );
   }
 
   createFund(
@@ -174,7 +204,7 @@ export class FinancialApiService {
   createTransaction(
     condoId: string,
     body: {
-      kind: 'expense' | 'income';
+      kind: 'expense' | 'income' | 'investment';
       amountCents: number;
       occurredOn: string;
       title: string;
@@ -182,6 +212,7 @@ export class FinancialApiService {
       fundId?: string | null;
       allocationRule: AllocationRule;
       receiptStorageKey?: string;
+      recurringSeriesId?: string;
     },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
@@ -194,7 +225,7 @@ export class FinancialApiService {
     condoId: string,
     txId: string,
     body: Partial<{
-      kind: 'expense' | 'income';
+      kind: 'expense' | 'income' | 'investment';
       amountCents: number;
       occurredOn: string;
       title: string;
@@ -213,6 +244,34 @@ export class FinancialApiService {
   deleteTransaction(condoId: string, txId: string): Observable<void> {
     return this.http.delete<void>(
       `${this.base(condoId)}/transactions/${txId}`,
+    );
+  }
+
+  updateRecurringSeries(
+    condoId: string,
+    seriesId: string,
+    body: {
+      kind?: 'expense' | 'income' | 'investment';
+      titleBase?: string;
+      description?: string | null;
+      fundId?: string | null;
+      allocationRule?: AllocationRule;
+      amountCents?: number;
+      receiptStorageKey?: string | null;
+    },
+  ): Observable<FinancialTransaction[]> {
+    return this.http.patch<FinancialTransaction[]>(
+      `${this.base(condoId)}/transactions/recurring-series/${seriesId}`,
+      body,
+    );
+  }
+
+  deleteRecurringSeries(
+    condoId: string,
+    seriesId: string,
+  ): Observable<{ deleted: number }> {
+    return this.http.delete<{ deleted: number }>(
+      `${this.base(condoId)}/transactions/recurring-series/${seriesId}`,
     );
   }
 
@@ -266,11 +325,35 @@ export class FinancialApiService {
   settleCondominiumFee(
     condoId: string,
     chargeId: string,
-    incomeTransactionId: string,
+    incomeTransactionId?: string,
   ): Observable<CondominiumFeeCharge> {
+    const body = incomeTransactionId?.trim()
+      ? { incomeTransactionId: incomeTransactionId.trim() }
+      : {};
     return this.http.post<CondominiumFeeCharge>(
       `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
-      { incomeTransactionId },
+      body,
+    );
+  }
+
+  condominiumFeePaymentReceiptPdf(
+    condoId: string,
+    chargeId: string,
+  ): Observable<Blob> {
+    return this.http.get(
+      `${this.base(condoId)}/condominium-fees/${chargeId}/payment-receipt`,
+      { responseType: 'blob' },
+    );
+  }
+
+  condominiumFeesTransparencyPdf(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<Blob> {
+    const params = new HttpParams().set('competenceYm', competenceYm);
+    return this.http.get(
+      `${this.base(condoId)}/condominium-fees/transparency-pdf`,
+      { params, responseType: 'blob' },
     );
   }
 }

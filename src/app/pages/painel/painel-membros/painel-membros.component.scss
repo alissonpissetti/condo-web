@@ -445,12 +445,10 @@
   color: var(--accent);
 }
 
-@media (prefers-color-scheme: light) {
-  .pill--syndic {
-    color: #4338ca;
-  }
+.pill--syndic {
+  color: #4338ca;
+}
 
-  .pill--sub {
-    color: #0369a1;
-  }
+.pill--sub {
+  color: #0369a1;
 }

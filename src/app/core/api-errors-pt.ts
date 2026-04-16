@@ -74,9 +74,13 @@ const EXACT: Record<string, string> = {
     'Indique o nome completo para cadastrar o endereço na ficha.',
   'Expense transactions require an allocation rule':
     'Despesas exigem uma regra de rateio.',
+  'Expense and investment transactions require an allocation rule':
+    'Despesas e investimentos exigem uma regra de rateio.',
   'Invalid allocation rule': 'Regra de rateio inválida.',
   'Expense transactions require at least one unit in allocation':
     'Despesa exige pelo menos uma unidade no rateio.',
+  'Expense and investment transactions require at least one unit in allocation':
+    'Despesa e investimento exigem pelo menos uma unidade no rateio.',
   'No units in condominium for equal allocation':
     'Não há unidades no condomínio para ratear.',
   'No units in the selected groupings for allocation':
@@ -108,6 +112,10 @@ const EXACT: Record<string, string> = {
   'Income amount allocated to this unit does not match charge':
     'O valor da receita rateado para esta unidade não coincide com a cobrança.',
   'Transaction must be income': 'A transação tem de ser uma receita.',
+  'Charge must be paid to generate a receipt':
+    'Só é possível emitir o comprovante para cobranças já quitadas.',
+  'No units in condominium for transparency report':
+    'Não há unidades neste condomínio para gerar o relatório de transparência.',
 };
 
 function translateApiMessage(raw: string): string {
@@ -150,6 +158,35 @@ function translateApiMessage(raw: string): string {
     return 'Os dados enviados não são válidos. Confirme os campos e tente novamente.';
   }
   return s;
+}
+
+/** Quando `responseType: 'blob'`, erros HTTP podem vir como Blob com JSON no corpo. */
+export async function translateHttpErrorMessageAsync(
+  err: HttpErrorResponse,
+  options: { network: string; default: string },
+): Promise<string> {
+  if (err.error instanceof Blob) {
+    try {
+      const text = await err.error.text();
+      let parsed: unknown = text;
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch {
+        /* corpo não é JSON */
+      }
+      const synthetic = new HttpErrorResponse({
+        error: parsed,
+        headers: err.headers,
+        status: err.status,
+        statusText: err.statusText,
+        url: err.url ?? undefined,
+      });
+      return translateHttpErrorMessage(synthetic, options);
+    } catch {
+      /* ignora */
+    }
+  }
+  return translateHttpErrorMessage(err, options);
 }
 
 export function translateHttpErrorMessage(

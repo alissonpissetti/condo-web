@@ -103,6 +103,10 @@
   gap: 0.5rem;
 }
 
+.mode-tabs--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-tabs--sub {
   margin-bottom: 0.85rem;
 

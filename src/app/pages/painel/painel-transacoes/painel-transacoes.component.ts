@@ -1,6 +1,7 @@
 import {
   Component,
   ElementRef,
+  HostListener,
   OnInit,
   computed,
   inject,
@@ -9,8 +10,8 @@ import {
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
-import { Observable, of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { Observable, of, from } from 'rxjs';
+import { switchMap, concatMap, last } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   CondominiumManagementService,
@@ -22,8 +23,11 @@ import {
   type FinancialFund,
   type FinancialTransaction,
 } from '../../../core/financial-api.service';
-import { formatDateDdMmYyyy } from '../../../core/date-display';
+import { formatDateDdMmYyyy, todayLocalIsoDate } from '../../../core/date-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
+import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
+
+type TxKind = 'expense' | 'income' | 'investment';
 
 type AllocKind =
   | 'all_units_equal'
@@ -44,6 +48,7 @@ export class PainelTransacoesComponent implements OnInit {
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
+  protected readonly transactionKindLabelPt = transactionKindLabelPt;
 
   protected readonly transactions = signal<FinancialTransaction[]>([]);
   protected readonly funds = signal<FinancialFund[]>([]);
@@ -54,7 +59,15 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly saving = signal(false);
   protected readonly fundFilter = signal<string>('');
 
-  protected readonly txKind = signal<'expense' | 'income'>('expense');
+  protected readonly txKind = signal<TxKind>('expense');
+  /** Única transação ou série mensal (apenas criação). */
+  protected readonly entryMode = signal<'single' | 'recurring'>('single');
+  protected readonly recurringMode = signal<'by_installment' | 'by_total'>(
+    'by_installment',
+  );
+  protected readonly recurringCount = signal(2);
+  protected readonly recurringInstallmentReais = signal(0);
+  protected readonly recurringTotalReais = signal(0);
   protected readonly amountReais = signal(0);
   protected readonly occurredOn = signal('');
   protected readonly titleTx = signal('');
@@ -65,6 +78,10 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly selectedGroupingIds = signal<string[]>([]);
   protected readonly excludeUnitIds = signal<string[]>([]);
   protected readonly editingId = signal<string | null>(null);
+  /** Edição em lote de transações com o mesmo `recurringSeriesId`. */
+  protected readonly editingSeriesId = signal<string | null>(null);
+  /** Se &gt; 0, aplica o mesmo valor (R$) a todas as parcelas ao salvar a série. */
+  protected readonly seriesUniformAmountReais = signal(0);
   protected readonly pendingReceiptFile = signal<File | null>(null);
   protected readonly receiptRemoved = signal(false);
   protected readonly editingReceiptKey = signal<string | null>(null);
@@ -72,7 +89,40 @@ export class PainelTransacoesComponent implements OnInit {
   private readonly receiptInputEl =
     viewChild<ElementRef<HTMLInputElement>>('receiptInput');
 
+  /** Linha da tabela com menu ⋮ aberto (id da transação). */
+  protected readonly rowActionMenuForId = signal<string | null>(null);
+
   private condoId = '';
+
+  toggleRowActionMenu(txId: string, ev: Event): void {
+    ev.stopPropagation();
+    this.rowActionMenuForId.update((cur) => (cur === txId ? null : txId));
+  }
+
+  @HostListener('document:click')
+  onDocumentClickCloseRowMenu(): void {
+    this.rowActionMenuForId.set(null);
+  }
+
+  editRowFromMenu(t: FinancialTransaction): void {
+    this.rowActionMenuForId.set(null);
+    this.startEdit(t);
+  }
+
+  editSeriesFromMenu(seriesId: string): void {
+    this.rowActionMenuForId.set(null);
+    this.startEditSeries(seriesId);
+  }
+
+  removeRowFromMenu(t: FinancialTransaction): void {
+    this.rowActionMenuForId.set(null);
+    this.remove(t);
+  }
+
+  removeSeriesFromMenu(seriesId: string): void {
+    this.rowActionMenuForId.set(null);
+    this.removeSeries(seriesId);
+  }
 
   protected readonly flatUnits = computed(() => {
     const out: { id: string; identifier: string; groupingName: string }[] =
@@ -89,6 +139,47 @@ export class PainelTransacoesComponent implements OnInit {
     return out;
   });
 
+  /** Resumo do lançamento recorrente (apenas UI). */
+  protected readonly recurringPreviewText = computed(() => {
+    if (this.entryMode() !== 'recurring') {
+      return '';
+    }
+    const n = Math.floor(this.recurringCount());
+    if (n < 2 || n > 120) {
+      return '';
+    }
+    const start = this.occurredOn();
+    if (this.recurringMode() === 'by_installment') {
+      const v = this.recurringInstallmentReais();
+      if (!Number.isFinite(v) || v <= 0) {
+        return '';
+      }
+      const each = reaisToCents(v);
+      const total = each * n;
+      return `Serão criadas ${n} transações mensais de ${formatCentsBrl(each)} (total ${formatCentsBrl(total)}), primeira em ${formatDateDdMmYyyy(start)}.`;
+    }
+    const t = this.recurringTotalReais();
+    if (!Number.isFinite(t) || t <= 0) {
+      return '';
+    }
+    const parts = this.splitTotalCentsEvenly(reaisToCents(t), n);
+    const minV = Math.min(...parts);
+    const maxV = Math.max(...parts);
+    const valHint =
+      minV === maxV
+        ? formatCentsBrl(parts[0])
+        : `${formatCentsBrl(minV)} a ${formatCentsBrl(maxV)} por parcela`;
+    return `Serão criadas ${n} transações mensais (${valHint}; soma ${formatCentsBrl(parts.reduce((a, b) => a + b, 0))}), primeira em ${formatDateDdMmYyyy(start)}.`;
+  });
+
+  protected readonly seriesEditCount = computed(() => {
+    const sid = this.editingSeriesId();
+    if (!sid) {
+      return 0;
+    }
+    return this.transactions().filter((t) => t.recurringSeriesId === sid).length;
+  });
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
@@ -97,8 +188,7 @@ export class PainelTransacoesComponent implements OnInit {
       return;
     }
     this.condoId = id;
-    const d = new Date();
-    this.occurredOn.set(d.toISOString().slice(0, 10));
+    this.occurredOn.set(todayLocalIsoDate());
     this.reloadAll();
   }
 
@@ -150,21 +240,57 @@ export class PainelTransacoesComponent implements OnInit {
     this.amountReais.set(Number.isFinite(n) ? n : 0);
   }
 
+  setEntryMode(m: 'single' | 'recurring'): void {
+    this.entryMode.set(m);
+    this.formError.set(null);
+  }
+
+  setRecurringMode(m: 'by_installment' | 'by_total'): void {
+    this.recurringMode.set(m);
+    this.formError.set(null);
+  }
+
+  setRecurringCountFromInput(v: string): void {
+    const n = parseInt(String(v).replace(/\D/g, ''), 10);
+    this.recurringCount.set(Number.isFinite(n) ? n : 0);
+  }
+
+  setRecurringInstallmentFromInput(v: string): void {
+    const n = parseFloat(String(v).replace(',', '.'));
+    this.recurringInstallmentReais.set(Number.isFinite(n) ? n : 0);
+  }
+
+  setRecurringTotalFromInput(v: string): void {
+    const n = parseFloat(String(v).replace(',', '.'));
+    this.recurringTotalReais.set(Number.isFinite(n) ? n : 0);
+  }
+
+  setSeriesUniformAmountFromInput(v: string): void {
+    const n = parseFloat(String(v).replace(',', '.'));
+    this.seriesUniformAmountReais.set(Number.isFinite(n) ? n : 0);
+  }
+
   onAllocKindChange(v: string): void {
     const k = v as AllocKind;
     this.allocKind.set(k);
     if (k !== 'unit_ids') this.selectedUnitIds.set([]);
     if (k !== 'grouping_ids') this.selectedGroupingIds.set([]);
     if (k !== 'all_units_except') this.excludeUnitIds.set([]);
-    if (this.txKind() === 'expense' && k === 'none') {
+    if (
+      (this.txKind() === 'expense' || this.txKind() === 'investment') &&
+      k === 'none'
+    ) {
       this.allocKind.set('all_units_equal');
     }
   }
 
   onTxKindChange(v: string): void {
-    const k = v as 'expense' | 'income';
+    const k = v as TxKind;
     this.txKind.set(k);
-    if (k === 'expense' && this.allocKind() === 'none') {
+    if (
+      (k === 'expense' || k === 'investment') &&
+      this.allocKind() === 'none'
+    ) {
       this.allocKind.set('all_units_equal');
     }
   }
@@ -234,10 +360,16 @@ export class PainelTransacoesComponent implements OnInit {
 
   resetForm(): void {
     this.editingId.set(null);
+    this.editingSeriesId.set(null);
+    this.seriesUniformAmountReais.set(0);
     this.txKind.set('expense');
+    this.entryMode.set('single');
+    this.recurringMode.set('by_installment');
+    this.recurringCount.set(2);
+    this.recurringInstallmentReais.set(0);
+    this.recurringTotalReais.set(0);
     this.amountReais.set(0);
-    const d = new Date();
-    this.occurredOn.set(d.toISOString().slice(0, 10));
+    this.occurredOn.set(todayLocalIsoDate());
     this.titleTx.set('');
     this.descriptionTx.set('');
     this.fundIdForm.set('');
@@ -253,6 +385,9 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   startEdit(t: FinancialTransaction): void {
+    this.entryMode.set('single');
+    this.editingSeriesId.set(null);
+    this.seriesUniformAmountReais.set(0);
     this.editingId.set(t.id);
     this.txKind.set(t.kind);
     this.amountReais.set(Number(t.amountCents) / 100);
@@ -282,6 +417,60 @@ export class PainelTransacoesComponent implements OnInit {
     this.formError.set(null);
   }
 
+  startEditSeries(seriesId: string): void {
+    const members = this.transactions()
+      .filter((t) => t.recurringSeriesId === seriesId)
+      .sort((a, b) => {
+        const da = a.occurredOn.slice(0, 10);
+        const db = b.occurredOn.slice(0, 10);
+        const c = da.localeCompare(db);
+        return c !== 0 ? c : a.id.localeCompare(b.id);
+      });
+    if (members.length === 0) {
+      return;
+    }
+    const first = members[0];
+    this.editingId.set(null);
+    this.entryMode.set('single');
+    this.editingSeriesId.set(seriesId);
+    this.seriesUniformAmountReais.set(0);
+    this.txKind.set(first.kind);
+    this.amountReais.set(Number(first.amountCents) / 100);
+    this.occurredOn.set(
+      first.occurredOn.length >= 10
+        ? first.occurredOn.slice(0, 10)
+        : first.occurredOn,
+    );
+    this.titleTx.set(this.titleBaseFromTransactionTitle(first.title));
+    this.descriptionTx.set(first.description ?? '');
+    this.fundIdForm.set(first.fundId ?? '');
+    const r = first.allocationRule;
+    if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
+    else if (r.kind === 'none') this.allocKind.set('none');
+    else if (r.kind === 'unit_ids') {
+      this.allocKind.set('unit_ids');
+      this.selectedUnitIds.set([...r.unitIds].sort());
+    } else if (r.kind === 'grouping_ids') {
+      this.allocKind.set('grouping_ids');
+      this.selectedGroupingIds.set([...r.groupingIds].sort());
+    } else if (r.kind === 'all_units_except') {
+      this.allocKind.set('all_units_except');
+      this.excludeUnitIds.set([...r.excludeUnitIds].sort());
+    }
+    this.pendingReceiptFile.set(null);
+    this.receiptRemoved.set(false);
+    const withReceipt = members.find((m) => m.receiptStorageKey);
+    this.editingReceiptKey.set(withReceipt?.receiptStorageKey ?? null);
+    this.clearReceiptFileInput();
+    this.formError.set(null);
+  }
+
+  /** Remove sufixo « (k/n) » do título, se existir. */
+  private titleBaseFromTransactionTitle(title: string): string {
+    const m = /^(.+?)\s+\(\d+\/\d+\)\s*$/.exec(title.trim());
+    return m ? m[1].trim() : title.trim();
+  }
+
   onReceiptFileChange(ev: Event): void {
     const input = ev.target as HTMLInputElement;
     const f = input.files?.[0] ?? null;
@@ -305,9 +494,9 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   downloadEditingReceipt(): void {
-    const id = this.editingId();
     const key = this.editingReceiptKey();
-    if (!id || !key) return;
+    if (!key) return;
+    const id = this.editingId() ?? this.editingSeriesId() ?? 'recibo';
     this.downloadReceiptByKey(key, id);
   }
 
@@ -340,11 +529,6 @@ export class PainelTransacoesComponent implements OnInit {
       this.formError.set('Indique o título.');
       return;
     }
-    const ar = this.amountReais();
-    if (!Number.isFinite(ar) || ar <= 0) {
-      this.formError.set('Indique um valor válido em reais.');
-      return;
-    }
     let rule: AllocationRule;
     try {
       rule = this.buildRule();
@@ -354,22 +538,59 @@ export class PainelTransacoesComponent implements OnInit {
       );
       return;
     }
-    if (this.txKind() === 'expense' && rule.kind === 'none') {
-      this.formError.set('Despesa exige rateio (não pode ser «sem repartição»).');
+    if (
+      (this.txKind() === 'expense' || this.txKind() === 'investment') &&
+      rule.kind === 'none'
+    ) {
+      this.formError.set(
+        'Despesa e investimento exigem rateio (não pode ser «sem repartição»).',
+      );
       return;
     }
-    const baseBody = {
-      kind: this.txKind(),
-      amountCents: reaisToCents(ar),
-      occurredOn: this.occurredOn(),
-      title,
-      description: this.descriptionTx().trim() || null,
-      fundId: this.fundIdForm() || null,
-      allocationRule: rule,
-    };
+
+    const editId = this.editingId();
+    const editSeriesId = this.editingSeriesId();
+    const isRecurring =
+      !editId && !editSeriesId && this.entryMode() === 'recurring';
+
+    if (!isRecurring && !editSeriesId) {
+      const ar = this.amountReais();
+      if (!Number.isFinite(ar) || ar <= 0) {
+        this.formError.set('Indique um valor válido em reais.');
+        return;
+      }
+    } else if (editSeriesId) {
+      const u = this.seriesUniformAmountReais();
+      if (u !== 0 && (!Number.isFinite(u) || u <= 0)) {
+        this.formError.set('Valor único para todas as parcelas inválido.');
+        return;
+      }
+    } else if (isRecurring) {
+      const n = Math.floor(this.recurringCount());
+      if (!Number.isFinite(n) || n < 2) {
+        this.formError.set('Informe pelo menos 2 parcelas ou meses.');
+        return;
+      }
+      if (n > 120) {
+        this.formError.set('No máximo 120 parcelas por lançamento.');
+        return;
+      }
+      if (this.recurringMode() === 'by_installment') {
+        const v = this.recurringInstallmentReais();
+        if (!Number.isFinite(v) || v <= 0) {
+          this.formError.set('Indique o valor de cada parcela.');
+          return;
+        }
+      } else {
+        const t = this.recurringTotalReais();
+        if (!Number.isFinite(t) || t <= 0) {
+          this.formError.set('Indique o valor total a dividir.');
+          return;
+        }
+      }
+    }
 
     const pending = this.pendingReceiptFile();
-    const editId = this.editingId();
 
     this.saving.set(true);
     const upload$: Observable<{ receiptStorageKey: string } | null> = pending
@@ -379,7 +600,42 @@ export class PainelTransacoesComponent implements OnInit {
     upload$
       .pipe(
         switchMap((uploadRes: { receiptStorageKey: string } | null) => {
+          if (editSeriesId) {
+            const patch: Parameters<
+              FinancialApiService['updateRecurringSeries']
+            >[2] = {
+              kind: this.txKind(),
+              titleBase: title,
+              description: this.descriptionTx().trim() || null,
+              fundId: this.fundIdForm() || null,
+              allocationRule: rule,
+            };
+            const uniform = this.seriesUniformAmountReais();
+            if (Number.isFinite(uniform) && uniform > 0) {
+              patch.amountCents = reaisToCents(uniform);
+            }
+            if (uploadRes?.receiptStorageKey) {
+              patch.receiptStorageKey = uploadRes.receiptStorageKey;
+            } else if (this.receiptRemoved()) {
+              patch.receiptStorageKey = null;
+            }
+            return this.api.updateRecurringSeries(
+              this.condoId,
+              editSeriesId,
+              patch,
+            );
+          }
           if (editId) {
+            const ar = this.amountReais();
+            const baseBody = {
+              kind: this.txKind(),
+              amountCents: reaisToCents(ar),
+              occurredOn: this.occurredOn(),
+              title,
+              description: this.descriptionTx().trim() || null,
+              fundId: this.fundIdForm() || null,
+              allocationRule: rule,
+            };
             const patch: Parameters<
               FinancialApiService['updateTransaction']
             >[2] = { ...baseBody };
@@ -390,9 +646,33 @@ export class PainelTransacoesComponent implements OnInit {
             }
             return this.api.updateTransaction(this.condoId, editId, patch);
           }
+          if (isRecurring) {
+            const recurringSeriesId = crypto.randomUUID();
+            const payloads = this.buildRecurringCreatePayloads(
+              title,
+              rule,
+              uploadRes?.receiptStorageKey,
+              recurringSeriesId,
+            );
+            return from(payloads).pipe(
+              concatMap((body) =>
+                this.api.createTransaction(this.condoId, body),
+              ),
+              last(),
+            );
+          }
+          const ar = this.amountReais();
           const createBody: Parameters<
             FinancialApiService['createTransaction']
-          >[1] = { ...baseBody };
+          >[1] = {
+            kind: this.txKind(),
+            amountCents: reaisToCents(ar),
+            occurredOn: this.occurredOn(),
+            title,
+            description: this.descriptionTx().trim() || null,
+            fundId: this.fundIdForm() || null,
+            allocationRule: rule,
+          };
           if (uploadRes?.receiptStorageKey) {
             createBody.receiptStorageKey = uploadRes.receiptStorageKey;
           }
@@ -412,10 +692,89 @@ export class PainelTransacoesComponent implements OnInit {
       });
   }
 
+  private addCalendarMonths(isoYmd: string, deltaMonths: number): string {
+    const [y0, m0, d0] = isoYmd.split('-').map((s) => parseInt(s, 10));
+    const d = new Date(y0, m0 - 1 + deltaMonths, d0);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  /** Distribui centavos em partes iguais; o resto vai às primeiras parcelas. */
+  private splitTotalCentsEvenly(totalCents: number, parts: number): number[] {
+    const base = Math.floor(totalCents / parts);
+    const rem = totalCents % parts;
+    return Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
+  }
+
+  private buildRecurringCreatePayloads(
+    title: string,
+    rule: AllocationRule,
+    receiptKey: string | undefined,
+    recurringSeriesId: string,
+  ): Parameters<FinancialApiService['createTransaction']>[1][] {
+    const n = Math.floor(this.recurringCount());
+    const start = this.occurredOn();
+    const desc = this.descriptionTx().trim() || null;
+    const fundId = this.fundIdForm() || null;
+    const kind = this.txKind();
+
+    let amounts: number[];
+    if (this.recurringMode() === 'by_installment') {
+      const c = reaisToCents(this.recurringInstallmentReais());
+      amounts = Array.from({ length: n }, () => c);
+    } else {
+      amounts = this.splitTotalCentsEvenly(
+        reaisToCents(this.recurringTotalReais()),
+        n,
+      );
+    }
+
+    return amounts.map((amountCents, i) => {
+      const body: Parameters<FinancialApiService['createTransaction']>[1] = {
+        kind,
+        amountCents,
+        occurredOn: this.addCalendarMonths(start, i),
+        title: n > 1 ? `${title} (${i + 1}/${n})` : title,
+        description: desc,
+        fundId,
+        allocationRule: rule,
+        recurringSeriesId,
+      };
+      if (i === 0 && receiptKey) {
+        body.receiptStorageKey = receiptKey;
+      }
+      return body;
+    });
+  }
+
   remove(t: FinancialTransaction): void {
     if (!confirm(`Excluir a transação «${t.title}»?`)) return;
     this.api.deleteTransaction(this.condoId, t.id).subscribe({
       next: () => this.refreshList(),
+      error: (err: HttpErrorResponse) => {
+        this.formError.set(this.msg(err));
+      },
+    });
+  }
+
+  removeSeries(seriesId: string): void {
+    const n = this.transactions().filter(
+      (x) => x.recurringSeriesId === seriesId,
+    ).length;
+    if (
+      !confirm(
+        `Excluir todas as ${n} transações desta série recorrente? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.api.deleteRecurringSeries(this.condoId, seriesId).subscribe({
+      next: () => {
+        this.resetForm();
+        this.refreshList();
+      },
       error: (err: HttpErrorResponse) => {
         this.formError.set(this.msg(err));
       },

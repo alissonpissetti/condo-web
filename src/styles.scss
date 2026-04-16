@@ -1,28 +1,16 @@
 @use './styles/painel-form-ui.scss';
 
 :root {
-  color-scheme: light dark;
-  --bg: #0b1020;
-  --surface: #121a2f;
-  --surface-2: #0f1628;
-  --border: #243047;
-  --text: #eef2ff;
-  --muted: #9fb0d0;
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
   --accent: #3b82f6;
   --accent-2: #6366f1;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f4f6fb;
-    --surface: #ffffff;
-    --surface-2: #f8fafc;
-    --border: #e2e8f0;
-    --text: #0f172a;
-    --muted: #64748b;
-    --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
-  }
+  --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
 }
 
 *,

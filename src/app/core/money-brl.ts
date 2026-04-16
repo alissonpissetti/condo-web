@@ -1,13 +1,41 @@
-/** Formata centavos (inteiro) para moeda BRL. */
-export function formatCentsBrl(cents: string | number): string {
-  const n = typeof cents === 'string' ? parseInt(cents, 10) : cents;
-  if (Number.isNaN(n)) {
+export type FormatCentsBrlOptions = {
+  /** Se true, formata sempre como valor positivo (módulo), sem prefixo «-». */
+  absolute?: boolean;
+};
+
+/** Formata centavos (inteiro) para moeda BRL. Usa BigInt para não perder precisão em valores grandes. */
+export function formatCentsBrl(
+  cents: string | number | bigint,
+  options?: FormatCentsBrlOptions,
+): string {
+  try {
+    let bi: bigint;
+    if (typeof cents === 'bigint') {
+      bi = cents;
+    } else if (typeof cents === 'number') {
+      if (!Number.isFinite(cents)) {
+        return '—';
+      }
+      bi = BigInt(Math.trunc(cents));
+    } else {
+      const s = String(cents ?? '').trim();
+      if (s === '' || !/^-?\d+$/.test(s)) {
+        return '—';
+      }
+      bi = BigInt(s);
+    }
+    const forceAbs = options?.absolute === true;
+    const neg = !forceAbs && bi < 0n;
+    const abs = bi < 0n ? -bi : bi;
+    const whole = abs / 100n;
+    const frac = abs % 100n;
+    const wholeStr = whole.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const fracStr = frac.toString().padStart(2, '0');
+    const body = `${wholeStr},${fracStr}`;
+    return neg ? `-R$ ${body}` : `R$ ${body}`;
+  } catch {
     return '—';
   }
-  return (n / 100).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
 }
 
 /** Valor em reais (ex.: 12.5) para centavos inteiros. */

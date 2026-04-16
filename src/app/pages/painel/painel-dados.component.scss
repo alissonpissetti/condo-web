@@ -273,11 +273,7 @@
 .field-error {
   font-weight: 500;
   font-size: 0.78rem;
-  color: #f87171;
-
-  @media (prefers-color-scheme: light) {
-    color: #b91c1c;
-  }
+  color: #b91c1c;
 
   &--block {
     display: block;

@@ -1,7 +1,10 @@
 <div class="page">
   <header class="page__header">
     <h1>Editar condomínio</h1>
-    <p class="page__intro">Altere o nome do condomínio selecionado.</p>
+    <p class="page__intro">
+      Nome do condomínio, dados para o PDF de transparência (PIX) e WhatsApp para
+      envio de comprovantes pelos condóminos.
+    </p>
   </header>
 
   @if (loading()) {
@@ -30,6 +33,94 @@
         @if (form.controls.name.invalid && form.controls.name.touched) {
           <span class="field__error">{{
             fieldErrorsPt(form.controls.name)
+          }}</span>
+        }
+      </label>
+
+      <h2 class="section-title">Logo da gestão (PDF)</h2>
+      <p class="muted small">
+        Aparece no topo do PDF de transparência e do comprovante de taxa. PNG, JPG
+        ou WEBP, máximo 2 MB.
+      </p>
+      @if (logoPreviewUrl(); as logoSrc) {
+        <div class="logo-block">
+          <img [src]="logoSrc" alt="Logo do condomínio" class="logo-preview" />
+          <button
+            type="button"
+            class="btn ghost"
+            (click)="removeManagementLogo()"
+            [disabled]="logoBusy() || saving()"
+          >
+            Remover logo
+          </button>
+        </div>
+      } @else {
+        <p class="muted small">Nenhuma logo enviada.</p>
+      }
+      <label class="field">
+        <span class="field__label">Enviar nova imagem</span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          class="field__input"
+          [disabled]="logoBusy() || saving()"
+          (change)="onManagementLogoSelected($event)"
+        />
+      </label>
+
+      <h2 class="section-title">Transparência e pagamento (PDF mensal)</h2>
+      <p class="muted small">
+        Usado no relatório enviado aos proprietários. Se o WhatsApp ficar em
+        branco, o sistema tenta o telefone da ficha do síndico em Planeamento.
+      </p>
+
+      <label class="field">
+        <span class="field__label">Chave PIX do condomínio</span>
+        <input
+          type="text"
+          formControlName="billingPixKey"
+          autocomplete="off"
+          class="field__input"
+          placeholder="E-mail, CPF/CNPJ, telefone ou EVP"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">Nome do beneficiário (PIX, até 25 caracteres)</span>
+        <input
+          type="text"
+          formControlName="billingPixBeneficiaryName"
+          class="field__input"
+          maxlength="25"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">Cidade do beneficiário (PIX, até 15 caracteres)</span>
+        <input
+          type="text"
+          formControlName="billingPixCity"
+          class="field__input"
+          maxlength="15"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">WhatsApp para comprovantes</span>
+        <input
+          type="text"
+          formControlName="syndicWhatsappForReceipts"
+          class="field__input"
+          placeholder="(41) 99989-7602"
+          appBrPhoneMask
+          [mobileOnly]="true"
+        />
+        @if (
+          form.controls.syndicWhatsappForReceipts.invalid &&
+          form.controls.syndicWhatsappForReceipts.touched
+        ) {
+          <span class="field__error">{{
+            fieldErrorsPt(form.controls.syndicWhatsappForReceipts)
           }}</span>
         }
       </label>

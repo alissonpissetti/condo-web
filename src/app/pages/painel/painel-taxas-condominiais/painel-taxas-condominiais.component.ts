@@ -2,7 +2,10 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { Observable } from 'rxjs';
-import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import {
+  translateHttpErrorMessage,
+  translateHttpErrorMessageAsync,
+} from '../../../core/api-errors-pt';
 import {
   FinancialApiService,
   type CondominiumFeeCharge,
@@ -28,7 +31,6 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly formError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly actionBusy = signal(false);
-  protected readonly settleDraft = signal<Record<string, string>>({});
 
   /** Soma de todas as cobranças da competência (centavos). */
   protected readonly totalChargesFormatted = computed(() => {
@@ -124,34 +126,72 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     });
   }
 
-  updateSettleDraft(chargeId: string, ev: Event): void {
-    const v = (ev.target as HTMLInputElement).value;
-    this.settleDraft.update((m) => ({ ...m, [chargeId]: v }));
-  }
-
   settle(c: CondominiumFeeCharge): void {
-    const txId = this.settleDraft()[c.id]?.trim();
-    if (!txId) {
-      this.formError.set('Indique o ID da transação de receita.');
-      return;
-    }
     this.formError.set(null);
     this.actionBusy.set(true);
-    this.api.settleCondominiumFee(this.condoId, c.id, txId).subscribe({
+    this.api.settleCondominiumFee(this.condoId, c.id).subscribe({
       next: (updated) => {
         this.charges.update((list) =>
           list.map((x) => (x.id === updated.id ? updated : x)),
         );
-        this.settleDraft.update((m) => {
-          const n = { ...m };
-          delete n[c.id];
-          return n;
-        });
         this.actionBusy.set(false);
       },
       error: (err: HttpErrorResponse) => {
         this.actionBusy.set(false);
         this.formError.set(this.msg(err));
+      },
+    });
+  }
+
+  downloadTransparencyPdf(): void {
+    const ym = this.competenceYm().trim();
+    if (!ym) {
+      this.formError.set('Indique a competência.');
+      return;
+    }
+    this.formError.set(null);
+    this.actionBusy.set(true);
+    this.api.condominiumFeesTransparencyPdf(this.condoId, ym).subscribe({
+      next: (blob) => {
+        this.actionBusy.set(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transparencia-condominial-${ym}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.actionBusy.set(false);
+        void translateHttpErrorMessageAsync(err, {
+          network:
+            'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+          default: 'Não foi possível gerar o PDF de transparência.',
+        }).then((m) => this.formError.set(m));
+      },
+    });
+  }
+
+  downloadReceipt(c: CondominiumFeeCharge): void {
+    this.formError.set(null);
+    this.actionBusy.set(true);
+    this.api.condominiumFeePaymentReceiptPdf(this.condoId, c.id).subscribe({
+      next: (blob) => {
+        this.actionBusy.set(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `comprovante-taxa-${c.id.slice(0, 8)}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.actionBusy.set(false);
+        void translateHttpErrorMessageAsync(err, {
+          network:
+            'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+          default: 'Não foi possível baixar o comprovante.',
+        }).then((m) => this.formError.set(m));
       },
     });
   }

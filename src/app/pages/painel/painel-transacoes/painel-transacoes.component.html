@@ -2,8 +2,12 @@
   <header class="page__header">
     <h1>Transações</h1>
     <p class="page__intro">
-      Despesas e receitas com rateio entre unidades. Receitas podem ser sem repartição.
-      Opcionalmente anexe um comprovante (PDF ou imagem).
+      Despesas, receitas e investimentos (capital aplicado) com rateio entre unidades,
+      quando aplicável. Receitas podem ser sem repartição. Opcionalmente anexe um
+      comprovante (PDF ou imagem). Com
+      <strong>filtro por fundo</strong>, a coluna «Saldo após» é o saldo do fundo após
+      cada lançamento, em ordem cronológica (só os movimentos listados), exibido em
+      valor absoluto (sempre positivo).
     </p>
   </header>
 
@@ -31,10 +35,20 @@
     <section class="form-card">
       <div class="form-card__head">
         <h2 class="form-card__title">
-          {{ editingId() ? 'Editar transação' : 'Nova transação' }}
+          @if (editingSeriesId()) {
+            Editar série ({{ seriesEditCount() }} parcelas)
+          } @else if (editingId()) {
+            Editar transação
+          } @else {
+            Nova transação
+          }
         </h2>
         <p class="form-card__lede">
-          @if (editingId()) {
+          @if (editingSeriesId()) {
+            Alterações em tipo, título base, descrição, fundo e rateio aplicam-se a todas
+            as parcelas. Títulos ganham de novo o sufixo (1/N)…(N/N). Datas e valores
+            individuais permanecem, salvo se indicar um valor único para todas.
+          } @else if (editingId()) {
             Altere os blocos abaixo e salve. Envie um novo arquivo para substituir o
             comprovante, ou remova-o com o botão correspondente.
           } @else {
@@ -91,11 +105,15 @@
             <div>
               <h3 class="form-section__title">Tipo</h3>
               <p class="form-section__hint">
-                Despesa reparte custo; receita pode não repartir por unidade.
+                Despesa e investimento repartem entre unidades; receita pode não repartir.
               </p>
             </div>
           </div>
-          <div class="mode-tabs" role="tablist" aria-label="Tipo de transação">
+          <div
+            class="mode-tabs mode-tabs--3"
+            role="tablist"
+            aria-label="Tipo de transação"
+          >
             <button
               type="button"
               class="mode-tab"
@@ -117,6 +135,17 @@
             >
               <span class="mode-tab__name">Receita</span>
               <span class="mode-tab__desc">Entrada de valores</span>
+            </button>
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="txKind() === 'investment'"
+              [class.mode-tab--active]="txKind() === 'investment'"
+              (click)="onTxKindChange('investment')"
+            >
+              <span class="mode-tab__name">Investimento</span>
+              <span class="mode-tab__desc">Capital aplicado</span>
             </button>
           </div>
         </div>
@@ -227,32 +256,191 @@
             <div>
               <h3 class="form-section__title">Valores e competência</h3>
               <p class="form-section__hint">
-                Valor total da transação e data. Fundo opcional para filtrar no painel.
+                @if (editingSeriesId()) {
+                  Opcional: defina um valor único para todas as parcelas. Caso contrário,
+                  mantêm-se os valores já lançados. Fundo opcional.
+                } @else if (editingId() || entryMode() === 'single') {
+                  Valor da transação e data. Fundo opcional para filtrar no painel.
+                } @else {
+                  Série mensal a partir da data indicada (cada mês, mesmo rateio e
+                  fundo). Fundo opcional.
+                }
               </p>
             </div>
           </div>
+
+          @if (!editingId() && !editingSeriesId()) {
+            <div
+              class="mode-tabs mode-tabs--sub entry-mode-tabs"
+              role="tablist"
+              aria-label="Lançamento único ou recorrente"
+            >
+              <button
+                type="button"
+                class="mode-tab"
+                role="tab"
+                [attr.aria-selected]="entryMode() === 'single'"
+                [class.mode-tab--active]="entryMode() === 'single'"
+                (click)="setEntryMode('single')"
+              >
+                <span class="mode-tab__name">Única</span>
+                <span class="mode-tab__desc">Uma transação</span>
+              </button>
+              <button
+                type="button"
+                class="mode-tab"
+                role="tab"
+                [attr.aria-selected]="entryMode() === 'recurring'"
+                [class.mode-tab--active]="entryMode() === 'recurring'"
+                (click)="setEntryMode('recurring')"
+              >
+                <span class="mode-tab__name">Recorrente</span>
+                <span class="mode-tab__desc">Parcelas mensais</span>
+              </button>
+            </div>
+          }
+
           <div class="values-grid">
-            <label class="field field--block field--money">
-              <span class="field__label">Valor (R$)</span>
-              <div class="input-money">
-                <span class="input-money__prefix" aria-hidden="true">R$</span>
+            @if (editingSeriesId()) {
+              <div class="field field--block series-edit-values">
+                <span class="field__label">Valores atuais</span>
+                <p class="muted series-edit-values__note">
+                  {{ seriesEditCount() }} parcelas com datas e valores próprios. Só
+                  altere todos de uma vez usando o campo abaixo.
+                </p>
+                <label class="field field--block field--money">
+                  <span class="field__label"
+                    >Novo valor por parcela — todas iguais (opcional)</span
+                  >
+                  <div class="input-money">
+                    <span class="input-money__prefix" aria-hidden="true">R$</span>
+                    <input
+                      type="number"
+                      class="input input--lg input--money"
+                      step="0.01"
+                      min="0.01"
+                      [value]="seriesUniformAmountReais() || ''"
+                      (input)="
+                        setSeriesUniformAmountFromInput($any($event.target).value)
+                      "
+                      placeholder="vazio = manter valores"
+                    />
+                  </div>
+                </label>
+              </div>
+            } @else if (editingId() || entryMode() === 'single') {
+              <label class="field field--block field--money">
+                <span class="field__label">Valor (R$)</span>
+                <div class="input-money">
+                  <span class="input-money__prefix" aria-hidden="true">R$</span>
+                  <input
+                    type="number"
+                    class="input input--lg input--money"
+                    step="0.01"
+                    min="0.01"
+                    [value]="amountReais() || ''"
+                    (input)="setAmountFromInput($any($event.target).value)"
+                    placeholder="0,00"
+                  />
+                </div>
+              </label>
+            } @else {
+              <label class="field field--block">
+                <span class="field__label">Quantidade de parcelas / meses</span>
                 <input
                   type="number"
-                  class="input input--lg input--money"
-                  step="0.01"
-                  min="0.01"
-                  [value]="amountReais() || ''"
-                  (input)="setAmountFromInput($any($event.target).value)"
-                  placeholder="0,00"
+                  class="input input--lg"
+                  min="2"
+                  max="120"
+                  step="1"
+                  [value]="recurringCount() || ''"
+                  (input)="setRecurringCountFromInput($any($event.target).value)"
                 />
+              </label>
+
+              <div class="recurring-calc">
+                <div
+                  class="mode-tabs mode-tabs--sub"
+                  role="tablist"
+                  aria-label="Como calcular o valor das parcelas"
+                >
+                  <button
+                    type="button"
+                    class="mode-tab"
+                    role="tab"
+                    [attr.aria-selected]="recurringMode() === 'by_installment'"
+                    [class.mode-tab--active]="recurringMode() === 'by_installment'"
+                    (click)="setRecurringMode('by_installment')"
+                  >
+                    <span class="mode-tab__name">N × valor</span>
+                    <span class="mode-tab__desc">Parcelas fixas</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="mode-tab"
+                    role="tab"
+                    [attr.aria-selected]="recurringMode() === 'by_total'"
+                    [class.mode-tab--active]="recurringMode() === 'by_total'"
+                    (click)="setRecurringMode('by_total')"
+                  >
+                    <span class="mode-tab__name">Total ÷ meses</span>
+                    <span class="mode-tab__desc">Divide o total</span>
+                  </button>
+                </div>
+
+                @if (recurringMode() === 'by_installment') {
+                  <label class="field field--block field--money">
+                    <span class="field__label">Valor de cada parcela (R$)</span>
+                    <div class="input-money">
+                      <span class="input-money__prefix" aria-hidden="true">R$</span>
+                      <input
+                        type="number"
+                        class="input input--lg input--money"
+                        step="0.01"
+                        min="0.01"
+                        [value]="recurringInstallmentReais() || ''"
+                        (input)="
+                          setRecurringInstallmentFromInput($any($event.target).value)
+                        "
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </label>
+                } @else {
+                  <label class="field field--block field--money">
+                    <span class="field__label">Valor total (R$)</span>
+                    <div class="input-money">
+                      <span class="input-money__prefix" aria-hidden="true">R$</span>
+                      <input
+                        type="number"
+                        class="input input--lg input--money"
+                        step="0.01"
+                        min="0.01"
+                        [value]="recurringTotalReais() || ''"
+                        (input)="setRecurringTotalFromInput($any($event.target).value)"
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </label>
+                }
               </div>
-            </label>
+            }
+
             <label class="field field--block">
-              <span class="field__label">Data (ocorrência)</span>
+              <span class="field__label">
+                @if (editingSeriesId()) {
+                  Data da 1ª parcela (fixa neste modo)
+                } @else if (editingId() || entryMode() === 'single') {
+                  Data (ocorrência)
+                } @else {
+                  Primeira data (demais: +1 mês cada)
+                }
+              </span>
               <input
                 type="date"
                 class="input input--lg"
                 [value]="occurredOn()"
+                [disabled]="!!editingSeriesId()"
                 (input)="occurredOn.set($any($event.target).value)"
               />
             </label>
@@ -270,6 +458,17 @@
               </select>
             </label>
           </div>
+
+          @if (
+            entryMode() === 'recurring' &&
+            !editingId() &&
+            !editingSeriesId() &&
+            recurringPreviewText()
+          ) {
+            <p class="form-section__inline-hint recurring-preview">
+              {{ recurringPreviewText() }}
+            </p>
+          }
         </div>
 
         <div class="form-section">
@@ -285,7 +484,7 @@
           </div>
           <div class="receipt-field">
             @if (
-              editingId() &&
+              (editingId() || editingSeriesId()) &&
               editingReceiptKey() &&
               !receiptRemoved() &&
               !pendingReceiptFile()
@@ -319,27 +518,37 @@
               <span class="receipt-field__name">{{
                 pendingReceiptFile()?.name || 'Nenhum arquivo selecionado'
               }}</span>
-              @if (pendingReceiptFile() || (editingId() && editingReceiptKey() && !receiptRemoved())) {
+              @if (
+                pendingReceiptFile() ||
+                ((editingId() || editingSeriesId()) &&
+                  editingReceiptKey() &&
+                  !receiptRemoved())
+              ) {
                 <button type="button" class="btn btn--ghost sm" (click)="removeReceipt()">
                   Remover
                 </button>
               }
             </div>
             <p class="receipt-field__hint">
-              Ao salvar, o arquivo é enviado primeiro e vinculado à transação.
+              @if (editingSeriesId()) {
+                Ao salvar, o arquivo substitui ou remove o comprovante em todas as
+                parcelas da série.
+              } @else {
+                Ao salvar, o arquivo é enviado primeiro e vinculado à transação.
+              }
             </p>
           </div>
         </div>
 
         <div class="form-footer form-footer--split">
-          @if (editingId()) {
+          @if (editingId() || editingSeriesId()) {
             <button
               type="button"
               class="btn btn--ghost"
               [disabled]="saving()"
               (click)="resetForm()"
             >
-              Cancelar edição
+              {{ editingSeriesId() ? 'Cancelar edição da série' : 'Cancelar edição' }}
             </button>
           }
           <button
@@ -351,9 +560,13 @@
             {{
               saving()
                 ? 'Salvando…'
-                : editingId()
-                  ? 'Salvar alterações'
-                  : 'Adicionar transação'
+                : editingSeriesId()
+                  ? 'Salvar série (' + seriesEditCount() + ' parcelas)'
+                  : editingId()
+                    ? 'Salvar alterações'
+                    : entryMode() === 'recurring'
+                      ? 'Adicionar ' + recurringCount() + ' transações'
+                      : 'Adicionar transação'
             }}
           </button>
         </div>
@@ -369,18 +582,37 @@
             <th>Título</th>
             <th>Fundo</th>
             <th class="num">Valor</th>
+            @if (fundFilter()) {
+              <th class="num">Saldo após</th>
+            }
             <th>Comprovante</th>
             <th class="td-actions"></th>
           </tr>
         </thead>
         <tbody>
           @for (t of transactions(); track t.id) {
-            <tr [class.row--editing]="editingId() === t.id">
+            <tr
+              [class.row--editing]="
+                editingId() === t.id ||
+                (!!t.recurringSeriesId && editingSeriesId() === t.recurringSeriesId)
+              "
+            >
               <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
-              <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
+              <td>{{ transactionKindLabelPt(t.kind) }}</td>
               <td>{{ t.title }}</td>
               <td>{{ t.fund?.name || '—' }}</td>
               <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
+              @if (fundFilter()) {
+                <td class="num">
+                  {{
+                    t.runningBalanceCents != null
+                      ? formatCentsBrl(t.runningBalanceCents, {
+                          absolute: true,
+                        })
+                      : '—'
+                  }}
+                </td>
+              }
               <td>
                 @if (t.receiptStorageKey) {
                   <button
@@ -394,21 +626,71 @@
                   <span class="muted">—</span>
                 }
               </td>
-              <td class="td-actions">
-                <button
-                  type="button"
-                  class="btn btn--ghost sm"
-                  (click)="startEdit(t)"
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  class="btn danger sm"
-                  (click)="remove(t)"
-                >
-                  Excluir
-                </button>
+              <td class="td-actions td-actions--menu">
+                <div class="row-actions">
+                  <button
+                    type="button"
+                    class="row-actions__trigger"
+                    [class.row-actions__trigger--open]="rowActionMenuForId() === t.id"
+                    [attr.aria-expanded]="rowActionMenuForId() === t.id"
+                    aria-haspopup="menu"
+                    [attr.aria-controls]="'tx-actions-' + t.id"
+                    [id]="'tx-actions-trigger-' + t.id"
+                    (click)="toggleRowActionMenu(t.id, $event)"
+                  >
+                    <span class="sr-only">Ações da transação</span>
+                    <span class="row-actions__dots" aria-hidden="true"
+                      ><span></span><span></span><span></span
+                    ></span>
+                  </button>
+                  @if (rowActionMenuForId() === t.id) {
+                    <div
+                      class="row-actions__menu"
+                      role="menu"
+                      [attr.aria-labelledby]="'tx-actions-trigger-' + t.id"
+                      [id]="'tx-actions-' + t.id"
+                      (click)="$event.stopPropagation()"
+                    >
+                      <button
+                        type="button"
+                        class="row-actions__item"
+                        role="menuitem"
+                        (click)="editRowFromMenu(t)"
+                      >
+                        Editar este registro
+                      </button>
+                      @if (t.recurringSeriesId) {
+                        <button
+                          type="button"
+                          class="row-actions__item"
+                          role="menuitem"
+                          (click)="editSeriesFromMenu(t.recurringSeriesId!)"
+                        >
+                          Editar toda a série
+                        </button>
+                      }
+                      <div class="row-actions__sep" role="separator"></div>
+                      <button
+                        type="button"
+                        class="row-actions__item row-actions__item--danger"
+                        role="menuitem"
+                        (click)="removeRowFromMenu(t)"
+                      >
+                        Excluir este registro
+                      </button>
+                      @if (t.recurringSeriesId) {
+                        <button
+                          type="button"
+                          class="row-actions__item row-actions__item--danger"
+                          role="menuitem"
+                          (click)="removeSeriesFromMenu(t.recurringSeriesId!)"
+                        >
+                          Excluir toda a série
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
               </td>
             </tr>
           }

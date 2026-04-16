@@ -12,16 +12,27 @@ import {
   CondominiumManagementService,
   type GroupingWithUnits,
 } from '../../../core/condominium-management.service';
+import { formatDateDdMmYyyy } from '../../../core/date-display';
 import {
   FinancialApiService,
   type AllocationRule,
   type FinancialFund,
+  type FinancialTransaction,
 } from '../../../core/financial-api.service';
 import {
   centsToReaisInput,
   formatCentsBrl,
   reaisToCents,
 } from '../../../core/money-brl';
+
+type ExtratoRow = {
+  id: string;
+  occurredOn: string;
+  kind: FinancialTransaction['kind'];
+  title: string;
+  signedDeltaCents: bigint;
+  runningAfterCents: bigint;
+};
 
 type AllocKind =
   | 'all_units_equal'
@@ -54,6 +65,7 @@ export class PainelFundosComponent implements OnInit {
   private readonly condoApi = inject(CondominiumManagementService);
 
   protected readonly formatCentsBrl = formatCentsBrl;
+  protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
 
   protected readonly funds = signal<FinancialFund[]>([]);
   protected readonly tree = signal<GroupingWithUnits[]>([]);
@@ -68,6 +80,11 @@ export class PainelFundosComponent implements OnInit {
   protected readonly selectedGroupingIds = signal<string[]>([]);
   protected readonly excludeUnitIds = signal<string[]>([]);
   protected readonly parcelEntryMode = signal<ParcelEntryMode>('byInstallments');
+
+  protected readonly extratoFund = signal<FinancialFund | null>(null);
+  protected readonly extratoRows = signal<ExtratoRow[]>([]);
+  protected readonly extratoLoading = signal(false);
+  protected readonly extratoError = signal<string | null>(null);
 
   private condoId = '';
 
@@ -219,6 +236,16 @@ export class PainelFundosComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
         this.loadError.set(this.msg(err));
+      },
+    });
+  }
+
+  /** Atualiza cartões de fundo sem desativar a página (ex.: após abrir o extrato). */
+  private syncFundsFromApi(): void {
+    this.api.listFunds(this.condoId).subscribe({
+      next: (rows) => this.funds.set(rows),
+      error: () => {
+        /* mantém lista anterior; extrato já carregou */
       },
     });
   }
@@ -588,6 +615,111 @@ export class PainelFundosComponent implements OnInit {
         this.formError.set(this.msg(err));
       },
     });
+  }
+
+  openExtrato(f: FinancialFund): void {
+    this.extratoFund.set(f);
+    this.extratoError.set(null);
+    this.extratoRows.set([]);
+    this.extratoLoading.set(true);
+    this.api.listTransactions(this.condoId, f.id).subscribe({
+      next: (rows) => {
+        this.extratoRows.set(this.buildExtratoRows(rows));
+        this.extratoLoading.set(false);
+        this.syncFundsFromApi();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.extratoLoading.set(false);
+        this.extratoError.set(this.msg(err));
+      },
+    });
+  }
+
+  closeExtrato(): void {
+    this.extratoFund.set(null);
+    this.extratoRows.set([]);
+    this.extratoError.set(null);
+    this.extratoLoading.set(false);
+  }
+
+  /** Saldo acumulado atual na lista de fundos (atualizado ao fechar o carregamento do extrato). */
+  protected fundBalanceDisplay(fundId: string): string {
+    const f = this.funds().find((x) => x.id === fundId);
+    if (f?.accumulatedBalanceCents == null) {
+      return '—';
+    }
+    return formatCentsBrl(f.accumulatedBalanceCents, { absolute: true });
+  }
+
+  /** Saldo após o último movimento do extrato (deve coincidir com o saldo do cartão). */
+  protected extratoLastRunningDisplay(): string {
+    const r = this.extratoRows();
+    if (r.length === 0) {
+      return '—';
+    }
+    const last = r[r.length - 1];
+    return last
+      ? formatCentsBrl(last.runningAfterCents, { absolute: true })
+      : '—';
+  }
+
+  protected onExtratoBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeExtrato();
+    }
+  }
+
+  protected extratoKindLabel(kind: FinancialTransaction['kind']): string {
+    switch (kind) {
+      case 'income':
+        return 'Receita';
+      case 'expense':
+        return 'Despesa';
+      case 'investment':
+        return 'Aplicação';
+      default:
+        return kind;
+    }
+  }
+
+  private buildExtratoRows(txs: FinancialTransaction[]): ExtratoRow[] {
+    const sorted = [...txs].sort((a, b) => {
+      const da = this.occurredYmd(a).localeCompare(this.occurredYmd(b));
+      if (da !== 0) {
+        return da;
+      }
+      return a.id.localeCompare(b.id);
+    });
+    let run = 0n;
+    const out: ExtratoRow[] = [];
+    for (const t of sorted) {
+      const delta = this.signedDeltaForFund(t);
+      run += delta;
+      out.push({
+        id: t.id,
+        occurredOn: t.occurredOn,
+        kind: t.kind,
+        title: t.title,
+        signedDeltaCents: delta,
+        runningAfterCents: run,
+      });
+    }
+    return out;
+  }
+
+  private occurredYmd(t: FinancialTransaction): string {
+    return String(t.occurredOn ?? '').slice(0, 10);
+  }
+
+  private signedDeltaForFund(t: FinancialTransaction): bigint {
+    const amount = BigInt(String(t.amountCents));
+    if (t.kind === 'income') {
+      return amount;
+    }
+    if (t.kind === 'expense' || t.kind === 'investment') {
+      return -amount;
+    }
+    return 0n;
   }
 
   remove(f: FinancialFund): void {

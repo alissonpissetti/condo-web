@@ -4,14 +4,20 @@ import {
   forwardRef,
   HostListener,
   inject,
+  Input,
   OnInit,
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { formatBrPhoneDisplay, toNationalPhoneDigits } from './br-phone-mask';
+import {
+  formatBrPhoneDisplay,
+  toMobileNationalPhoneDigits,
+  toNationalPhoneDigits,
+} from './br-phone-mask';
 
 /**
  * Máscara de telefone BR no formato (XX) XXXXX-XXXX (móvel) ou (XX) XXXX-XXXX.
  * O valor do FormControl permanece só com dígitos (nacionais, até 11).
+ * Com `mobileOnly`, aceita apenas celular (9 após o DDD).
  */
 @Directive({
   standalone: true,
@@ -27,9 +33,18 @@ import { formatBrPhoneDisplay, toNationalPhoneDigits } from './br-phone-mask';
 export class BrPhoneMaskDirective implements ControlValueAccessor, OnInit {
   private readonly el = inject(ElementRef<HTMLInputElement>);
 
+  /** Se true, só formata e guarda números de celular (9 + 8 dígitos após DDD). */
+  @Input() mobileOnly = false;
+
   private onChange: (value: string) => void = () => {};
   private onTouched: () => void = () => {};
   private updating = false;
+
+  private normalizeDigits(raw: string): string {
+    return this.mobileOnly
+      ? toMobileNationalPhoneDigits(raw)
+      : toNationalPhoneDigits(raw);
+  }
 
   ngOnInit(): void {
     const input = this.el.nativeElement;
@@ -38,7 +53,7 @@ export class BrPhoneMaskDirective implements ControlValueAccessor, OnInit {
   }
 
   writeValue(value: string | null): void {
-    const digits = toNationalPhoneDigits(value ?? '');
+    const digits = this.normalizeDigits(value ?? '');
     this.el.nativeElement.value = formatBrPhoneDisplay(digits);
   }
 
@@ -60,7 +75,7 @@ export class BrPhoneMaskDirective implements ControlValueAccessor, OnInit {
       return;
     }
     const input = this.el.nativeElement;
-    const digits = toNationalPhoneDigits(input.value);
+    const digits = this.normalizeDigits(input.value);
     const masked = formatBrPhoneDisplay(digits);
     if (input.value !== masked) {
       this.updating = true;

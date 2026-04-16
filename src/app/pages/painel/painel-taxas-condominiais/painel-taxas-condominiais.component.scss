@@ -101,19 +101,27 @@
   min-width: 0;
 }
 
-.btn.primary {
+.btn {
   padding: 0.5rem 0.85rem;
   border-radius: 0.55rem;
   font-weight: 600;
-  background: var(--accent);
-  color: var(--accent-contrast, #fff);
-  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.88rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   cursor: pointer;
 }
 
-.btn.primary:disabled {
+.btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  border: 1px solid transparent;
 }
 
 .btn.primary.sm {

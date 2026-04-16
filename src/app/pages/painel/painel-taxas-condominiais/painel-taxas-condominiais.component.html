@@ -28,6 +28,15 @@
       >
         Atualizar
       </button>
+      <button
+        type="button"
+        class="btn"
+        (click)="downloadTransparencyPdf()"
+        [disabled]="loading() || actionBusy() || !competenceYm()"
+        title="Relatório para enviar aos proprietários: despesas por unidade, taxa, PIX e WhatsApp"
+      >
+        PDF transparência
+      </button>
     </div>
   </div>
 
@@ -76,7 +85,7 @@
             <th class="num">Valor</th>
             <th>Vencimento</th>
             <th>Situação</th>
-            <th>Quitar</th>
+            <th>Ação</th>
           </tr>
         </thead>
         <tbody>
@@ -94,25 +103,23 @@
               </td>
               <td>
                 @if (c.status === 'open') {
-                  <div class="settle-row">
-                    <input
-                      type="text"
-                      class="input flex"
-                      placeholder="UUID da receita"
-                      autocomplete="off"
-                      (input)="updateSettleDraft(c.id, $event)"
-                    />
-                    <button
-                      type="button"
-                      class="btn primary sm"
-                      (click)="settle(c)"
-                      [disabled]="actionBusy()"
-                    >
-                      Quitar
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    class="btn primary sm"
+                    (click)="settle(c)"
+                    [disabled]="actionBusy()"
+                  >
+                    Quitar
+                  </button>
                 } @else {
-                  <span class="muted">—</span>
+                  <button
+                    type="button"
+                    class="btn sm"
+                    (click)="downloadReceipt(c)"
+                    [disabled]="actionBusy()"
+                  >
+                    Baixar comprovante
+                  </button>
                 }
               </td>
             </tr>

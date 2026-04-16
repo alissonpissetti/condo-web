@@ -40,5 +40,8 @@ export function controlErrorMessagesPt(
   if (e['pattern']) {
     out.push('O formato não é válido.');
   }
+  if (e['brMobilePhone']) {
+    out.push('Introduza um número de celular válido com DDD (11 dígitos).');
+  }
   return out;
 }

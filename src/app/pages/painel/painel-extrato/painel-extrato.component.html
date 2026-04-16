@@ -2,8 +2,8 @@
   <header class="page__header">
     <h1>Extrato</h1>
     <p class="page__intro">
-      Saldos por unidade no período (despesas positivas, receitas repartidas como
-      crédito) e lista de transações.
+      Saldos por unidade no período (despesas e investimentos repartidos como
+      positivos, receitas repartidas como crédito) e lista de transações.
     </p>
   </header>
 
@@ -92,7 +92,7 @@
           @for (t of statement()!.transactions; track t.id) {
             <tr>
               <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
-              <td>{{ t.kind === 'expense' ? 'Despesa' : 'Receita' }}</td>
+              <td>{{ transactionKindLabelPt(t.kind) }}</td>
               <td>{{ t.title }}</td>
               <td>{{ t.fundName || '—' }}</td>
               <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>

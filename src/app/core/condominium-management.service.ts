@@ -44,7 +44,16 @@ export class CondominiumManagementService {
     );
   }
 
-  updateCondominium(id: string, body: { name: string }): Observable<Condominium> {
+  updateCondominium(
+    id: string,
+    body: {
+      name?: string;
+      billingPixKey?: string;
+      billingPixBeneficiaryName?: string;
+      billingPixCity?: string;
+      syndicWhatsappForReceipts?: string;
+    },
+  ): Observable<Condominium> {
     return this.http.patch<Condominium>(
       `${environment.apiUrl}/condominiums/${id}`,
       body,
@@ -315,6 +324,31 @@ export class CondominiumManagementService {
   ): Observable<GroupingWithUnits[]> {
     return this.http.get<GroupingWithUnits[]>(
       `${environment.apiUrl}/condominiums/${condominiumId}/groupings/with-units`,
+    );
+  }
+
+  uploadManagementLogo(
+    condominiumId: string,
+    file: File,
+  ): Observable<{ managementLogoStorageKey: string }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return this.http.post<{ managementLogoStorageKey: string }>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/management-logo`,
+      fd,
+    );
+  }
+
+  deleteManagementLogo(condominiumId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/management-logo`,
+    );
+  }
+
+  getManagementLogoBlob(condominiumId: string): Observable<Blob> {
+    return this.http.get(
+      `${environment.apiUrl}/condominiums/${condominiumId}/management-logo`,
+      { responseType: 'blob' },
     );
   }
 }

@@ -1,13 +1,35 @@
 /**
+ * Hoje no fuso local como YYYY-MM-DD (evita `toISOString()`, que usa UTC).
+ */
+export function todayLocalIsoDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Exibição de datas em pt-BR (DD/MM/AAAA).
- * Aceita ISO completo (ex.: 2026-04-11T12:00:00.000Z) ou só a parte da data (YYYY-MM-DD).
+ * Aceita YYYY-MM-DD ou ISO com hora; para instantes usa o **calendário UTC**
+ * (alinhado à API que persiste datas civis ao meio-dia UTC).
  */
 export function formatDateDdMmYyyy(value: string | null | undefined): string {
   if (value == null || value === '') return '—';
-  const head = value.slice(0, 10);
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(head);
-  if (!m) return head;
-  return `${m[3]}/${m[2]}/${m[1]}`;
+  const s = String(value).trim();
+  const head = s.slice(0, 10);
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(head);
+  if (plain && (s.length <= 10 || !s.includes('T'))) {
+    return `${plain[3]}/${plain[2]}/${plain[1]}`;
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) {
+    return plain ? `${plain[3]}/${plain[2]}/${plain[1]}` : '—';
+  }
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 /**

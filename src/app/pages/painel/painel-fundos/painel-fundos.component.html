@@ -413,8 +413,11 @@
     <section class="list-section" aria-labelledby="fundos-lista-titulo">
       <h2 id="fundos-lista-titulo" class="list-section__title">Fundos registados</h2>
       <p class="list-section__lede">
-        Cada cartão resume um fundo: valor por unidade, período de competências e quem
-        entra no rateio.
+        Cada cartão resume um fundo: valor por unidade, período de competências, quem
+        entra no rateio e o
+        <strong>saldo acumulado</strong>: receitas com o fundo somam; despesas e
+        aplicações (investimentos) subtraem, até hoje. O valor do cartão é mostrado em
+        <strong>positivo</strong> (módulo).
       </p>
 
       @if (funds().length === 0) {
@@ -442,6 +445,18 @@
 
                 <dl class="fund-card__meta">
                   <div class="fund-card__kv">
+                    <dt>Saldo acumulado (movimentos)</dt>
+                    <dd>
+                      {{
+                        f.accumulatedBalanceCents != null
+                          ? formatCentsBrl(f.accumulatedBalanceCents, {
+                              absolute: true,
+                            })
+                          : '—'
+                      }}
+                    </dd>
+                  </div>
+                  <div class="fund-card__kv">
                     <dt>Mensalidade por unidade</dt>
                     <dd>{{ monthlyLabel(f) }}</dd>
                   </div>
@@ -456,6 +471,13 @@
                 </dl>
 
                 <div class="fund-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="openExtrato(f)"
+                  >
+                    Extrato
+                  </button>
                   <button
                     type="button"
                     class="btn btn--ghost sm"
@@ -477,5 +499,99 @@
         </ul>
       }
     </section>
+  }
+
+  @if (extratoFund(); as xf) {
+    <div
+      class="fund-extrato-backdrop"
+      (click)="onExtratoBackdropClick($event)"
+      role="presentation"
+    >
+      <div
+        class="fund-extrato"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fund-extrato-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="fund-extrato__header">
+          <div class="fund-extrato__heading">
+            <h2 id="fund-extrato-title" class="fund-extrato__title">
+              Extrato do fundo
+            </h2>
+            <p class="fund-extrato__subtitle">{{ xf.name }}</p>
+          </div>
+          <button
+            type="button"
+            class="fund-extrato__close"
+            (click)="closeExtrato()"
+            aria-label="Fechar"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="fund-extrato__body">
+          <p class="fund-extrato__lede muted">
+            Todos os lançamentos com este fundo, em ordem cronológica.
+            As colunas <strong>«Valor no fundo»</strong> e <strong>«Saldo após»</strong>
+            mostram sempre montantes em <strong>positivo</strong> (módulo). O saldo após
+            cada linha coincide com o <strong>saldo acumulado</strong> do cartão até essa
+            data (também em módulo).
+          </p>
+
+          @if (extratoError(); as ee) {
+            <p class="error" role="alert">{{ ee }}</p>
+          } @else if (extratoLoading()) {
+            <p class="muted">Carregando movimentos…</p>
+          } @else if (extratoRows().length === 0) {
+            <p class="muted">Nenhum lançamento associado a este fundo.</p>
+          } @else {
+            <div class="fund-extrato__table-wrap">
+              <table class="fund-extrato-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Data</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Descrição</th>
+                    <th scope="col" class="num">Valor no fundo</th>
+                    <th scope="col" class="num">Saldo após</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of extratoRows(); track row.id) {
+                    <tr>
+                      <td>{{ formatDateDdMmYyyy(row.occurredOn) }}</td>
+                      <td>{{ extratoKindLabel(row.kind) }}</td>
+                      <td class="fund-extrato-table__desc">{{ row.title }}</td>
+                      <td class="num">
+                        {{
+                          formatCentsBrl(row.signedDeltaCents, { absolute: true })
+                        }}
+                      </td>
+                      <td class="num">
+                        {{
+                          formatCentsBrl(row.runningAfterCents, { absolute: true })
+                        }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p class="fund-extrato__footer muted">
+              Saldo atual do fundo (cartão):
+              <strong>{{ fundBalanceDisplay(xf.id) }}</strong>
+              @if (extratoRows().length > 0) {
+                <span>
+                  · última linha do extrato:
+                  <strong>{{ extratoLastRunningDisplay() }}</strong>
+                </span>
+              }
+            </p>
+          }
+        </div>
+      </div>
+    </div>
   }
 </div>

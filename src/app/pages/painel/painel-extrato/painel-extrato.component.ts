@@ -9,6 +9,7 @@ import {
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
 import { formatCentsBrl } from '../../../core/money-brl';
+import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 
 @Component({
   selector: 'app-painel-extrato',
@@ -21,6 +22,7 @@ export class PainelExtratoComponent implements OnInit {
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
+  protected readonly transactionKindLabelPt = transactionKindLabelPt;
   protected readonly funds = signal<FinancialFund[]>([]);
   protected readonly statement = signal<FinancialStatement | null>(null);
   protected readonly loadError = signal<string | null>(null);

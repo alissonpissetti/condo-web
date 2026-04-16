@@ -1,3 +1,5 @@
+import { AbstractControl, ValidationErrors } from '@angular/forms';
+
 /** Extrai até 11 dígitos nacionais (DDD + número), removendo 55 inicial se existir. */
 export function toNationalPhoneDigits(input: string): string {
   let d = input.replace(/\D/g, '');
@@ -5,6 +7,31 @@ export function toNationalPhoneDigits(input: string): string {
     d = d.slice(2);
   }
   return d.slice(0, 11);
+}
+
+/**
+ * Como {@link toNationalPhoneDigits}, mas só mantém dígitos após o DDD se o número for móvel (9 + 8 dígitos).
+ */
+export function toMobileNationalPhoneDigits(input: string): string {
+  let d = toNationalPhoneDigits(input);
+  if (d.length > 2 && d[2] !== '9') {
+    d = d.slice(0, 2);
+  }
+  return d.slice(0, 11);
+}
+
+/** Vazio é válido; se houver dígitos, exige celular BR completo (11 dígitos, 9 após DDD). */
+export function optionalBrMobilePhoneValidator(
+  control: AbstractControl,
+): ValidationErrors | null {
+  const v = String(control.value ?? '').replace(/\D/g, '');
+  if (v.length === 0) {
+    return null;
+  }
+  if (v.length !== 11 || v[2] !== '9') {
+    return { brMobilePhone: true };
+  }
+  return null;
 }
 
 /** Máscara visual (XX) XXXXX-XXXX para móvel ou (XX) XXXX-XXXX para fixo. */

@@ -81,6 +81,12 @@ export interface Condominium {
   hasSyndic?: boolean;
   /** Nome completo no perfil da pessoa; nunca e-mail. */
   syndicName?: string | null;
+  /** Detalhe GET :id — cobrança / PDF de transparência. */
+  billingPixKey?: string | null;
+  billingPixBeneficiaryName?: string | null;
+  billingPixCity?: string | null;
+  syndicWhatsappForReceipts?: string | null;
+  managementLogoStorageKey?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -211,7 +217,14 @@ export class AuthService {
 
   patchCondominium(
     id: string,
-    body: { name?: string; planId?: number },
+    body: {
+      name?: string;
+      planId?: number;
+      billingPixKey?: string;
+      billingPixBeneficiaryName?: string;
+      billingPixCity?: string;
+      syndicWhatsappForReceipts?: string;
+    },
   ): Observable<Condominium> {
     return this.http.patch<Condominium>(
       `${environment.apiUrl}/condominiums/${id}`,
