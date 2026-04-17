@@ -1,5 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  HostListener,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import type { Observable } from 'rxjs';
 import {
@@ -34,18 +41,133 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly loading = signal(true);
   protected readonly actionBusy = signal(false);
 
-  /** Soma de todas as cobranças da competência (centavos). */
-  protected readonly totalChargesFormatted = computed(() => {
-    let sum = 0n;
+  /** Quitação: cobrança alvo do modal, arquivo anexado (opcional) e estado. */
+  protected readonly settleTarget = signal<CondominiumFeeCharge | null>(null);
+  protected readonly settleReceiptFile = signal<File | null>(null);
+  protected readonly settleError = signal<string | null>(null);
+  protected readonly settleBusy = signal(false);
+
+  /** Edição de vencimento (uma ou mais cobranças): alvos, valor e estado. */
+  protected readonly dueEditTargets = signal<CondominiumFeeCharge[]>([]);
+  protected readonly dueEditValue = signal<string>('');
+  protected readonly dueEditError = signal<string | null>(null);
+  protected readonly dueEditBusy = signal(false);
+
+  /** IDs das cobranças selecionadas no modo em massa. */
+  protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+
+  /** ID da cobrança com o menu de ações (kebab) aberto, ou `null` quando fechado. */
+  protected readonly openActionMenuId = signal<string | null>(null);
+
+  protected readonly selectedCount = computed(() => this.selectedIds().size);
+
+  protected readonly allSelectableSelected = computed(() => {
+    const selectable = this.charges();
+    const sel = this.selectedIds();
+    if (selectable.length === 0) {
+      return false;
+    }
+    return selectable.every((c) => sel.has(c.id));
+  });
+
+  protected toggleSelectAll(): void {
+    const all = this.charges();
+    if (this.allSelectableSelected()) {
+      this.selectedIds.set(new Set());
+    } else {
+      this.selectedIds.set(new Set(all.map((c) => c.id)));
+    }
+  }
+
+  protected clearSelection(): void {
+    this.selectedIds.set(new Set());
+  }
+
+  protected toggleSelected(id: string, evt?: Event): void {
+    if (evt) {
+      evt.stopPropagation();
+    }
+    const next = new Set(this.selectedIds());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.selectedIds.set(next);
+  }
+
+  protected isSelected(id: string): boolean {
+    return this.selectedIds().has(id);
+  }
+
+  protected toggleActionMenu(charge: CondominiumFeeCharge, evt: Event): void {
+    evt.stopPropagation();
+    const current = this.openActionMenuId();
+    this.openActionMenuId.set(current === charge.id ? null : charge.id);
+  }
+
+  protected closeActionMenu(): void {
+    if (this.openActionMenuId() !== null) {
+      this.openActionMenuId.set(null);
+    }
+  }
+
+  @HostListener('document:click')
+  protected onDocumentClick(): void {
+    this.closeActionMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  protected onEscape(): void {
+    if (this.settleTarget()) {
+      this.closeSettle();
+    }
+    if (this.dueEditTargets().length > 0) {
+      this.closeDueEdit();
+    }
+    this.closeActionMenu();
+  }
+
+  /** Agregados para o resumo visual (total, pago, em aberto, % quitado). */
+  protected readonly summary = computed(() => {
+    let totalCents = 0n;
+    let paidCents = 0n;
+    let openCents = 0n;
+    let paidCount = 0;
+    let openCount = 0;
     for (const c of this.charges()) {
+      let v = 0n;
       try {
-        sum += BigInt(c.amountDueCents || '0');
+        v = BigInt(c.amountDueCents || '0');
       } catch {
-        /* valor inválido ignorado */
+        v = 0n;
+      }
+      totalCents += v;
+      if (c.status === 'paid') {
+        paidCents += v;
+        paidCount += 1;
+      } else {
+        openCents += v;
+        openCount += 1;
       }
     }
-    return formatCentsBrl(sum.toString());
+    const total = Number(totalCents);
+    const paidPct = total > 0 ? (Number(paidCents) / total) * 100 : 0;
+    return {
+      total: totalCents.toString(),
+      paid: paidCents.toString(),
+      open: openCents.toString(),
+      paidCount,
+      openCount,
+      totalCount: paidCount + openCount,
+      paidPct,
+      paidPctLabel: `${Math.round(paidPct)}%`,
+    };
   });
+
+  protected readonly totalChargesFormatted = computed(() =>
+    formatCentsBrl(this.summary().total),
+  );
 
   private condoId = '';
 
@@ -57,7 +179,11 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       return;
     }
     this.condoId = id;
+    // Carrega por padrão a competência do mês anterior ao atual, que é a
+    // última fechada (as cobranças do mês corrente ainda estão em formação).
     const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     this.competenceYm.set(`${y}-${m}`);
@@ -128,21 +254,198 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     });
   }
 
-  settle(c: CondominiumFeeCharge): void {
+  /** Abre o modal de quitação para anexar opcionalmente um comprovante. */
+  openSettle(c: CondominiumFeeCharge): void {
+    this.settleError.set(null);
+    this.settleReceiptFile.set(null);
+    this.settleTarget.set(c);
+  }
+
+  /** Abre o modal de edição de vencimento para uma cobrança. */
+  openDueEdit(c: CondominiumFeeCharge): void {
+    this.dueEditError.set(null);
+    // Converte para AAAA-MM-DD pro input[type=date].
+    this.dueEditValue.set((c.dueOn ?? '').slice(0, 10));
+    this.dueEditTargets.set([c]);
+  }
+
+  /** Abre o modal de edição de vencimento para as cobranças selecionadas. */
+  openDueEditForSelected(): void {
+    const ids = this.selectedIds();
+    if (ids.size === 0) {
+      return;
+    }
+    const selected = this.charges().filter((c) => ids.has(c.id));
+    if (selected.length === 0) {
+      return;
+    }
+    this.dueEditError.set(null);
+    // Se todas as cobranças compartilham o mesmo vencimento, pré-preenche; senão deixa vazio.
+    const firstDue = selected[0].dueOn?.slice(0, 10) ?? '';
+    const sameDue = selected.every((c) => (c.dueOn?.slice(0, 10) ?? '') === firstDue);
+    this.dueEditValue.set(sameDue ? firstDue : '');
+    this.dueEditTargets.set(selected);
+  }
+
+  closeDueEdit(): void {
+    if (this.dueEditBusy()) {
+      return;
+    }
+    this.dueEditTargets.set([]);
+    this.dueEditValue.set('');
+    this.dueEditError.set(null);
+  }
+
+  onDueEditValueChange(v: string): void {
+    this.dueEditValue.set(v);
+    if (this.dueEditError()) {
+      this.dueEditError.set(null);
+    }
+  }
+
+  confirmDueEdit(): void {
+    const targets = this.dueEditTargets();
+    if (targets.length === 0) {
+      return;
+    }
+    const due = (this.dueEditValue() ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) {
+      this.dueEditError.set('Informe uma data válida (AAAA-MM-DD).');
+      return;
+    }
+
+    this.dueEditBusy.set(true);
+    this.dueEditError.set(null);
+    this.api
+      .updateCondominiumFeeDueDate(
+        this.condoId,
+        targets.map((c) => c.id),
+        due,
+      )
+      .subscribe({
+        next: (updated) => {
+          // Merge do retorno com a lista atual, preservando a ordem.
+          const byId = new Map(updated.map((c) => [c.id, c]));
+          this.charges.update((rows) =>
+            rows.map((r) => byId.get(r.id) ?? r),
+          );
+          // Limpa seleção quando era em massa (>1 cobrança).
+          if (targets.length > 1) {
+            this.selectedIds.set(new Set());
+          }
+          this.dueEditBusy.set(false);
+          this.dueEditTargets.set([]);
+          this.dueEditValue.set('');
+        },
+        error: (err: HttpErrorResponse) => {
+          this.dueEditBusy.set(false);
+          this.dueEditError.set(this.msg(err));
+        },
+      });
+  }
+
+  closeSettle(): void {
+    if (this.settleBusy()) {
+      return;
+    }
+    this.settleTarget.set(null);
+    this.settleReceiptFile.set(null);
+    this.settleError.set(null);
+  }
+
+  onSettleFileChange(evt: Event): void {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    const allowed = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'application/pdf',
+    ];
+    if (!allowed.includes(file.type)) {
+      this.settleError.set(
+        'Formato não suportado. Envie uma imagem (PNG, JPG, WEBP) ou PDF.',
+      );
+      input.value = '';
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      this.settleError.set('O arquivo ultrapassa o limite de 8 MB.');
+      input.value = '';
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    this.settleError.set(null);
+    this.settleReceiptFile.set(file);
+  }
+
+  clearSettleFile(): void {
+    this.settleReceiptFile.set(null);
+  }
+
+  confirmSettle(): void {
+    const target = this.settleTarget();
+    if (!target) return;
+    this.settleError.set(null);
+    this.settleBusy.set(true);
+    const file = this.settleReceiptFile();
+    const run = (receiptKey: string | null) => {
+      this.api
+        .settleCondominiumFee(this.condoId, target.id, {
+          paymentReceiptStorageKey: receiptKey ?? null,
+        })
+        .subscribe({
+          next: (updated) => {
+            this.charges.update((list) =>
+              list.map((x) => (x.id === updated.id ? updated : x)),
+            );
+            this.settleBusy.set(false);
+            this.settleTarget.set(null);
+            this.settleReceiptFile.set(null);
+          },
+          error: (err: HttpErrorResponse) => {
+            this.settleBusy.set(false);
+            this.settleError.set(this.msg(err));
+          },
+        });
+    };
+    if (file) {
+      this.api.uploadTransactionReceipt(this.condoId, file).subscribe({
+        next: ({ receiptStorageKey }) => run(receiptStorageKey),
+        error: (err: HttpErrorResponse) => {
+          this.settleBusy.set(false);
+          this.settleError.set(this.msg(err));
+        },
+      });
+    } else {
+      run(null);
+    }
+  }
+
+  /** Abre o comprovante anexado (imagem/PDF) em nova aba. */
+  viewPaymentReceiptFile(c: CondominiumFeeCharge): void {
     this.formError.set(null);
     this.actionBusy.set(true);
-    this.api.settleCondominiumFee(this.condoId, c.id).subscribe({
-      next: (updated) => {
-        this.charges.update((list) =>
-          list.map((x) => (x.id === updated.id ? updated : x)),
-        );
-        this.actionBusy.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        this.actionBusy.set(false);
-        this.formError.set(this.msg(err));
-      },
-    });
+    this.api
+      .condominiumFeePaymentReceiptFile(this.condoId, c.id)
+      .subscribe({
+        next: (blob) => {
+          this.actionBusy.set(false);
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.actionBusy.set(false);
+          this.formError.set(this.msg(err));
+        },
+      });
   }
 
   downloadTransparencyPdf(): void {

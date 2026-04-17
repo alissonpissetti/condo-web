@@ -1,24 +1,24 @@
 <div class="page">
   <header class="page__header">
-    <h1>Taxas condominiais</h1>
-    @if (condoAccess.canManage()) {
-      <p class="page__intro">
-        Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês, com o
-        mesmo valor para todas as unidades do mesmo agrupamento (nivelado para o
-        máximo do grupo, para evitar diferenças de centavos). Vencimento no dia 10 do
-        mês seguinte.
-      </p>
-    } @else {
-      <p class="page__intro">
-        Consulte as cobranças da competência (AAAA-MM) e o vencimento. Se a sua
-        unidade estiver associada à sua conta, só aparecem as linhas correspondentes.
-      </p>
-    }
-  </header>
+    <div class="page__header-top">
+      <div class="page__header-text">
+        <h1>Taxas condominiais</h1>
+        @if (condoAccess.canManage()) {
+          <p class="page__intro">
+            Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês,
+            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte.
+          </p>
+        } @else {
+          <p class="page__intro">
+            Consulte as cobranças da sua unidade por competência (AAAA-MM) e
+            baixe o slip de pagamento ou comprovante quando disponível.
+          </p>
+        }
+      </div>
+    </div>
 
-  <div class="filters card">
-    <div class="row wrap">
-      <label class="field">
+    <div class="toolbar">
+      <label class="toolbar__field">
         <span>Competência</span>
         <input
           type="month"
@@ -27,37 +27,76 @@
           (input)="setCompetenceYm($any($event.target).value)"
         />
       </label>
-      <button
-        type="button"
-        class="btn primary"
-        (click)="load()"
-        [disabled]="loading()"
-      >
-        Atualizar
-      </button>
-      @if (condoAccess.canManage()) {
+
+      <div class="toolbar__actions">
         <button
           type="button"
           class="btn"
-          (click)="downloadTransparencyPdf()"
-          [disabled]="loading() || actionBusy() || !competenceYm()"
-          title="Relatório para enviar aos proprietários: despesas por unidade, taxa, PIX e WhatsApp"
+          (click)="load()"
+          [disabled]="loading()"
         >
-          PDF transparência
+          Atualizar
         </button>
-      }
+        @if (condoAccess.canManage()) {
+          <button
+            type="button"
+            class="btn"
+            (click)="downloadTransparencyPdf()"
+            [disabled]="loading() || actionBusy() || !competenceYm()"
+            title="Relatório completo da competência para enviar aos proprietários."
+          >
+            PDF transparência
+          </button>
+        }
+      </div>
     </div>
-  </div>
+  </header>
+
+  @if (condoAccess.canManage() && charges().length > 0) {
+    <section class="summary" aria-label="Resumo da competência">
+      @if (summary(); as s) {
+        <div class="summary__item">
+          <span class="summary__label">Total</span>
+          <strong class="summary__value">{{ formatCentsBrl(s.total) }}</strong>
+          <span class="summary__hint">{{ s.totalCount }} cobrança{{ s.totalCount === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="summary__item summary__item--paid">
+          <span class="summary__label">Quitado</span>
+          <strong class="summary__value">{{ formatCentsBrl(s.paid) }}</strong>
+          <span class="summary__hint">{{ s.paidCount }} unidade{{ s.paidCount === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="summary__item summary__item--open">
+          <span class="summary__label">Em aberto</span>
+          <strong class="summary__value">{{ formatCentsBrl(s.open) }}</strong>
+          <span class="summary__hint">{{ s.openCount }} unidade{{ s.openCount === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="summary__item summary__item--rate">
+          <span class="summary__label">% quitado</span>
+          <strong class="summary__value">{{ s.paidPctLabel }}</strong>
+          <div
+            class="summary__bar"
+            role="progressbar"
+            [attr.aria-valuenow]="s.paidPctLabel"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span class="summary__bar-fill" [style.width.%]="s.paidPct"></span>
+          </div>
+        </div>
+      }
+    </section>
+  }
 
   @if (condoAccess.canManage()) {
-    <div class="card gestao">
-      <h2 class="section-title">Gestão do fechamento</h2>
-      <p class="muted small">
-        O fechamento automático corre no dia 1 de cada mês (servidor). Use os
-        botões abaixo para repetir o processo ou regenerar cobranças após corrigir
-        transações.
-      </p>
-      <div class="row wrap">
+    <div class="mgmt-strip" role="group" aria-label="Gestão do fechamento">
+      <div class="mgmt-strip__label">
+        <span class="mgmt-strip__title">Gestão do fechamento</span>
+        <span class="muted small">
+          O fechamento automático ocorre no dia 1º. Use os botões para repetir
+          ou regenerar cobranças após corrigir transações.
+        </span>
+      </div>
+      <div class="mgmt-strip__actions">
         <button
           type="button"
           class="btn primary"
@@ -87,31 +126,81 @@
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
+    @if (condoAccess.canManage() && selectedCount() > 0) {
+      <div class="bulk-bar" role="region" aria-label="Ações em massa">
+        <div class="bulk-bar__info">
+          <strong>{{ selectedCount() }}</strong>
+          {{ selectedCount() === 1 ? 'cobrança selecionada' : 'cobranças selecionadas' }}
+        </div>
+        <div class="bulk-bar__actions">
+          <button type="button" class="btn sm" (click)="clearSelection()">
+            Limpar seleção
+          </button>
+          <button
+            type="button"
+            class="btn primary sm"
+            (click)="openDueEditForSelected()"
+            [disabled]="actionBusy()"
+          >
+            Alterar vencimento
+          </button>
+        </div>
+      </div>
+    }
+
     <div class="table-wrap">
       <table class="table table--cards">
         <thead>
           <tr>
+            @if (condoAccess.canManage()) {
+              <th class="col-select">
+                <label class="checkbox" [attr.aria-label]="'Selecionar todas as cobranças'">
+                  <input
+                    type="checkbox"
+                    [checked]="allSelectableSelected()"
+                    (change)="toggleSelectAll()"
+                    [disabled]="charges().length === 0"
+                  />
+                  <span></span>
+                </label>
+              </th>
+            }
             <th>Unidade</th>
-            <th>Agrupamento</th>
             <th class="num">Valor</th>
-            <th>Vencimento</th>
             <th>Situação</th>
-            <th>Ação</th>
+            <th class="col-actions" aria-label="Ações"></th>
           </tr>
         </thead>
         <tbody>
           @for (c of charges(); track c.id) {
-            <tr [attr.data-status]="c.status">
-              <td data-label="Unidade" class="cell-unit">{{ c.unitIdentifier }}</td>
-              <td data-label="Agrupamento" class="cell-group">{{ c.groupingName }}</td>
-              <td data-label="Valor" class="num cell-amount">{{ formatCentsBrl(c.amountDueCents) }}</td>
-              <td data-label="Vencimento" class="cell-due">{{ formatDateDdMmYyyy(c.dueOn) }}</td>
+            <tr [attr.data-status]="c.status" [class.is-selected]="isSelected(c.id)">
+              @if (condoAccess.canManage()) {
+                <td class="cell-select" (click)="$event.stopPropagation()">
+                  <label class="checkbox" [attr.aria-label]="'Selecionar ' + c.unitIdentifier">
+                    <input
+                      type="checkbox"
+                      [checked]="isSelected(c.id)"
+                      (change)="toggleSelected(c.id, $event)"
+                    />
+                    <span></span>
+                  </label>
+                </td>
+              }
+              <td data-label="Unidade" class="cell-unit">
+                <span class="cell-unit__ident">{{ c.unitIdentifier }}</span>
+                <span class="cell-unit__group">{{ c.groupingName }}</span>
+              </td>
+              <td data-label="Valor" class="num cell-amount">
+                <span class="cell-amount__value">{{ formatCentsBrl(c.amountDueCents) }}</span>
+                <span class="cell-amount__due">Vence {{ formatDateDdMmYyyy(c.dueOn) }}</span>
+              </td>
               <td data-label="Situação" class="cell-status">
                 <span
                   class="status-badge"
                   [class.status-badge--paid]="c.status === 'paid'"
                   [class.status-badge--open]="c.status !== 'paid'"
                 >
+                  <span class="status-badge__dot" aria-hidden="true"></span>
                   {{ c.status === 'paid' ? 'Pago' : 'Em aberto' }}
                 </span>
                 @if (c.status === 'paid' && c.paidAt) {
@@ -119,38 +208,96 @@
                 }
               </td>
               <td data-label="Ações" class="cell-actions">
-                <div class="row-actions">
+                <div class="kebab" (click)="$event.stopPropagation()">
                   <button
                     type="button"
-                    class="btn sm"
-                    (click)="downloadUnitSlipPdf(c)"
+                    class="kebab__btn"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="openActionMenuId() === c.id"
+                    [attr.aria-label]="'Ações para ' + c.unitIdentifier"
+                    (click)="toggleActionMenu(c, $event)"
                     [disabled]="actionBusy()"
-                    [title]="
-                      c.status === 'paid'
-                        ? 'PDF da unidade com o detalhe da cobrança (referência desta competência)'
-                        : 'PDF da unidade com QR Code PIX (valor + referência do condomínio/competência)'
-                    "
                   >
-                    PDF PIX
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <circle cx="12" cy="5" r="1.7" fill="currentColor" />
+                      <circle cx="12" cy="12" r="1.7" fill="currentColor" />
+                      <circle cx="12" cy="19" r="1.7" fill="currentColor" />
+                    </svg>
                   </button>
-                  @if (condoAccess.canManage() && c.status === 'open') {
-                    <button
-                      type="button"
-                      class="btn primary sm"
-                      (click)="settle(c)"
-                      [disabled]="actionBusy()"
-                    >
-                      Quitar
-                    </button>
-                  } @else if (c.status === 'paid') {
-                    <button
-                      type="button"
-                      class="btn sm"
-                      (click)="downloadReceipt(c)"
-                      [disabled]="actionBusy()"
-                    >
-                      Baixar comprovante
-                    </button>
+
+                  @if (openActionMenuId() === c.id) {
+                    <div class="kebab__menu" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        class="kebab__item"
+                        (click)="downloadUnitSlipPdf(c); closeActionMenu()"
+                        [disabled]="actionBusy()"
+                      >
+                        <span class="kebab__item-title">
+                          {{ c.status === 'paid' ? 'Baixar PDF da unidade' : 'PDF PIX (slip)' }}
+                        </span>
+                        <span class="kebab__item-hint">
+                          {{
+                            c.status === 'paid'
+                              ? 'Detalhe da competência da unidade'
+                              : 'Código e QR Code para pagamento'
+                          }}
+                        </span>
+                      </button>
+
+                      @if (condoAccess.canManage() && c.status === 'open') {
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="kebab__item kebab__item--primary"
+                          (click)="openSettle(c); closeActionMenu()"
+                          [disabled]="actionBusy()"
+                        >
+                          <span class="kebab__item-title">Quitar cobrança</span>
+                          <span class="kebab__item-hint">Marcar como paga e anexar comprovante</span>
+                        </button>
+                      } @else if (c.status === 'paid') {
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="kebab__item"
+                          (click)="downloadReceipt(c); closeActionMenu()"
+                          [disabled]="actionBusy()"
+                        >
+                          <span class="kebab__item-title">Comprovante (PDF)</span>
+                          <span class="kebab__item-hint">Gerado pelo sistema</span>
+                        </button>
+                        @if (c.hasPaymentReceipt) {
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="kebab__item"
+                            (click)="viewPaymentReceiptFile(c); closeActionMenu()"
+                            [disabled]="actionBusy()"
+                          >
+                            <span class="kebab__item-title">Ver anexo</span>
+                            <span class="kebab__item-hint">Comprovante enviado ao quitar</span>
+                          </button>
+                        }
+                      }
+
+                      @if (condoAccess.canManage()) {
+                        <div class="kebab__divider" role="separator"></div>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="kebab__item"
+                          (click)="openDueEdit(c); closeActionMenu()"
+                          [disabled]="actionBusy()"
+                        >
+                          <span class="kebab__item-title">Alterar vencimento</span>
+                          <span class="kebab__item-hint">
+                            Atual: {{ formatDateDdMmYyyy(c.dueOn) }}
+                          </span>
+                        </button>
+                      }
+                    </div>
                   }
                 </div>
               </td>
@@ -160,9 +307,12 @@
         @if (charges().length > 0) {
           <tfoot>
             <tr class="table__footer">
-              <td colspan="2"><strong>Total</strong></td>
+              @if (condoAccess.canManage()) {
+                <td></td>
+              }
+              <td><strong>Total</strong></td>
               <td class="num"><strong>{{ totalChargesFormatted() }}</strong></td>
-              <td colspan="3"></td>
+              <td colspan="2"></td>
             </tr>
           </tfoot>
         }
@@ -174,8 +324,234 @@
         </div>
       }
       @if (charges().length === 0) {
-        <p class="empty">Sem cobranças para esta competência.</p>
+        <div class="empty empty--card">
+          <div class="empty__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7h18M6 7v13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7" />
+              <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
+          </div>
+          <p class="empty__title">Sem cobranças para esta competência</p>
+          @if (condoAccess.canManage()) {
+            <p class="empty__hint">
+              Selecione outra competência ou execute o fechamento do mês.
+            </p>
+          } @else {
+            <p class="empty__hint">
+              Ainda não há cobranças registradas para o período selecionado.
+            </p>
+          }
+        </div>
       }
+    </div>
+  }
+
+  @if (settleTarget(); as target) {
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settle-modal-title"
+      (click)="closeSettle()"
+    >
+      <div class="modal" (click)="$event.stopPropagation()">
+        <header class="modal__head">
+          <h2 id="settle-modal-title">Quitar cobrança</h2>
+          <button
+            type="button"
+            class="modal__close"
+            aria-label="Fechar"
+            (click)="closeSettle()"
+            [disabled]="settleBusy()"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__body">
+          <dl class="settle-summary">
+            <div>
+              <dt>Unidade</dt>
+              <dd>{{ target.unitIdentifier }} · {{ target.groupingName }}</dd>
+            </div>
+            <div>
+              <dt>Competência</dt>
+              <dd>{{ target.competenceYm }}</dd>
+            </div>
+            <div>
+              <dt>Valor</dt>
+              <dd>{{ formatCentsBrl(target.amountDueCents) }}</dd>
+            </div>
+            <div>
+              <dt>Vencimento</dt>
+              <dd>{{ formatDateDdMmYyyy(target.dueOn) }}</dd>
+            </div>
+          </dl>
+
+          <div class="settle-attach">
+            <label class="settle-attach__label" for="settle-receipt-file">
+              Comprovante de pagamento <span class="muted small">(opcional)</span>
+            </label>
+            <p class="muted small settle-attach__hint">
+              Aceita imagens (PNG, JPG, WEBP) ou PDF, até 8 MB. Fica anexado ao
+              registro da cobrança e pode ser consultado depois pelos gestores.
+            </p>
+            <input
+              id="settle-receipt-file"
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+              (change)="onSettleFileChange($event)"
+              [disabled]="settleBusy()"
+            />
+            @if (settleReceiptFile(); as file) {
+              <div class="settle-attach__file">
+                <span class="settle-attach__file-name" [title]="file.name">
+                  {{ file.name }}
+                </span>
+                <button
+                  type="button"
+                  class="btn sm ghost"
+                  (click)="clearSettleFile()"
+                  [disabled]="settleBusy()"
+                >
+                  Remover
+                </button>
+              </div>
+            }
+          </div>
+
+          @if (settleError()) {
+            <p class="error" role="alert">{{ settleError() }}</p>
+          }
+        </div>
+
+        <footer class="modal__foot">
+          <button
+            type="button"
+            class="btn"
+            (click)="closeSettle()"
+            [disabled]="settleBusy()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn primary"
+            (click)="confirmSettle()"
+            [disabled]="settleBusy()"
+          >
+            {{ settleBusy() ? 'Processando…' : 'Confirmar quitação' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  @if (dueEditTargets().length > 0) {
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="due-edit-title"
+      (click)="closeDueEdit()"
+    >
+      <div class="modal" (click)="$event.stopPropagation()">
+        <header class="modal__head">
+          <h2 id="due-edit-title">
+            @if (dueEditTargets().length === 1) {
+              Alterar vencimento
+            } @else {
+              Alterar vencimento de {{ dueEditTargets().length }} cobranças
+            }
+          </h2>
+          <button
+            type="button"
+            class="modal__close"
+            aria-label="Fechar"
+            (click)="closeDueEdit()"
+            [disabled]="dueEditBusy()"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__body">
+          @if (dueEditTargets().length === 1 && dueEditTargets()[0]; as target) {
+            <dl class="settle-summary">
+              <div>
+                <dt>Unidade</dt>
+                <dd>{{ target.unitIdentifier }} · {{ target.groupingName }}</dd>
+              </div>
+              <div>
+                <dt>Competência</dt>
+                <dd>{{ target.competenceYm }}</dd>
+              </div>
+              <div>
+                <dt>Valor</dt>
+                <dd>{{ formatCentsBrl(target.amountDueCents) }}</dd>
+              </div>
+              <div>
+                <dt>Vencimento atual</dt>
+                <dd>{{ formatDateDdMmYyyy(target.dueOn) }}</dd>
+              </div>
+            </dl>
+          } @else {
+            <p class="muted small">
+              O novo vencimento será aplicado a todas as cobranças selecionadas.
+              Cobranças já pagas também terão o vencimento atualizado — utilize
+              apenas para correção de registro.
+            </p>
+            <ul class="due-targets">
+              @for (t of dueEditTargets(); track t.id) {
+                <li class="due-targets__item">
+                  <span class="due-targets__unit">
+                    <strong>{{ t.unitIdentifier }}</strong>
+                    <span class="muted small">· {{ t.groupingName }}</span>
+                  </span>
+                  <span class="due-targets__due muted small">
+                    Atual: {{ formatDateDdMmYyyy(t.dueOn) }}
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+
+          <label class="due-edit-field">
+            <span class="due-edit-field__label">Novo vencimento</span>
+            <input
+              type="date"
+              class="input"
+              [value]="dueEditValue()"
+              (input)="onDueEditValueChange($any($event.target).value)"
+              [disabled]="dueEditBusy()"
+            />
+          </label>
+
+          @if (dueEditError()) {
+            <p class="error" role="alert">{{ dueEditError() }}</p>
+          }
+        </div>
+
+        <footer class="modal__foot">
+          <button
+            type="button"
+            class="btn"
+            (click)="closeDueEdit()"
+            [disabled]="dueEditBusy()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn primary"
+            (click)="confirmDueEdit()"
+            [disabled]="dueEditBusy() || !dueEditValue()"
+          >
+            {{ dueEditBusy() ? 'Salvando…' : 'Salvar vencimento' }}
+          </button>
+        </footer>
+      </div>
     </div>
   }
 </div>

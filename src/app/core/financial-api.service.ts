@@ -92,6 +92,8 @@ export interface CondominiumFeeCharge {
   status: 'open' | 'paid';
   paidAt: string | null;
   incomeTransactionId: string | null;
+  /** `true` quando houver um comprovante (imagem/PDF) anexado à quitação. */
+  hasPaymentReceipt?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -322,14 +324,41 @@ export class FinancialApiService {
     );
   }
 
+  /**
+   * Altera a data de vencimento de uma ou mais cobranças condominiais.
+   * `dueOn` no formato `AAAA-MM-DD`.
+   */
+  updateCondominiumFeeDueDate(
+    condoId: string,
+    chargeIds: string[],
+    dueOn: string,
+  ): Observable<CondominiumFeeCharge[]> {
+    return this.http.post<CondominiumFeeCharge[]>(
+      `${this.base(condoId)}/condominium-fees/update-due-date`,
+      { chargeIds, dueOn },
+    );
+  }
+
   settleCondominiumFee(
     condoId: string,
     chargeId: string,
-    incomeTransactionId?: string,
+    options?: {
+      incomeTransactionId?: string | null;
+      paymentReceiptStorageKey?: string | null;
+    },
   ): Observable<CondominiumFeeCharge> {
-    const body = incomeTransactionId?.trim()
-      ? { incomeTransactionId: incomeTransactionId.trim() }
-      : {};
+    const body: {
+      incomeTransactionId?: string;
+      paymentReceiptStorageKey?: string;
+    } = {};
+    const tx = options?.incomeTransactionId?.trim();
+    if (tx) {
+      body.incomeTransactionId = tx;
+    }
+    const receipt = options?.paymentReceiptStorageKey?.trim();
+    if (receipt) {
+      body.paymentReceiptStorageKey = receipt;
+    }
     return this.http.post<CondominiumFeeCharge>(
       `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
       body,
@@ -342,6 +371,17 @@ export class FinancialApiService {
   ): Observable<Blob> {
     return this.http.get(
       `${this.base(condoId)}/condominium-fees/${chargeId}/payment-receipt`,
+      { responseType: 'blob' },
+    );
+  }
+
+  /** Comprovante anexado ao quitar (imagem ou PDF). */
+  condominiumFeePaymentReceiptFile(
+    condoId: string,
+    chargeId: string,
+  ): Observable<Blob> {
+    return this.http.get(
+      `${this.base(condoId)}/condominium-fees/${chargeId}/payment-receipt-file`,
       { responseType: 'blob' },
     );
   }
