@@ -6,7 +6,7 @@ import { AuthService } from './auth.service';
 import { SelectedCondominiumService } from './selected-condominium.service';
 
 /**
- * Permite rotas `/painel/condominio/:id/...` se o utilizador tiver acesso ao `id`.
+ * Permite rotas `/painel/condominio/:id/...` se o usuário tiver acesso ao `id`.
  * Alinha a seleção do painel ao `id` da URL (não exige ter clicado na estrela antes).
  */
 export const selectedCondominiumGuard: CanActivateFn = (

@@ -32,37 +32,64 @@
       </label>
     </div>
 
-    <section class="form-card">
-      <div class="form-card__head">
-        <h2 class="form-card__title">
-          @if (editingSeriesId()) {
-            Editar série ({{ seriesEditCount() }} parcelas)
-          } @else if (editingId()) {
-            Editar transação
-          } @else {
-            Nova transação
-          }
-        </h2>
-        <p class="form-card__lede">
-          @if (editingSeriesId()) {
-            Alterações em tipo, título base, descrição, fundo e rateio aplicam-se a todas
-            as parcelas. Títulos ganham de novo o sufixo (1/N)…(N/N). Datas e valores
-            individuais permanecem, salvo se indicar um valor único para todas.
-          } @else if (editingId()) {
-            Altere os blocos abaixo e salve. Envie um novo arquivo para substituir o
-            comprovante, ou remova-o com o botão correspondente.
-          } @else {
-            Preencha por blocos: identificação, tipo, rateio, valores e, se quiser,
-            comprovante.
-          }
-        </p>
-      </div>
+    <section
+      id="tx-form-card"
+      class="form-card form-card--collapsible"
+      [class.form-card--open]="formExpanded()"
+      [class.form-card--editing]="!!editingId() || !!editingSeriesId()"
+    >
+      <button
+        type="button"
+        class="form-card__toggle"
+        [attr.aria-expanded]="formExpanded()"
+        aria-controls="tx-form-body"
+        (click)="toggleForm()"
+      >
+        <span class="form-card__toggle-text">
+          <span class="form-card__toggle-icon" aria-hidden="true">
+            @if (editingId() || editingSeriesId()) {
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.004 1.004 0 0 0 0-1.42l-2.34-2.34a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>
+            } @else {
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            }
+          </span>
+          <span class="form-card__toggle-label">
+            @if (editingSeriesId()) {
+              Editar série ({{ seriesEditCount() }} parcelas)
+            } @else if (editingId()) {
+              Editar transação
+            } @else {
+              Nova transação
+            }
+          </span>
+        </span>
+        <span class="form-card__toggle-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+        </span>
+      </button>
 
-      @if (formError(); as fe) {
-        <p class="error error--form" role="alert">{{ fe }}</p>
-      }
+      <div class="form-card__body" id="tx-form-body" [hidden]="!formExpanded()">
+        <div class="form-card__head">
+          <p class="form-card__lede">
+            @if (editingSeriesId()) {
+              Alterações em tipo, título base, descrição, fundo e rateio aplicam-se a todas
+              as parcelas. Títulos ganham de novo o sufixo (1/N)…(N/N). Datas e valores
+              individuais permanecem, salvo se indicar um valor único para todas.
+            } @else if (editingId()) {
+              Altere os blocos abaixo e salve. Envie um novo arquivo para substituir o
+              comprovante, ou remova-o com o botão correspondente.
+            } @else {
+              Preencha por blocos: identificação, tipo, rateio, valores e, se quiser,
+              comprovante.
+            }
+          </p>
+        </div>
 
-      <div class="tx-form">
+        @if (formError(); as fe) {
+          <p class="error error--form" role="alert">{{ fe }}</p>
+        }
+
+        <div class="tx-form">
         <div class="form-section">
           <div class="form-section__head">
             <span class="form-section__step" aria-hidden="true">1</span>
@@ -571,10 +598,11 @@
           </button>
         </div>
       </div>
+      </div>
     </section>
 
     <div class="table-wrap">
-      <table class="table">
+      <table class="table table--cards">
         <thead>
           <tr>
             <th>Data</th>
@@ -597,13 +625,14 @@
                 (!!t.recurringSeriesId && editingSeriesId() === t.recurringSeriesId)
               "
             >
-              <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
-              <td>{{ transactionKindLabelPt(t.kind) }}</td>
-              <td>{{ t.title }}</td>
-              <td>{{ t.fund?.name || '—' }}</td>
-              <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
+              <td data-label="Data" class="cell-date">{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
+              <td data-label="Tipo" class="cell-kind"
+                [attr.data-kind]="t.kind">{{ transactionKindLabelPt(t.kind) }}</td>
+              <td data-label="Título" class="cell-title">{{ t.title }}</td>
+              <td data-label="Fundo">{{ t.fund?.name || '—' }}</td>
+              <td data-label="Valor" class="num cell-amount">{{ formatCentsBrl(t.amountCents) }}</td>
               @if (fundFilter()) {
-                <td class="num">
+                <td data-label="Saldo após" class="num">
                   {{
                     t.runningBalanceCents != null
                       ? formatCentsBrl(t.runningBalanceCents, {
@@ -613,7 +642,7 @@
                   }}
                 </td>
               }
-              <td>
+              <td data-label="Comprovante" class="cell-receipt">
                 @if (t.receiptStorageKey) {
                   <button
                     type="button"
@@ -626,7 +655,7 @@
                   <span class="muted">—</span>
                 }
               </td>
-              <td class="td-actions td-actions--menu">
+              <td data-label="Ações" class="td-actions td-actions--menu">
                 <div class="row-actions">
                   <button
                     type="button"

@@ -41,6 +41,10 @@
               </span>
             }
           }
+          <span class="sub__note">
+            Celular com DDD é obrigatório (mesmo número para login por SMS /
+            WhatsApp do condomínio).
+          </span>
         </p>
       } @else if (!invitePreviewError()) {
         <p class="muted">Carregando dados do convite…</p>
@@ -71,6 +75,23 @@
             <small class="field-error">{{ msg }}</small>
           }
         </label>
+        <label>
+          <span>Celular / WhatsApp</span>
+          <input
+            type="tel"
+            formControlName="phone"
+            appBrPhoneMask
+            [mobileOnly]="true"
+            autocomplete="tel"
+            placeholder="(61) 99999-8888"
+          />
+          <span class="hint"
+            >Obrigatório. Se já tem conta, use o mesmo celular cadastrado.</span
+          >
+          @for (msg of fieldErrorsPt(inviteForm.controls.phone); track msg) {
+            <small class="field-error">{{ msg }}</small>
+          }
+        </label>
         @if (prIv.pendingRegistration) {
           <label>
             <span>Senha</span>
@@ -87,7 +108,7 @@
         <button type="submit" class="btn primary" [disabled]="submitting()">
           {{
             submitting()
-              ? 'A processar…'
+              ? 'Processando…'
               : prIv.pendingRegistration
                 ? 'Aceitar convite e criar conta'
                 : 'Confirmar associação à unidade'
@@ -134,7 +155,7 @@
         </label>
 
         <button type="submit" class="btn primary" [disabled]="submitting()">
-          {{ submitting() ? 'A criar…' : 'Registar' }}
+          {{ submitting() ? 'Criando…' : 'Cadastrar' }}
         </button>
       </form>
     }
@@ -149,5 +170,11 @@
       Já tem uma conta?
       <a routerLink="/auth/login">Entrar</a>
     </p>
+
+    <nav class="legal-footer" aria-label="Documentos legais">
+      <a routerLink="/privacidade">Política de privacidade</a>
+      <span class="legal-footer__sep" aria-hidden="true">·</span>
+      <a routerLink="/termos">Termos de uso</a>
+    </nav>
   </div>
 </div>

@@ -71,10 +71,15 @@ export interface Condominium {
   ownerId: string;
   /** Plano SaaS gravado no condomínio; ausente ou null = fallback (titular / padrão). */
   saasPlanId?: number | null;
-  /** Plano efectivo para faturação (listagem enriquecida). */
+  /** Plano efetivo para faturamento (listagem enriquecida). */
   billingPlanId?: number;
   billingPlanName?: string;
   billingPricePerUnitCents?: number;
+  /**
+   * Mapa de módulos habilitados pelo plano efetivo. Chaves ausentes são
+   * tratadas como habilitadas (planos legados sem restrição).
+   */
+  billingPlanFeatures?: Partial<Record<string, boolean>> | null;
   createdAt: string;
   updatedAt: string;
   /** Listagem: existe participante com papel síndico. */
@@ -85,8 +90,16 @@ export interface Condominium {
   billingPixKey?: string | null;
   billingPixBeneficiaryName?: string | null;
   billingPixCity?: string | null;
+  /** Incluir QR Code e «Copia e cola» PIX no PDF de transparência (senão só chave em texto). */
+  transparencyPdfIncludePixQrCode?: boolean;
   syndicWhatsappForReceipts?: string | null;
   managementLogoStorageKey?: string | null;
+  /** Modelo de cobrança em uso (hoje apenas `manual_pix`). */
+  billingChargeModel?: string;
+  /** Dia do mês (1..31) sugerido como vencimento padrão da taxa. */
+  billingDefaultDueDay?: number;
+  /** Juros aplicados em atraso em basis points (1 bp = 0,01 %). */
+  billingLateInterestBps?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -223,6 +236,7 @@ export class AuthService {
       billingPixKey?: string;
       billingPixBeneficiaryName?: string;
       billingPixCity?: string;
+      transparencyPdfIncludePixQrCode?: boolean;
       syndicWhatsappForReceipts?: string;
     },
   ): Observable<Condominium> {

@@ -1,0 +1,256 @@
+<header class="topbar">
+  <div class="layout-box topbar__inner">
+    <a routerLink="/" class="brand" aria-label="Meu Condomínio — início">
+      <img
+        class="brand-logo"
+        src="/logo-white.png"
+        width="677"
+        height="369"
+        alt="Meu Condomínio"
+      />
+    </a>
+    <nav class="actions">
+      @if (auth.isAuthenticated()) {
+        <a routerLink="/painel" class="btn ghost">Painel</a>
+        <button type="button" class="btn primary" (click)="auth.logout()">
+          Sair
+        </button>
+      } @else {
+        <a routerLink="/auth/login" class="btn ghost">Entrar</a>
+        <a routerLink="/auth/register" class="btn primary">Criar conta</a>
+      }
+    </nav>
+  </div>
+</header>
+
+<main class="doc-main">
+  <div class="layout-box">
+    @if (doc === 'privacy') {
+      <article class="doc-article">
+        <h1>Política de privacidade</h1>
+        <p class="doc-updated">Última atualização: abril de {{ year }}.</p>
+
+        <p>
+          Esta política descreve como a plataforma <strong>Meu Condomínio</strong>
+          trata dados pessoais no contexto do serviço oferecido aos usuários
+          (condomínios, gestores e moradores com acesso autorizado). Ao utilizar o
+          site ou a aplicação, você concorda com as práticas abaixo, sem prejuízo
+          dos seus direitos ao abrigo da legislação aplicável (incluindo a LGPD,
+          no Brasil).
+        </p>
+
+        <h2>1. Responsável e contato</h2>
+        <p>
+          O responsável pelo tratamento dos dados no âmbito da plataforma é a
+          entidade que opera o serviço Meu Condomínio. Para questões sobre
+          privacidade ou exercício de direitos, utilize o canal de suporte ou
+          e-mail indicado no site ou na área autenticada, quando disponível.
+        </p>
+
+        <h2>2. Que dados recolhemos</h2>
+        <p>Conforme o uso, podemos tratar, entre outros:</p>
+        <ul>
+          <li>
+            <strong>Dados de conta:</strong> nome, e-mail, telefone, senha
+            (armazenada de forma segura), identificadores técnicos de sessão.
+          </li>
+          <li>
+            <strong>Dados do condomínio e gestão:</strong> informações que o
+            usuário ou o condomínio insere (endereço, unidades, documentos,
+            valores e registros operacionais necessários ao serviço).
+          </li>
+          <li>
+            <strong>Dados técnicos:</strong> endereço IP, tipo de navegador,
+            registros de segurança e de diagnóstico, para operar e proteger o
+            serviço.
+          </li>
+        </ul>
+
+        <h2>3. Finalidades e bases legais</h2>
+        <p>Tratamos dados para:</p>
+        <ul>
+          <li>Prestação do serviço contratado ou pedido (execução de contrato).</li>
+          <li>Cumprimento de obrigações legais, quando aplicável.</li>
+          <li>
+            Interesses legítimos, como segurança, prevenção de abuso, melhoria do
+            produto e suporte, equilibrados com os seus direitos.
+          </li>
+          <li>Consentimento, quando for necessário para finalidades específicas.</li>
+        </ul>
+
+        <h2>4. Partilha de dados</h2>
+        <p>
+          Não vendemos dados pessoais. Podemos recorrer a fornecedores que
+          processam dados em nosso nome (alojamento, infraestrutura, e-mail
+          transacional, etc.), mediante contratos e medidas de segurança
+          adequadas. Podemos divulgar informações se a lei o exigir ou para
+          proteger direitos e segurança.
+        </p>
+
+        <h2>5. Conservação</h2>
+        <p>
+          Conservamos dados pelo tempo necessário às finalidades descritas, à
+          resolução de litígios e ao cumprimento de obrigações legais. Critérios
+          de arquivo e eliminação podem variar consoante o tipo de dado e a
+          relação contratual.
+        </p>
+
+        <h2>6. Segurança</h2>
+        <p>
+          Aplicamos medidas técnicas e organizativas razoáveis para proteger os
+          dados contra acesso não autorizado, perda ou alteração. Nenhum sistema
+          é totalmente isento de risco; recomendamos credenciais fortes e uso
+          responsável da conta.
+        </p>
+
+        <h2>7. Os seus direitos</h2>
+        <p>
+          Dependendo da legislação aplicável, pode solicitar acesso, retificação,
+          eliminação, portabilidade, oposição ou limitação do tratamento, e
+          retirar consentimentos quando o tratamento se baseie neles. Pode também
+          apresentar reclamação à autoridade de proteção de dados competente.
+        </p>
+
+        <h2>8. Cookies e tecnologias semelhantes</h2>
+        <p>
+          Podemos utilizar cookies ou armazenamento local estritamente necessário
+          ao funcionamento da sessão e da segurança. Se no futuro forem usados
+          cookies analíticos ou de marketing não essenciais, informaremos e,
+          quando exigido, pediremos consentimento.
+        </p>
+
+        <h2>9. Alterações</h2>
+        <p>
+          Podemos atualizar esta política. A data no topo indica a última revisão.
+          Alterações relevantes podem ser comunicadas por meios adequados (por
+          exemplo, aviso no site ou por e-mail).
+        </p>
+
+        <p class="doc-cross">
+          Consulte também os
+          <a routerLink="/termos">Termos de uso</a>.
+        </p>
+      </article>
+    } @else {
+      <article class="doc-article">
+        <h1>Termos de uso</h1>
+        <p class="doc-updated">Última atualização: abril de {{ year }}.</p>
+
+        <p>
+          Estes termos regulam o acesso e o uso da plataforma
+          <strong>Meu Condomínio</strong> (site, áreas autenticadas e serviços
+          associados). Ao se cadastrar, entrar ou usar o serviço, você declara
+          que leu e aceita estes termos. Se não concordar, não deve usar a
+          plataforma.
+        </p>
+
+        <h2>1. Descrição do serviço</h2>
+        <p>
+          Meu Condomínio oferece ferramentas para apoio à gestão e comunicação em
+          contexto condominial, conforme as funcionalidades disponíveis em cada
+          momento. O serviço pode ser alterado, ampliado ou descontinuado em
+          parte, com aviso razoável quando aplicável.
+        </p>
+
+        <h2>2. Elegibilidade e conta</h2>
+        <p>
+          É responsável pela veracidade dos dados que indicar e pela
+          confidencialidade das credenciais. Deve notificar-nos em caso de uso
+          não autorizado da conta. Podemos suspender ou encerrar contas em caso de
+          violação destes termos ou de risco para o serviço ou terceiros.
+        </p>
+
+        <h2>3. Conteúdo e responsabilidade dos usuários</h2>
+        <p>
+          Os usuários (em especial quem administra o condomínio) são responsáveis
+          pelos dados, documentos e decisões inseridos na plataforma. Não nos
+          responsabilizamos por litígios entre condôminos, síndicos ou terceiros
+          que resultem exclusivamente desses conteúdos ou decisões.
+        </p>
+
+        <h2>4. Uso aceitável</h2>
+        <p>É proibido:</p>
+        <ul>
+          <li>
+            Utilizar o serviço para fins ilegais, fraudulentos ou que violem
+            direitos de terceiros.
+          </li>
+          <li>
+            Tentar acessar áreas ou dados sem autorização, ou perturbar a
+            infraestrutura (ex.: ataques, scraping abusivo).
+          </li>
+          <li>Reproduzir ou revender o serviço sem autorização.</li>
+        </ul>
+
+        <h2>5. Propriedade intelectual</h2>
+        <p>
+          A marca, o software, o design e os materiais da plataforma pertencem ao
+          operador do serviço ou aos seus licenciadores. É concedida apenas uma
+          licença limitada, não exclusiva e revogável para utilização conforme estes
+          termos.
+        </p>
+
+        <h2>6. Planos, preços e faturamento</h2>
+        <p>
+          Quando houver contratação paga, aplicam-se as condições apresentadas no
+          momento da assinatura (preços, renovação, cancelamento). O não pagamento
+          pode implicar restrição ou fim do acesso às funcionalidades pagas.
+        </p>
+
+        <h2>7. Limitação de responsabilidade</h2>
+        <p>
+          O serviço é prestado «tal como está», no estado das funcionalidades
+          disponíveis. Na medida máxima permitida por lei, não respondemos por danos
+          indiretos, lucros cessantes ou perda de dados decorrentes de casos
+          fortuitos, falhas de terceiros ou uso incorreto da plataforma. A
+          responsabilidade total, quando não puder ser excluída, limita-se, sempre
+          que aplicável, ao montante pago pelo usuário nos últimos doze meses
+          pelo serviço em causa, ou a zero se não houver pagamento.
+        </p>
+
+        <h2>8. Privacidade</h2>
+        <p>
+          O tratamento de dados pessoais é descrito na
+          <a routerLink="/privacidade">Política de privacidade</a>, que integra
+          estes termos por referência.
+        </p>
+
+        <h2>9. Lei aplicável e litígios</h2>
+        <p>
+          Aplicam-se as leis da República Federativa do Brasil, salvo disposição
+          legal imperativa em contrário. Os tribunais do foro da comarca do
+          domicílio do operador do serviço, ou outro foro legalmente competente,
+          poderão dirimir controvérsias, sem prejuízo de direitos do consumidor.
+        </p>
+
+        <h2>10. Alterações</h2>
+        <p>
+          Podemos alterar estes termos. A data no topo será atualizada. O uso
+          continuado após alterações pode constituir aceitação; para mudanças
+          materiais, poderemos solicitar nova aceitação ou notificar por e-mail.
+        </p>
+
+        <p class="doc-cross">
+          Consulte também a
+          <a routerLink="/privacidade">Política de privacidade</a>.
+        </p>
+      </article>
+    }
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner layout-box">
+    <div class="footer-brand">
+      <span class="footer-name">Meu Condomínio</span>
+      <span class="footer-year">· {{ year }}</span>
+    </div>
+    <nav class="footer-links" aria-label="Documentos legais">
+      <a routerLink="/">Início</a>
+      <span class="sep" aria-hidden="true">|</span>
+      <a routerLink="/privacidade">Privacidade</a>
+      <span class="sep" aria-hidden="true">|</span>
+      <a routerLink="/termos">Termos</a>
+    </nav>
+  </div>
+</footer>

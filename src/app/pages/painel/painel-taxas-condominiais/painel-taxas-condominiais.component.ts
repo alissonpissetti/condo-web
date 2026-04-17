@@ -6,6 +6,7 @@ import {
   translateHttpErrorMessage,
   translateHttpErrorMessageAsync,
 } from '../../../core/api-errors-pt';
+import { CondominiumAccessStore } from '../../../core/condominium-access.store';
 import {
   FinancialApiService,
   type CondominiumFeeCharge,
@@ -21,6 +22,7 @@ import { formatCentsBrl } from '../../../core/money-brl';
 export class PainelTaxasCondominiaisComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(FinancialApiService);
+  protected readonly condoAccess = inject(CondominiumAccessStore);
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
@@ -170,6 +172,44 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         }).then((m) => this.formError.set(m));
       },
     });
+  }
+
+  /**
+   * PDF específico da unidade: 1ª página é o slip de pagamento (valor devido,
+   * chave PIX e QR Code com valor e referência «Condomínio - MM/AAAA»).
+   */
+  downloadUnitSlipPdf(c: CondominiumFeeCharge): void {
+    const ym = this.competenceYm().trim();
+    if (!ym) {
+      this.formError.set('Indique a competência.');
+      return;
+    }
+    this.formError.set(null);
+    this.actionBusy.set(true);
+    this.api
+      .condominiumFeesTransparencyPdf(this.condoId, ym, c.unitId)
+      .subscribe({
+        next: (blob) => {
+          this.actionBusy.set(false);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const unitTag = (c.unitIdentifier || c.unitId.slice(0, 8))
+            .replace(/[^\w-]+/g, '_')
+            .slice(0, 24);
+          a.download = `taxa-${ym}-${unitTag}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.actionBusy.set(false);
+          void translateHttpErrorMessageAsync(err, {
+            network:
+              'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+            default: 'Não foi possível gerar o PDF da unidade.',
+          }).then((m) => this.formError.set(m));
+        },
+      });
   }
 
   downloadReceipt(c: CondominiumFeeCharge): void {

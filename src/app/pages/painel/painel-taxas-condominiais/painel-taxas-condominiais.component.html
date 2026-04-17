@@ -1,12 +1,19 @@
 <div class="page">
   <header class="page__header">
     <h1>Taxas condominiais</h1>
-    <p class="page__intro">
-      Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês, com o
-      mesmo valor para todas as unidades do mesmo agrupamento (nivelado para o
-      máximo do grupo, para evitar diferenças de centavos). Vencimento no dia 10 do
-      mês seguinte.
-    </p>
+    @if (condoAccess.canManage()) {
+      <p class="page__intro">
+        Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês, com o
+        mesmo valor para todas as unidades do mesmo agrupamento (nivelado para o
+        máximo do grupo, para evitar diferenças de centavos). Vencimento no dia 10 do
+        mês seguinte.
+      </p>
+    } @else {
+      <p class="page__intro">
+        Consulte as cobranças da competência (AAAA-MM) e o vencimento. Se a sua
+        unidade estiver associada à sua conta, só aparecem as linhas correspondentes.
+      </p>
+    }
   </header>
 
   <div class="filters card">
@@ -28,44 +35,48 @@
       >
         Atualizar
       </button>
-      <button
-        type="button"
-        class="btn"
-        (click)="downloadTransparencyPdf()"
-        [disabled]="loading() || actionBusy() || !competenceYm()"
-        title="Relatório para enviar aos proprietários: despesas por unidade, taxa, PIX e WhatsApp"
-      >
-        PDF transparência
-      </button>
+      @if (condoAccess.canManage()) {
+        <button
+          type="button"
+          class="btn"
+          (click)="downloadTransparencyPdf()"
+          [disabled]="loading() || actionBusy() || !competenceYm()"
+          title="Relatório para enviar aos proprietários: despesas por unidade, taxa, PIX e WhatsApp"
+        >
+          PDF transparência
+        </button>
+      }
     </div>
   </div>
 
-  <div class="card gestao">
-    <h2 class="section-title">Gestão do fechamento</h2>
-    <p class="muted small">
-      O fechamento automático corre no dia 1 de cada mês (servidor). Use os
-      botões abaixo para repetir o processo ou regenerar cobranças após corrigir
-      transações.
-    </p>
-    <div class="row wrap">
-      <button
-        type="button"
-        class="btn primary"
-        (click)="closeMonth()"
-        [disabled]="actionBusy() || loading()"
-      >
-        Executar fechamento
-      </button>
-      <button
-        type="button"
-        class="btn danger"
-        (click)="regenerateMonth()"
-        [disabled]="actionBusy() || loading()"
-      >
-        Regenerar cobranças
-      </button>
+  @if (condoAccess.canManage()) {
+    <div class="card gestao">
+      <h2 class="section-title">Gestão do fechamento</h2>
+      <p class="muted small">
+        O fechamento automático corre no dia 1 de cada mês (servidor). Use os
+        botões abaixo para repetir o processo ou regenerar cobranças após corrigir
+        transações.
+      </p>
+      <div class="row wrap">
+        <button
+          type="button"
+          class="btn primary"
+          (click)="closeMonth()"
+          [disabled]="actionBusy() || loading()"
+        >
+          Executar fechamento
+        </button>
+        <button
+          type="button"
+          class="btn danger"
+          (click)="regenerateMonth()"
+          [disabled]="actionBusy() || loading()"
+        >
+          Regenerar cobranças
+        </button>
+      </div>
     </div>
-  </div>
+  }
 
   @if (formError()) {
     <p class="error" role="alert">{{ formError() }}</p>
@@ -77,7 +88,7 @@
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
     <div class="table-wrap">
-      <table class="table">
+      <table class="table table--cards">
         <thead>
           <tr>
             <th>Unidade</th>
@@ -90,37 +101,58 @@
         </thead>
         <tbody>
           @for (c of charges(); track c.id) {
-            <tr>
-              <td>{{ c.unitIdentifier }}</td>
-              <td>{{ c.groupingName }}</td>
-              <td class="num">{{ formatCentsBrl(c.amountDueCents) }}</td>
-              <td>{{ formatDateDdMmYyyy(c.dueOn) }}</td>
-              <td>
-                {{ c.status === 'paid' ? 'Pago' : 'Em aberto' }}
+            <tr [attr.data-status]="c.status">
+              <td data-label="Unidade" class="cell-unit">{{ c.unitIdentifier }}</td>
+              <td data-label="Agrupamento" class="cell-group">{{ c.groupingName }}</td>
+              <td data-label="Valor" class="num cell-amount">{{ formatCentsBrl(c.amountDueCents) }}</td>
+              <td data-label="Vencimento" class="cell-due">{{ formatDateDdMmYyyy(c.dueOn) }}</td>
+              <td data-label="Situação" class="cell-status">
+                <span
+                  class="status-badge"
+                  [class.status-badge--paid]="c.status === 'paid'"
+                  [class.status-badge--open]="c.status !== 'paid'"
+                >
+                  {{ c.status === 'paid' ? 'Pago' : 'Em aberto' }}
+                </span>
                 @if (c.status === 'paid' && c.paidAt) {
-                  <span class="muted"> ({{ formatDateDdMmYyyy(c.paidAt) }})</span>
+                  <span class="muted cell-status__hint"> em {{ formatDateDdMmYyyy(c.paidAt) }}</span>
                 }
               </td>
-              <td>
-                @if (c.status === 'open') {
-                  <button
-                    type="button"
-                    class="btn primary sm"
-                    (click)="settle(c)"
-                    [disabled]="actionBusy()"
-                  >
-                    Quitar
-                  </button>
-                } @else {
+              <td data-label="Ações" class="cell-actions">
+                <div class="row-actions">
                   <button
                     type="button"
                     class="btn sm"
-                    (click)="downloadReceipt(c)"
+                    (click)="downloadUnitSlipPdf(c)"
                     [disabled]="actionBusy()"
+                    [title]="
+                      c.status === 'paid'
+                        ? 'PDF da unidade com o detalhe da cobrança (referência desta competência)'
+                        : 'PDF da unidade com QR Code PIX (valor + referência do condomínio/competência)'
+                    "
                   >
-                    Baixar comprovante
+                    PDF PIX
                   </button>
-                }
+                  @if (condoAccess.canManage() && c.status === 'open') {
+                    <button
+                      type="button"
+                      class="btn primary sm"
+                      (click)="settle(c)"
+                      [disabled]="actionBusy()"
+                    >
+                      Quitar
+                    </button>
+                  } @else if (c.status === 'paid') {
+                    <button
+                      type="button"
+                      class="btn sm"
+                      (click)="downloadReceipt(c)"
+                      [disabled]="actionBusy()"
+                    >
+                      Baixar comprovante
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }
@@ -135,6 +167,12 @@
           </tfoot>
         }
       </table>
+      @if (charges().length > 0) {
+        <div class="total-bar" aria-hidden="true">
+          <span class="total-bar__label">Total</span>
+          <strong class="total-bar__value">{{ totalChargesFormatted() }}</strong>
+        </div>
+      }
       @if (charges().length === 0) {
         <p class="empty">Sem cobranças para esta competência.</p>
       }

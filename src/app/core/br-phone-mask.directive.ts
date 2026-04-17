@@ -71,10 +71,13 @@ export class BrPhoneMaskDirective implements ControlValueAccessor, OnInit {
 
   @HostListener('input')
   onInput(): void {
+    const input = this.el.nativeElement;
+    if (input.readOnly || input.disabled) {
+      return;
+    }
     if (this.updating) {
       return;
     }
-    const input = this.el.nativeElement;
     const digits = this.normalizeDigits(input.value);
     const masked = formatBrPhoneDisplay(digits);
     if (input.value !== masked) {

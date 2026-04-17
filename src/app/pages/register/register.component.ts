@@ -7,6 +7,7 @@ import {
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { translateHttpErrorMessage } from '../../core/api-errors-pt';
+import { optionalBrMobilePhoneValidator } from '../../core/br-phone-mask';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { AuthService } from '../../core/auth.service';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
@@ -49,6 +50,7 @@ export class RegisterComponent {
   protected readonly inviteForm = this.fb.nonNullable.group({
     password: ['', [Validators.required, Validators.minLength(8)]],
     fullName: ['', [Validators.maxLength(255)]],
+    phone: ['', [Validators.required, optionalBrMobilePhoneValidator]],
   });
 
   constructor() {
@@ -109,22 +111,23 @@ export class RegisterComponent {
 
   private submitInvite(token: string): void {
     const pr = this.invitePreview();
-    if (pr?.pendingRegistration && this.inviteForm.controls.password.invalid) {
-      this.inviteForm.markAllAsTouched();
+    if (!pr) {
       return;
     }
-    if (pr?.pendingRegistration && this.inviteForm.invalid) {
+    if (this.inviteForm.invalid) {
       this.inviteForm.markAllAsTouched();
       return;
     }
     this.submitting.set(true);
-    const { password, fullName } = this.inviteForm.getRawValue();
+    const { password, fullName, phone } = this.inviteForm.getRawValue();
     const fn = fullName.trim();
-    const body: { password?: string; fullName?: string } = {};
+    const body: { phone: string; password?: string; fullName?: string } = {
+      phone: phone.trim(),
+    };
     if (fn.length >= 2) {
       body.fullName = fn;
     }
-    if (pr?.pendingRegistration) {
+    if (pr.pendingRegistration) {
       body.password = password;
     }
     this.invites.accept(token, body).subscribe({

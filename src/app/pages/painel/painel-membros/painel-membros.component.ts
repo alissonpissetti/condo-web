@@ -19,6 +19,7 @@ import {
   PlanningApiService,
   type CondominiumParticipant,
   type CondoAccess,
+  type GovernanceEligibleAccount,
   type GovernanceRole,
 } from '../../../core/planning-api.service';
 
@@ -52,6 +53,8 @@ export class PainelMembrosComponent implements OnInit {
     fullName: string | null;
     isOwner: boolean;
   } | null>(null);
+  protected readonly eligibleAccounts = signal<GovernanceEligibleAccount[]>([]);
+  protected readonly selectedEligibleUserId = signal<string>('');
   protected readonly removingId = signal<string | null>(null);
 
   protected readonly assignForm = this.fb.nonNullable.group({
@@ -135,6 +138,48 @@ export class PainelMembrosComponent implements OnInit {
     return '?';
   }
 
+  protected eligibleOptionLabel(e: GovernanceEligibleAccount): string {
+    const name = e.fullName?.trim();
+    const who = name ? name : e.email;
+    const units =
+      e.responsibleUnitLabels.length > 0
+        ? e.responsibleUnitLabels.join(', ')
+        : null;
+    if (e.isOwner && !units) {
+      return `${who} (titular)`;
+    }
+    if (units) {
+      return `${who} — unid.: ${units}`;
+    }
+    return who;
+  }
+
+  protected onEligiblePick(ev: Event): void {
+    if (!this.canAssignRoles()) {
+      return;
+    }
+    const sel = ev.target as HTMLSelectElement;
+    const v = sel.value;
+    this.selectedEligibleUserId.set(v);
+    this.actionError.set(null);
+    this.actionOk.set(null);
+    this.assignForm.patchValue({ email: '' });
+    if (!v) {
+      this.lookupResult.set(null);
+      return;
+    }
+    const row = this.eligibleAccounts().find((x) => x.userId === v);
+    if (row) {
+      this.lookupResult.set({
+        userId: row.userId,
+        email: row.email,
+        personId: row.personId,
+        fullName: row.fullName,
+        isOwner: row.isOwner,
+      });
+    }
+  }
+
   protected roleLabel(role: GovernanceRole): string {
     switch (role) {
       case 'owner':
@@ -162,7 +207,18 @@ export class PainelMembrosComponent implements OnInit {
         this.access.set(access.access);
         this.condoName.set(condo.name);
         this.participants.set(participants);
+        this.selectedEligibleUserId.set('');
+        this.lookupResult.set(null);
+        this.eligibleAccounts.set([]);
         this.loading.set(false);
+        if (this.canAssignRoles()) {
+          this.planningApi
+            .listEligibleForGovernance(this.condominiumId)
+            .subscribe({
+              next: (list) => this.eligibleAccounts.set(list),
+              error: () => this.eligibleAccounts.set([]),
+            });
+        }
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
@@ -181,6 +237,7 @@ export class PainelMembrosComponent implements OnInit {
     this.actionError.set(null);
     this.actionOk.set(null);
     this.lookupResult.set(null);
+    this.selectedEligibleUserId.set('');
     this.lookupBusy.set(true);
     this.planningApi.lookupParticipantUser(this.condominiumId, email).subscribe({
       next: (r) => {
@@ -216,6 +273,7 @@ export class PainelMembrosComponent implements OnInit {
           this.busy.set(false);
           this.assignForm.patchValue({ email: '' });
           this.lookupResult.set(null);
+          this.selectedEligibleUserId.set('');
           this.actionOk.set(
             role === 'syndic'
               ? 'Síndico atualizado.'
@@ -261,6 +319,14 @@ export class PainelMembrosComponent implements OnInit {
         /* lista falhou silenciosamente; página já carregou */
       },
     });
+    if (this.canAssignRoles()) {
+      this.planningApi.listEligibleForGovernance(this.condominiumId).subscribe({
+        next: (list) => this.eligibleAccounts.set(list),
+        error: () => {
+          /* ignora */
+        },
+      });
+    }
   }
 
   private msg(err: HttpErrorResponse): string {

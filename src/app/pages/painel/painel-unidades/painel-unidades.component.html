@@ -1,10 +1,21 @@
 <div class="page">
   <header class="page__header">
     <h1>Unidades</h1>
-    <p class="page__intro">
-      Agrupamentos, blocos, torres, internos, externos e suas unidades, administre
-      a montagem física do seu condomínio.
-    </p>
+    @if (canManageCondominium()) {
+      <p class="page__intro">
+        Agrupamentos, blocos, torres, internos, externos e suas unidades, administre
+        a montagem física do seu condomínio. Cada unidade pode ter
+        <strong>várias pessoas responsáveis</strong> (convites na página de convites).
+        O <strong>síndico</strong> ou o <strong>titular</strong> podem completar ou corrigir o
+        <strong>telefone</strong> de proprietários e responsáveis com ficha.
+      </p>
+    } @else {
+      <p class="page__intro">
+        Visualização das unidades e das pessoas associadas. Para alterar estrutura
+        ou responsáveis é necessário um papel de gestão (titular, síndico,
+        subsíndico ou administrador).
+      </p>
+    }
   </header>
 
   @if (actionError(); as ae) {
@@ -16,32 +27,34 @@
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <section class="new-grouping card">
-      <h2 class="card__title">Novo agrupamento</h2>
-      <div class="row">
-        <input
-          type="text"
-          class="input grow"
-          placeholder="Ex.: Bloco A"
-          [value]="newGroupingName()"
-          (input)="setNewGroupingName($any($event.target).value)"
-          [disabled]="busy()"
-        />
-        <button
-          type="button"
-          class="btn primary"
-          (click)="createGrouping()"
-          [disabled]="busy()"
-        >
-          Adicionar
-        </button>
-      </div>
-    </section>
+    @if (canManageCondominium()) {
+      <section class="new-grouping card">
+        <h2 class="card__title">Novo agrupamento</h2>
+        <div class="row">
+          <input
+            type="text"
+            class="input grow"
+            placeholder="Ex.: Bloco A"
+            [value]="newGroupingName()"
+            (input)="setNewGroupingName($any($event.target).value)"
+            [disabled]="busy()"
+          />
+          <button
+            type="button"
+            class="btn primary"
+            (click)="createGrouping()"
+            [disabled]="busy()"
+          >
+            Adicionar
+          </button>
+        </div>
+      </section>
+    }
 
     @for (g of rows(); track g.id) {
       <section class="card grouping">
         <div class="grouping__head">
-          @if (editingGroupingId() === g.id) {
+          @if (editingGroupingId() === g.id && canManageCondominium()) {
             <div class="row wrap">
               <input
                 type="text"
@@ -70,51 +83,55 @@
           } @else {
             <div class="row wrap grouping__title-row">
               <h2 class="card__title">{{ g.name }}</h2>
-              <div class="grouping__actions">
-                <button
-                  type="button"
-                  class="btn ghost sm"
-                  (click)="startEditGrouping(g)"
-                  [disabled]="busy()"
-                >
-                  Editar nome
-                </button>
-                <button
-                  type="button"
-                  class="btn danger sm"
-                  (click)="deleteGrouping(g)"
-                  [disabled]="busy() || !canDeleteGrouping()"
-                  [title]="
-                    !canDeleteGrouping()
-                      ? 'Tem de existir pelo menos um agrupamento.'
-                      : ''
-                  "
-                >
-                  Excluir agrupamento
-                </button>
-              </div>
+              @if (canManageCondominium()) {
+                <div class="grouping__actions">
+                  <button
+                    type="button"
+                    class="btn ghost sm"
+                    (click)="startEditGrouping(g)"
+                    [disabled]="busy()"
+                  >
+                    Editar nome
+                  </button>
+                  <button
+                    type="button"
+                    class="btn danger sm"
+                    (click)="deleteGrouping(g)"
+                    [disabled]="busy() || !canDeleteGrouping()"
+                    [title]="
+                      !canDeleteGrouping()
+                        ? 'Tem de existir pelo menos um agrupamento.'
+                        : ''
+                    "
+                  >
+                    Excluir agrupamento
+                  </button>
+                </div>
+              }
             </div>
           }
         </div>
 
         @if (g.units.length > 0) {
           <div class="table-wrap">
-            <table class="table">
+            <table class="table table--cards">
               <thead>
                 <tr>
                   <th>Identificador</th>
-                  <th>Responsável</th>
+                  <th>Responsáveis</th>
                   <th>Notas</th>
-                  <th class="th-actions">
-                    <span class="sr-only">Ações</span>
-                  </th>
+                  @if (canManageCondominium()) {
+                    <th class="th-actions">
+                      <span class="sr-only">Ações</span>
+                    </th>
+                  }
                 </tr>
               </thead>
               <tbody>
                 @for (u of g.units; track u.id) {
                   <tr [attr.id]="'unit-' + u.id">
-                    @if (isEditingUnit(u.id)) {
-                      <td>
+                    @if (isEditingUnit(u.id) && canManageCondominium()) {
+                      <td data-label="Identificador" class="cell-ident">
                         <input
                           type="text"
                           class="input table-input"
@@ -127,8 +144,8 @@
                           [disabled]="busy()"
                         />
                       </td>
-                      <td class="muted">—</td>
-                      <td>
+                      <td data-label="Responsáveis" class="muted">—</td>
+                      <td data-label="Notas">
                         <input
                           type="text"
                           class="input table-input"
@@ -160,70 +177,442 @@
                         </div>
                       </td>
                     } @else {
-                      <td>{{ u.identifier }}</td>
-                      <td class="person-cell">
-                        <div class="person-cell__inner">
-                          <span class="person-cell__name">{{
-                            u.responsiblePerson?.fullName || '—'
-                          }}</span>
-                          @if (u.responsiblePersonId) {
-                            <button
-                              type="button"
-                              class="btn-unassign"
-                              (click)="clearResponsible(g.id, u)"
-                              [disabled]="busy()"
-                              title="Remover responsável para poder associar outra pessoa"
-                            >
-                              Remover responsável
-                            </button>
+                      <td data-label="Identificador" class="cell-ident">{{ u.identifier }}</td>
+                      <td data-label="Responsáveis" class="person-cell">
+                        <div class="person-cell__box">
+                          @if (u.ownerPerson?.id) {
+                            <ul class="person-list person-list--owner">
+                              <li class="person-list__row person-list__row--stack">
+                                <div class="person-list__main">
+                                  <span class="person-list__badge">Proprietário</span>
+                                  <span class="person-list__name">{{
+                                    u.ownerPerson!.fullName
+                                  }}</span>
+                                  @if (hasDisplayPhone(u.ownerPerson?.phone)) {
+                                    <span class="person-list__phone">{{
+                                      displayPersonPhone(u.ownerPerson?.phone)
+                                    }}</span>
+                                  } @else {
+                                    <span
+                                      class="person-list__phone person-list__phone--empty"
+                                      >sem telefone</span
+                                    >
+                                  }
+                                </div>
+                                @if (canEditResidentPhones()) {
+                                  @if (
+                                    isEditingPhone(g.id, u.id, u.ownerPerson!.id)
+                                  ) {
+                                    <div
+                                      class="person-list__phone-edit"
+                                      [formGroup]="phoneEditForm"
+                                    >
+                                      <input
+                                        type="text"
+                                        class="input input--compact"
+                                        formControlName="phone"
+                                        appBrPhoneMask
+                                        [mobileOnly]="true"
+                                        autocomplete="tel-national"
+                                        [disabled]="busy()"
+                                      />
+                                      @if (
+                                        phoneEditForm.controls.phone.invalid &&
+                                        phoneEditForm.controls.phone.touched
+                                      ) {
+                                        <span class="field-err">{{
+                                          fieldErrorsPt(
+                                            phoneEditForm.controls.phone
+                                          )
+                                        }}</span>
+                                      }
+                                      <div class="person-list__phone-actions">
+                                        <button
+                                          type="button"
+                                          class="btn sm primary"
+                                          (click)="
+                                            saveResidentPhone(
+                                              g.id,
+                                              u.id,
+                                              u.ownerPerson!.id
+                                            )
+                                          "
+                                          [disabled]="busy()"
+                                        >
+                                          Salvar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="btn sm ghost"
+                                          (click)="cancelPhoneEdit()"
+                                          [disabled]="busy()"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  } @else {
+                                    <button
+                                      type="button"
+                                      class="btn sm ghost person-list__tel-btn"
+                                      (click)="
+                                        startEditResidentPhone(g.id, u, u.ownerPerson!)
+                                      "
+                                      [disabled]="busy()"
+                                    >
+                                      Telefone
+                                    </button>
+                                  }
+                                }
+                              </li>
+                            </ul>
+                          }
+                          @if ((u.responsiblePeople?.length ?? 0) > 0) {
+                            <ul class="person-list">
+                              @for (p of u.responsiblePeople!; track p.id) {
+                                <li class="person-list__row person-list__row--stack">
+                                  <div class="person-list__main">
+                                    <span class="person-list__name">{{
+                                      p.fullName
+                                    }}</span>
+                                    @if (hasDisplayPhone(p.phone)) {
+                                      <span class="person-list__phone">{{
+                                        displayPersonPhone(p.phone)
+                                      }}</span>
+                                    } @else {
+                                      <span
+                                        class="person-list__phone person-list__phone--empty"
+                                        >sem telefone</span
+                                      >
+                                    }
+                                  </div>
+                                  @if (canEditResidentPhones()) {
+                                    @if (isEditingPhone(g.id, u.id, p.id)) {
+                                      <div
+                                        class="person-list__phone-edit"
+                                        [formGroup]="phoneEditForm"
+                                      >
+                                        <input
+                                          type="text"
+                                          class="input input--compact"
+                                          formControlName="phone"
+                                          appBrPhoneMask
+                                          [mobileOnly]="true"
+                                          autocomplete="tel-national"
+                                          [disabled]="busy()"
+                                        />
+                                        @if (
+                                          phoneEditForm.controls.phone
+                                            .invalid &&
+                                          phoneEditForm.controls.phone.touched
+                                        ) {
+                                          <span class="field-err">{{
+                                            fieldErrorsPt(
+                                              phoneEditForm.controls.phone
+                                            )
+                                          }}</span>
+                                        }
+                                        <div class="person-list__phone-actions">
+                                          <button
+                                            type="button"
+                                            class="btn sm primary"
+                                            (click)="
+                                              saveResidentPhone(
+                                                g.id,
+                                                u.id,
+                                                p.id
+                                              )
+                                            "
+                                            [disabled]="busy()"
+                                          >
+                                            Salvar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            class="btn sm ghost"
+                                            (click)="cancelPhoneEdit()"
+                                            [disabled]="busy()"
+                                          >
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    } @else {
+                                      <button
+                                        type="button"
+                                        class="btn sm ghost person-list__tel-btn"
+                                        (click)="
+                                          startEditResidentPhone(g.id, u, p)
+                                        "
+                                        [disabled]="busy()"
+                                      >
+                                        Telefone
+                                      </button>
+                                    }
+                                  }
+                                  @if (canManageCondominium()) {
+                                    <button
+                                      type="button"
+                                      class="person-icon-btn"
+                                      (click)="
+                                        removeOneResponsible(
+                                          g.id,
+                                          u,
+                                          p.id,
+                                          p.fullName
+                                        )
+                                      "
+                                      [disabled]="busy()"
+                                      title="Remover esta pessoa dos responsáveis"
+                                      [attr.aria-label]="
+                                        'Remover responsável ' + p.fullName
+                                      "
+                                    >
+                                      <svg
+                                        class="person-icon-btn__svg"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          fill="currentColor"
+                                          d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                        />
+                                      </svg>
+                                    </button>
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          } @else if (u.responsiblePerson?.id) {
+                            <ul class="person-list">
+                              <li class="person-list__row person-list__row--stack">
+                                <div class="person-list__main">
+                                  <span class="person-list__name">{{
+                                    u.responsiblePerson?.fullName
+                                  }}</span>
+                                  @if (hasDisplayPhone(u.responsiblePerson?.phone)) {
+                                    <span class="person-list__phone">{{
+                                      displayPersonPhone(u.responsiblePerson?.phone)
+                                    }}</span>
+                                  } @else {
+                                    <span
+                                      class="person-list__phone person-list__phone--empty"
+                                      >sem telefone</span
+                                    >
+                                  }
+                                </div>
+                                @if (canEditResidentPhones()) {
+                                  @if (
+                                    isEditingPhone(
+                                      g.id,
+                                      u.id,
+                                      u.responsiblePerson!.id
+                                    )
+                                  ) {
+                                    <div
+                                      class="person-list__phone-edit"
+                                      [formGroup]="phoneEditForm"
+                                    >
+                                      <input
+                                        type="text"
+                                        class="input input--compact"
+                                        formControlName="phone"
+                                        appBrPhoneMask
+                                        [mobileOnly]="true"
+                                        autocomplete="tel-national"
+                                        [disabled]="busy()"
+                                      />
+                                      @if (
+                                        phoneEditForm.controls.phone.invalid &&
+                                        phoneEditForm.controls.phone.touched
+                                      ) {
+                                        <span class="field-err">{{
+                                          fieldErrorsPt(
+                                            phoneEditForm.controls.phone
+                                          )
+                                        }}</span>
+                                      }
+                                      <div class="person-list__phone-actions">
+                                        <button
+                                          type="button"
+                                          class="btn sm primary"
+                                          (click)="
+                                            saveResidentPhone(
+                                              g.id,
+                                              u.id,
+                                              u.responsiblePerson!.id
+                                            )
+                                          "
+                                          [disabled]="busy()"
+                                        >
+                                          Salvar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="btn sm ghost"
+                                          (click)="cancelPhoneEdit()"
+                                          [disabled]="busy()"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  } @else {
+                                    <button
+                                      type="button"
+                                      class="btn sm ghost person-list__tel-btn"
+                                      (click)="
+                                        startEditResidentPhone(
+                                          g.id,
+                                          u,
+                                          u.responsiblePerson!
+                                        )
+                                      "
+                                      [disabled]="busy()"
+                                    >
+                                      Telefone
+                                    </button>
+                                  }
+                                }
+                                @if (canManageCondominium()) {
+                                  <button
+                                    type="button"
+                                    class="person-icon-btn"
+                                    (click)="
+                                      removeOneResponsible(
+                                        g.id,
+                                        u,
+                                        u.responsiblePerson!.id,
+                                        u.responsiblePerson?.fullName ?? ''
+                                      )
+                                    "
+                                    [disabled]="busy()"
+                                    title="Remover esta pessoa dos responsáveis"
+                                    [attr.aria-label]="
+                                      'Remover responsável ' +
+                                      (u.responsiblePerson?.fullName ?? '')
+                                    "
+                                  >
+                                    <svg
+                                      class="person-icon-btn__svg"
+                                      viewBox="0 0 24 24"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        fill="currentColor"
+                                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                      />
+                                    </svg>
+                                  </button>
+                                }
+                              </li>
+                            </ul>
+                          } @else if (u.responsibleDisplayName?.trim()) {
+                            <div class="person-list__row">
+                              <span class="person-list__name person-list__name--muted">{{
+                                u.responsibleDisplayName!.trim()
+                              }}</span>
+                              @if (canManageCondominium()) {
+                                <button
+                                  type="button"
+                                  class="person-icon-btn"
+                                  (click)="clearResponsible(g.id, u)"
+                                  [disabled]="busy()"
+                                  title="Remover este nome (responsável sem ficha)"
+                                  aria-label="Remover nome livre do responsável"
+                                >
+                                  <svg
+                                    class="person-icon-btn__svg"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      fill="currentColor"
+                                      d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                    />
+                                  </svg>
+                                </button>
+                              }
+                            </div>
+                          } @else {
+                            <span class="person-cell__empty">—</span>
+                          }
+                          @if (
+                            canManageCondominium() &&
+                            hasResponsibleEntries(u) &&
+                            showClearAllResponsibles(u)
+                          ) {
+                            <div class="person-cell__bulk">
+                              <button
+                                type="button"
+                                class="person-icon-btn person-icon-btn--bulk"
+                                (click)="clearResponsible(g.id, u)"
+                                [disabled]="busy()"
+                                title="Remover todos os responsáveis e o nome livre"
+                                aria-label="Remover todos os responsáveis desta unidade"
+                              >
+                                <svg
+                                  class="person-icon-btn__svg"
+                                  viewBox="0 0 24 24"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    fill="currentColor"
+                                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
                           }
                         </div>
                       </td>
-                      <td class="notes">{{ u.notes || '—' }}</td>
-                      <td class="td-actions">
-                        <div class="td-actions__inner">
-                          <button
-                            type="button"
-                            class="icon-btn"
-                            (click)="startEditUnit(u)"
-                            [disabled]="busy()"
-                            [attr.aria-label]="
-                              'Editar unidade ' + u.identifier
-                            "
-                          >
-                            <svg
-                              class="icon-btn__svg"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
+                      <td data-label="Notas" class="notes">{{ u.notes || '—' }}</td>
+                      @if (canManageCondominium()) {
+                        <td data-label="Ações" class="td-actions">
+                          <div class="td-actions__inner">
+                            <button
+                              type="button"
+                              class="icon-btn"
+                              (click)="startEditUnit(u)"
+                              [disabled]="busy()"
+                              [attr.aria-label]="
+                                'Editar unidade ' + u.identifier
+                              "
                             >
-                              <path
-                                fill="currentColor"
-                                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.004 1.004 0 0 0 0-1.42l-2.34-2.34a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            class="icon-btn icon-btn--danger"
-                            (click)="deleteUnit(g.id, u)"
-                            [disabled]="busy()"
-                            [attr.aria-label]="
-                              'Excluir unidade ' + u.identifier
-                            "
-                          >
-                            <svg
-                              class="icon-btn__svg"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
+                              <svg
+                                class="icon-btn__svg"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  fill="currentColor"
+                                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.004 1.004 0 0 0 0-1.42l-2.34-2.34a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              class="icon-btn icon-btn--danger"
+                              (click)="deleteUnit(g.id, u)"
+                              [disabled]="busy()"
+                              [attr.aria-label]="
+                                'Excluir unidade ' + u.identifier
+                              "
                             >
-                              <path
-                                fill="currentColor"
-                                d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
+                              <svg
+                                class="icon-btn__svg"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  fill="currentColor"
+                                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      }
                     }
                   </tr>
                 }
@@ -234,41 +623,43 @@
           <p class="units-empty">Nenhuma unidade neste agrupamento</p>
         }
 
-        <div class="new-unit">
-          <span class="new-unit__label">Nova unidade</span>
-          <div class="row wrap">
-            <input
-              type="text"
-              class="input"
-              placeholder="Identificador (ex.: 101)"
-              [value]="newUnitFor(g.id).identifier"
-              (input)="
-                patchNewUnit(g.id, {
-                  identifier: $any($event.target).value,
-                })
-              "
-              [disabled]="busy()"
-            />
-            <input
-              type="text"
-              class="input grow"
-              placeholder="Notas (opcional)"
-              [value]="newUnitFor(g.id).notes"
-              (input)="
-                patchNewUnit(g.id, { notes: $any($event.target).value })
-              "
-              [disabled]="busy()"
-            />
-            <button
-              type="button"
-              class="btn primary"
-              (click)="createUnit(g.id)"
-              [disabled]="busy()"
-            >
-              Adicionar unidade
-            </button>
+        @if (canManageCondominium()) {
+          <div class="new-unit">
+            <span class="new-unit__label">Nova unidade</span>
+            <div class="row wrap">
+              <input
+                type="text"
+                class="input"
+                placeholder="Identificador (ex.: 101)"
+                [value]="newUnitFor(g.id).identifier"
+                (input)="
+                  patchNewUnit(g.id, {
+                    identifier: $any($event.target).value,
+                  })
+                "
+                [disabled]="busy()"
+              />
+              <input
+                type="text"
+                class="input grow"
+                placeholder="Notas (opcional)"
+                [value]="newUnitFor(g.id).notes"
+                (input)="
+                  patchNewUnit(g.id, { notes: $any($event.target).value })
+                "
+                [disabled]="busy()"
+              />
+              <button
+                type="button"
+                class="btn primary"
+                (click)="createUnit(g.id)"
+                [disabled]="busy()"
+              >
+                Adicionar unidade
+              </button>
+            </div>
           </div>
-        </div>
+        }
       </section>
     }
   }

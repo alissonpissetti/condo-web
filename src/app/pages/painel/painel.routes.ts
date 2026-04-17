@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+import { condominiumManagementGuard } from '../../core/condominium-management.guard';
+import { planFeatureGuard } from '../../core/plan-feature.guard';
 import { selectedCondominiumGuard } from '../../core/selected-condominium.guard';
 
 export const painelRoutes: Routes = [
@@ -21,8 +23,19 @@ export const painelRoutes: Routes = [
           import('./painel-dados.component').then((m) => m.PainelDadosComponent),
       },
       {
-        path: 'condominio/:condominiumId/editar',
+        path: 'condominio/:condominiumId/upgrade',
         canActivate: [selectedCondominiumGuard],
+        loadComponent: () =>
+          import('./painel-upgrade/painel-upgrade.component').then(
+            (m) => m.PainelUpgradeComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/editar',
+        canActivate: [
+          selectedCondominiumGuard,
+          planFeatureGuard('editCondominium'),
+        ],
         loadComponent: () =>
           import('./painel-condominio-editar/painel-condominio-editar.component').then(
             (m) => m.PainelCondominioEditarComponent,
@@ -30,7 +43,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/unidades',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('units')],
         loadComponent: () =>
           import('./painel-unidades/painel-unidades.component').then(
             (m) => m.PainelUnidadesComponent,
@@ -38,7 +51,11 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/convites',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('invitations'),
+        ],
         loadComponent: () =>
           import('./painel-convites/painel-convites.component').then(
             (m) => m.PainelConvitesComponent,
@@ -46,7 +63,11 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/membros',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('members'),
+        ],
         loadComponent: () =>
           import('./painel-membros/painel-membros.component').then(
             (m) => m.PainelMembrosComponent,
@@ -54,7 +75,11 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/transacoes',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('financialTransactions'),
+        ],
         loadComponent: () =>
           import('./painel-transacoes/painel-transacoes.component').then(
             (m) => m.PainelTransacoesComponent,
@@ -62,7 +87,11 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/extrato',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('financialStatement'),
+        ],
         loadComponent: () =>
           import('./painel-extrato/painel-extrato.component').then(
             (m) => m.PainelExtratoComponent,
@@ -70,7 +99,11 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/fundos',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('funds'),
+        ],
         loadComponent: () =>
           import('./painel-fundos/painel-fundos.component').then(
             (m) => m.PainelFundosComponent,
@@ -78,7 +111,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/taxas-condominiais',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('condoFees')],
         loadComponent: () =>
           import(
             './painel-taxas-condominiais/painel-taxas-condominiais.component'
@@ -86,7 +119,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/planejamento/:pollId',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('planning')],
         loadComponent: () =>
           import('./painel-planejamento/painel-planejamento.component').then(
             (m) => m.PainelPlanejamentoComponent,
@@ -94,7 +127,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/planejamento',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('planning')],
         loadComponent: () =>
           import('./painel-planejamento/painel-planejamento.component').then(
             (m) => m.PainelPlanejamentoComponent,
@@ -102,7 +135,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/documentos',
-        canActivate: [selectedCondominiumGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('documents')],
         loadComponent: () =>
           import('./painel-documentos/painel-documentos.component').then(
             (m) => m.PainelDocumentosComponent,

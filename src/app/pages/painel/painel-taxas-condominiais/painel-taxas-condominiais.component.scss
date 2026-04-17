@@ -196,9 +196,286 @@
   min-width: 12rem;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.btn.sm {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.82rem;
+}
+
 .empty {
   margin: 0;
   padding: 0.65rem;
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Status badge (situação)                                             */
+/* ------------------------------------------------------------------ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+
+  &--paid {
+    background: color-mix(in srgb, #1f883d 14%, var(--surface));
+    color: #14652b;
+    border: 1px solid color-mix(in srgb, #1f883d 35%, var(--border));
+  }
+
+  &--open {
+    background: color-mix(in srgb, #b45309 15%, var(--surface));
+    color: #8a4002;
+    border: 1px solid color-mix(in srgb, #b45309 35%, var(--border));
+  }
+}
+
+.cell-status__hint {
+  font-size: 0.78rem;
+  margin-left: 0.25rem;
+}
+
+/* Barra de total só aparece no mobile; escondida no desktop (tfoot já mostra). */
+.total-bar {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile: tabela → cards                                              */
+/* ------------------------------------------------------------------ */
+@media (max-width: 720px) {
+  .page {
+    max-width: none;
+    padding-bottom: 1.75rem;
+  }
+
+  .card {
+    padding: 0.85rem;
+  }
+
+  .row {
+    gap: 0.55rem;
+  }
+
+  .row .btn,
+  .row .input {
+    flex: 1 1 100%;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .row .field {
+    flex: 1 1 100%;
+  }
+
+  .input {
+    padding: 0.55rem 0.7rem;
+  }
+
+  .table-wrap {
+    border: none;
+    background: transparent;
+    overflow: visible;
+    margin-bottom: 0.75rem;
+  }
+
+  .table--cards {
+    display: block;
+    font-size: 0.92rem;
+
+    thead,
+    tfoot {
+      display: none;
+    }
+
+    tbody,
+    tr {
+      display: block;
+      width: 100%;
+    }
+
+    tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      column-gap: 0.75rem;
+      row-gap: 0.45rem;
+      padding: 0.85rem 0.9rem;
+      margin-bottom: 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    tr[data-status='paid'] {
+      border-color: color-mix(in srgb, #1f883d 40%, var(--border));
+    }
+
+    tr[data-status='open'] {
+      border-color: color-mix(in srgb, #b45309 35%, var(--border));
+    }
+
+    td {
+      display: block;
+      padding: 0;
+      border-bottom: 0;
+      vertical-align: top;
+    }
+
+    td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.2rem;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    /* Unidade em destaque à esquerda, status à direita (1ª linha do card). */
+    .cell-unit {
+      grid-column: 1;
+      grid-row: 1;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    .cell-status {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: end;
+      text-align: right;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    .cell-status__hint {
+      display: block;
+      margin-left: 0;
+      margin-top: 0.2rem;
+      font-size: 0.72rem;
+    }
+
+    /* Agrupamento como subtítulo discreto logo abaixo da unidade. */
+    .cell-group {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      margin-top: -0.25rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    /* Valor em destaque e vencimento lado a lado. */
+    .cell-amount {
+      grid-column: 1;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+      text-align: left;
+    }
+
+    .cell-due {
+      grid-column: 2;
+      justify-self: end;
+      text-align: right;
+
+      &::before {
+        text-align: right;
+      }
+    }
+
+    /* Ações ocupam toda a linha, empilhadas e em largura total. */
+    .cell-actions {
+      grid-column: 1 / -1;
+      padding-top: 0.35rem;
+      border-top: 1px dashed var(--border);
+
+      &::before {
+        display: none;
+      }
+
+      .row-actions {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .row-actions .btn {
+        flex: 1 1 calc(50% - 0.25rem);
+        min-height: 2.6rem;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.9rem;
+        justify-content: center;
+      }
+    }
+
+    .num {
+      text-align: left;
+    }
+  }
+
+  .total-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+    box-shadow: var(--shadow);
+    margin-top: 0.25rem;
+  }
+
+  .total-bar__label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .total-bar__value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty {
+    padding: 1.25rem 0.85rem;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 0.75rem;
+    background: var(--surface);
+  }
+}
+
+@media (max-width: 420px) {
+  .cell-actions .row-actions .btn {
+    flex: 1 1 100%;
+  }
 }

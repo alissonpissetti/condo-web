@@ -18,7 +18,17 @@
   } @else {
     <ul class="list" role="list">
       @for (c of condominiums(); track c.id) {
-        <li [class.is-selected]="isSelected(c.id)">
+        <li
+          [class.is-selected]="isSelected(c.id)"
+          [class.is-clickable]="!deletingId()"
+          role="button"
+          tabindex="0"
+          [attr.aria-pressed]="isSelected(c.id)"
+          [attr.aria-label]="'Selecionar condomínio ' + c.name"
+          (click)="selectCondominiumFromRow(c.id)"
+          (keydown.enter)="selectCondominiumFromRow(c.id)"
+          (keydown.space)="$event.preventDefault(); selectCondominiumFromRow(c.id)"
+        >
           <div class="row-main">
             <span class="title">{{ c.name }}</span>
             @if (c.billingPlanName != null && c.billingPricePerUnitCents != null) {
@@ -39,7 +49,7 @@
                   <button
                     type="button"
                     class="btn-text"
-                    (click)="openPlanEditor(c)"
+                    (click)="openPlanEditor(c); $event.stopPropagation()"
                     [disabled]="deletingId() !== null || planSaveBusyId() === c.id"
                   >
                     Alterar plano
@@ -57,12 +67,12 @@
               }
             </span>
           </div>
-          <div class="row-actions">
+          <div class="row-actions" (click)="$event.stopPropagation()">
             <button
               type="button"
               class="pin"
               [class.pin--on]="isSelected(c.id)"
-              (click)="selectCondominium(c.id)"
+              (click)="selectCondominium(c.id); $event.stopPropagation()"
               [disabled]="!!deletingId()"
               [attr.aria-pressed]="isSelected(c.id)"
               [attr.aria-label]="
@@ -85,31 +95,33 @@
                 />
               </svg>
             </button>
-            <button
-              type="button"
-              class="btn-remove"
-              (click)="remove(c)"
-              [disabled]="deletingId() !== null"
-              [attr.aria-busy]="isDeleting(c.id)"
-              [attr.aria-label]="'Excluir condomínio ' + c.name"
-              title="Excluir condomínio"
-            >
-              @if (isDeleting(c.id)) {
-                <span class="sr-only">Eliminando…</span>
-              }
-              <svg
-                viewBox="0 0 24 24"
-                width="20"
-                height="20"
-                aria-hidden="true"
-                focusable="false"
+            @if (isCondominiumOwner(c)) {
+              <button
+                type="button"
+                class="btn-remove"
+                (click)="remove(c); $event.stopPropagation()"
+                [disabled]="deletingId() !== null"
+                [attr.aria-busy]="isDeleting(c.id)"
+                [attr.aria-label]="'Excluir condomínio ' + c.name"
+                title="Excluir condomínio"
               >
-                <path
-                  fill="currentColor"
-                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                />
-              </svg>
-            </button>
+                @if (isDeleting(c.id)) {
+                  <span class="sr-only">Eliminando…</span>
+                }
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    fill="currentColor"
+                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                  />
+                </svg>
+              </button>
+            }
           </div>
         </li>
       }
@@ -173,7 +185,7 @@
               />
             </label>
             <p class="plan-studio__ref-hint muted">
-              Com <strong>{{ pr.unitCount }}</strong> unidade(s) registadas e o
+              Com <strong>{{ pr.unitCount }}</strong> unidade(s) cadastradas e o
               plano <strong>{{ pr.planName }}</strong> em vigor: total de referência
               <strong>{{ formatBrl(pr.monthlyCents) }}</strong>
               @if (pr.discountPercent > 0) {
@@ -209,7 +221,7 @@
                 {{ v.discountPercent }}% · válido de {{ v.validFrom }} a
                 {{ v.validTo }}
                 @if (!v.active) {
-                  <span class="plan-studio__warn"> (inactivo)</span>
+                  <span class="plan-studio__warn"> (inativo)</span>
                 }
               </p>
               <button

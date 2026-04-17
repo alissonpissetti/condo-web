@@ -17,7 +17,7 @@ export function controlErrorMessagesPt(
     out.push('Este campo é obrigatório.');
   }
   if (e['email']) {
-    out.push('Introduza um endereço de email válido.');
+    out.push('Informe um e-mail válido.');
   }
   if (e['minlength']) {
     const m = e['minlength'] as {
@@ -41,7 +41,7 @@ export function controlErrorMessagesPt(
     out.push('O formato não é válido.');
   }
   if (e['brMobilePhone']) {
-    out.push('Introduza um número de celular válido com DDD (11 dígitos).');
+    out.push('Informe um número de celular válido com DDD (11 dígitos).');
   }
   return out;
 }

@@ -4,6 +4,7 @@ import {
   HostListener,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -92,7 +93,42 @@ export class PainelTransacoesComponent implements OnInit {
   /** Linha da tabela com menu ⋮ aberto (id da transação). */
   protected readonly rowActionMenuForId = signal<string | null>(null);
 
+  /**
+   * Formulário de criação/edição expandido. No mobile começa fechado para dar
+   * foco à lista; ao editar (edição simples ou de série) abre automaticamente.
+   */
+  protected readonly formExpanded = signal(true);
+
   private condoId = '';
+
+  constructor() {
+    effect(() => {
+      if (this.editingId() || this.editingSeriesId()) {
+        this.formExpanded.set(true);
+        if (typeof window !== 'undefined') {
+          queueMicrotask(() => this.scrollFormIntoView());
+        }
+      }
+    });
+  }
+
+  toggleForm(): void {
+    this.formExpanded.update((v) => !v);
+  }
+
+  openForm(): void {
+    this.formExpanded.set(true);
+    if (typeof window !== 'undefined') {
+      queueMicrotask(() => this.scrollFormIntoView());
+    }
+  }
+
+  private scrollFormIntoView(): void {
+    const el = document.getElementById('tx-form-card');
+    if (el && 'scrollIntoView' in el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
 
   toggleRowActionMenu(txId: string, ev: Event): void {
     ev.stopPropagation();
@@ -189,6 +225,9 @@ export class PainelTransacoesComponent implements OnInit {
     }
     this.condoId = id;
     this.occurredOn.set(todayLocalIsoDate());
+    if (typeof window !== 'undefined' && window.innerWidth < 900) {
+      this.formExpanded.set(false);
+    }
     this.reloadAll();
   }
 
@@ -684,6 +723,9 @@ export class PainelTransacoesComponent implements OnInit {
           this.saving.set(false);
           this.resetForm();
           this.refreshList();
+          if (typeof window !== 'undefined' && window.innerWidth < 900) {
+            this.formExpanded.set(false);
+          }
         },
         error: (err: HttpErrorResponse) => {
           this.saving.set(false);

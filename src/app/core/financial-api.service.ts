@@ -349,8 +349,13 @@ export class FinancialApiService {
   condominiumFeesTransparencyPdf(
     condoId: string,
     competenceYm: string,
+    unitId?: string | null,
   ): Observable<Blob> {
-    const params = new HttpParams().set('competenceYm', competenceYm);
+    let params = new HttpParams().set('competenceYm', competenceYm);
+    const u = unitId?.trim();
+    if (u) {
+      params = params.set('unitId', u);
+    }
     return this.http.get(
       `${this.base(condoId)}/condominium-fees/transparency-pdf`,
       { params, responseType: 'blob' },

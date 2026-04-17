@@ -34,6 +34,22 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'privacidade',
+    loadComponent: () =>
+      import('./pages/legal/legal-document.component').then(
+        (m) => m.LegalDocumentComponent,
+      ),
+    data: { legalDoc: 'privacy' },
+  },
+  {
+    path: 'termos',
+    loadComponent: () =>
+      import('./pages/legal/legal-document.component').then(
+        (m) => m.LegalDocumentComponent,
+      ),
+    data: { legalDoc: 'terms' },
+  },
+  {
     path: 'painel',
     canActivate: [authGuard],
     loadChildren: () =>

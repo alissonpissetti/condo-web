@@ -36,3 +36,8 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+/* Trava o scroll do body enquanto o menu lateral do painel está aberto (mobile). */
+body.painel-mobile-nav-open {
+  overflow: hidden;
+}

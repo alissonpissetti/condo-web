@@ -25,6 +25,16 @@ export interface CondominiumParticipant {
   person?: { id: string; fullName: string } | null;
 }
 
+/** Titular e/ou responsáveis de unidade com conta — elegíveis para papéis de gestão. */
+export interface GovernanceEligibleAccount {
+  userId: string;
+  personId: string | null;
+  fullName: string | null;
+  email: string;
+  isOwner: boolean;
+  responsibleUnitLabels: string[];
+}
+
 export type PollStatus = 'draft' | 'open' | 'closed' | 'decided';
 export type AssemblyType = 'ordinary' | 'election';
 
@@ -113,6 +123,14 @@ export class PlanningApiService {
   ): Observable<CondominiumParticipant[]> {
     return this.http.get<CondominiumParticipant[]>(
       `${this.base}/condominiums/${condominiumId}/participants`,
+    );
+  }
+
+  listEligibleForGovernance(
+    condominiumId: string,
+  ): Observable<GovernanceEligibleAccount[]> {
+    return this.http.get<GovernanceEligibleAccount[]>(
+      `${this.base}/condominiums/${condominiumId}/participants/eligible-for-governance`,
     );
   }
 

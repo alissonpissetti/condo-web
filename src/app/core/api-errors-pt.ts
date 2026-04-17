@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 const EXACT: Record<string, string> = {
   'Email already registered': 'Este e-mail já está cadastrado.',
   'Phone already registered': 'Este telefone já está cadastrado.',
-  'Utilizador não encontrado.': 'Conta não encontrada.',
+  'Usuário não encontrado.': 'Conta não encontrada.',
   'Senha atual incorreta.': 'Senha atual incorreta.',
   'Indique a senha atual para definir uma nova.':
     'Indique a senha atual para definir uma nova.',
@@ -41,7 +41,7 @@ const EXACT: Record<string, string> = {
   'Regra de rateio em falta.': 'Regra de rateio em falta.',
   'Login por SMS indisponível neste ambiente.':
     'Login por SMS indisponível neste ambiente.',
-  'Não foi possível contactar o serviço de SMS.':
+  'Não foi possível contatar o serviço de SMS.':
     'Não foi possível contatar o serviço de SMS.',
   'O serviço de SMS recusou o envio.': 'O serviço de SMS recusou o envio.',
   Unauthorized: 'Não autorizado.',
@@ -60,17 +60,17 @@ const EXACT: Record<string, string> = {
   'Cannot delete the last grouping':
     'Não é possível excluir o último agrupamento.',
   'Email já está associado a outra ficha de pessoa.':
-    'Email já está associado a outra ficha de pessoa.',
-  'CPF já registado noutra ficha de pessoa.':
+    'E-mail já está associado a outra ficha de pessoa.',
+  'CPF já cadastrado em outra ficha de pessoa.':
     'CPF já cadastrado em outra ficha de pessoa.',
-  'Email ou CPF já registado noutra ficha de pessoa.':
+  'E-mail ou CPF já cadastrado em outra ficha de pessoa.':
     'E-mail ou CPF já cadastrado em outra ficha de pessoa.',
   'CEP inválido: são necessários 8 dígitos quando indicar endereço.':
     'CEP inválido: são necessários 8 dígitos quando indicar endereço.',
   'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.':
     'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.',
   'UF deve ter 2 letras.': 'UF deve ter 2 letras.',
-  'Indique o nome completo para registar o endereço na ficha.':
+  'Indique o nome completo para cadastrar o endereço na ficha.':
     'Indique o nome completo para cadastrar o endereço na ficha.',
   'Expense transactions require an allocation rule':
     'Despesas exigem uma regra de rateio.',
@@ -132,7 +132,7 @@ function translateApiMessage(raw: string): string {
     lower.includes('must be an email') ||
     lower.includes('must be a valid email')
   ) {
-    return 'Introduza um endereço de email válido.';
+    return 'Informe um e-mail válido.';
   }
   if (
     lower.includes('should not be empty') ||

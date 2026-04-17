@@ -373,6 +373,11 @@
   color: var(--muted);
 }
 
+.field__hint {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .input {
   padding: 0.5rem 0.65rem;
   border-radius: 0.45rem;

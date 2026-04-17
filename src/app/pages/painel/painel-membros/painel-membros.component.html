@@ -7,16 +7,18 @@
       }
     </div>
     <p class="page__intro">
-      Quem gere este condomínio na plataforma — titular, síndico, equipa administrativa e contas apenas
-      com vínculo (membros).
+      Quem gere este condomínio na plataforma — titular, síndico, equipa administrativa e contas com
+      vínculo (membros). Papéis de gestão restringem-se ao titular e a responsáveis nas unidades.
     </p>
     <details class="page__more">
       <summary>Regras dos papéis e atribuição</summary>
       <p>
-        Para atribuir papéis de gestão, a pessoa precisa de <strong>conta registada</strong> e vínculo ao
-        condomínio (por exemplo convite aceite ou unidade). O síndico só é alterado por
-        <strong>troca</strong>: atribuir um novo síndico substitui o anterior. Apenas o titular ou o
-        síndico podem alterar papéis; os restantes perfis de gestão veem a lista em leitura.
+        Papéis de gestão (síndico, subsíndico, administrador) só podem ser dados ao
+        <strong>titular da conta</strong> ou a pessoas que já figurem como
+        <strong>responsáveis</strong> em alguma unidade (com conta associada à ficha, em
+        Unidades). O síndico só é alterado por <strong>troca</strong>: um novo síndico substitui o
+        anterior. Apenas o titular ou o síndico alteram papéis; os restantes perfis de gestão veem a
+        lista em leitura.
       </p>
     </details>
   </header>
@@ -194,7 +196,8 @@
             <header class="card__head card__head--tight">
               <h2 class="card__title">Atribuir papel</h2>
               <p class="card__subtitle">
-                Identifique a conta pelo e-mail e confirme o papel. Síndico substitui o atual.
+                Escolha um responsável de unidade (ou o titular) e confirme o papel. Síndico substitui
+                o atual. Opcionalmente pode identificar por e-mail.
               </p>
             </header>
             <form
@@ -204,7 +207,27 @@
               novalidate
             >
               <label class="field">
-                <span class="field__label">E-mail da conta</span>
+                <span class="field__label">Responsável numa unidade</span>
+                <select
+                  class="input"
+                  [value]="selectedEligibleUserId()"
+                  (change)="onEligiblePick($event)"
+                  [disabled]="busy() || eligibleAccounts().length === 0"
+                >
+                  <option value="">— Escolher na lista —</option>
+                  @for (e of eligibleAccounts(); track e.userId) {
+                    <option [value]="e.userId">{{ eligibleOptionLabel(e) }}</option>
+                  }
+                </select>
+                @if (eligibleAccounts().length === 0) {
+                  <span class="field__hint muted"
+                    >Nenhuma conta elegível: associe responsáveis às unidades (com usuário na
+                    ficha).</span
+                  >
+                }
+              </label>
+              <label class="field">
+                <span class="field__label">Ou e-mail da conta</span>
                 <input
                   type="email"
                   class="input"

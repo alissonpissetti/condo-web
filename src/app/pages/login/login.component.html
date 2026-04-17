@@ -16,7 +16,7 @@
 
   <div class="card">
     <h1>Entrar</h1>
-    <p class="sub">Email e senha, ou código enviado por SMS ao seu número registado.</p>
+    <p class="sub">E-mail e senha, ou código enviado por SMS ao seu número cadastrado.</p>
 
     <div class="mode-tabs" role="tablist" aria-label="Forma de login">
       <button
@@ -68,7 +68,7 @@
         </label>
 
         <button type="submit" class="btn primary" [disabled]="submitting()">
-          {{ submitting() ? 'A entrar…' : 'Entrar' }}
+          {{ submitting() ? 'Entrando…' : 'Entrar' }}
         </button>
       </form>
     } @else {
@@ -124,7 +124,7 @@
               [disabled]="smsSending()"
               (click)="requestSmsCode()"
             >
-              {{ smsSending() ? 'A enviar…' : 'Reenviar código' }}
+              {{ smsSending() ? 'Enviando…' : 'Reenviar código' }}
             </button>
           </div>
         }
@@ -136,11 +136,11 @@
             [disabled]="smsSending()"
             (click)="requestSmsCode()"
           >
-            {{ smsSending() ? 'A enviar…' : 'Receber código por SMS' }}
+            {{ smsSending() ? 'Enviando…' : 'Receber código por SMS' }}
           </button>
         } @else {
           <button type="submit" class="btn primary" [disabled]="smsVerifying()">
-            {{ smsVerifying() ? 'A entrar…' : 'Entrar com o código' }}
+            {{ smsVerifying() ? 'Entrando…' : 'Entrar com o código' }}
           </button>
         }
       </form>
@@ -154,5 +154,11 @@
       Ainda sem conta?
       <a routerLink="/auth/register">Criar conta</a>
     </p>
+
+    <nav class="legal-footer" aria-label="Documentos legais">
+      <a routerLink="/privacidade">Política de privacidade</a>
+      <span class="legal-footer__sep" aria-hidden="true">·</span>
+      <a routerLink="/termos">Termos de uso</a>
+    </nav>
   </div>
 </div>

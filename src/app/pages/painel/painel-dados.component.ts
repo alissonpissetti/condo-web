@@ -92,7 +92,7 @@ export class PainelDadosComponent implements OnInit {
   protected readonly cepLookupLoading = signal(false);
   /** Já existe ficha `people` associada — enviamos o bloco `person` em cada salvamento. */
   protected readonly hasPersonProfile = signal(false);
-  /** CPF que veio do servidor (para não enviar `cpf: ""` e apagar sem o utilizador o limpar). */
+  /** CPF que veio do servidor (para não enviar `cpf: ""` e apagar sem o usuário o limpar). */
   private readonly initialPersonCpf = signal<string | null>(null);
 
   protected readonly accountSummary = signal<{
@@ -137,7 +137,7 @@ export class PainelDadosComponent implements OnInit {
         this.personRecordId.set(me.person?.id ?? null);
         this.accountSummary.set({
           id: me.id,
-          createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-PT', {
+          createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-BR', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
@@ -180,7 +180,7 @@ export class PainelDadosComponent implements OnInit {
       '',
     );
     if (digits.length !== 8) {
-      this.cepLookupError.set('Introduza um CEP com 8 dígitos.');
+      this.cepLookupError.set('Informe um CEP com 8 dígitos.');
       return;
     }
     this.cepLookupLoading.set(true);
@@ -242,7 +242,7 @@ export class PainelDadosComponent implements OnInit {
         this.personRecordId.set(me.person?.id ?? null);
         this.accountSummary.set({
           id: me.id,
-          createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-PT', {
+          createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-BR', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',

@@ -188,3 +188,30 @@ label {
     }
   }
 }
+
+.legal-footer {
+  margin: 1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+
+  a {
+    color: var(--muted);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+  }
+}
+
+.legal-footer__sep {
+  user-select: none;
+  opacity: 0.7;
+}

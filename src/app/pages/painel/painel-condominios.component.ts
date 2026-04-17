@@ -341,6 +341,9 @@ export class PainelCondominiosComponent implements OnInit {
       next: (rows) => {
         this.condominiums.set(rows);
         this.selectedCondo.hydrateFromList(rows.map((r) => r.id));
+        if (rows.length === 1 && this.selectedCondo.selectedId() !== rows[0].id) {
+          this.selectedCondo.setSelected(rows[0].id);
+        }
         this.loadingList.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -348,6 +351,13 @@ export class PainelCondominiosComponent implements OnInit {
         this.loadError.set(this.messageFromHttp(err));
       },
     });
+  }
+
+  selectCondominiumFromRow(id: string): void {
+    if (this.selectedCondo.selectedId() === id) {
+      return;
+    }
+    this.selectedCondo.setSelected(id);
   }
 
   create(): void {
@@ -389,6 +399,9 @@ export class PainelCondominiosComponent implements OnInit {
   }
 
   remove(c: Condominium): void {
+    if (!this.isCondominiumOwner(c)) {
+      return;
+    }
     this.deleteError.set(null);
     if (
       !confirm(

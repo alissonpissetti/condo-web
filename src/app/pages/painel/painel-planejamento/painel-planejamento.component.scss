@@ -411,11 +411,44 @@
 }
 
 .plan-list-body {
-  padding: 0 1.25rem 1.15rem;
+  padding: 1.15rem 1.25rem 1.25rem;
 }
 
 .plan-list-empty {
   margin: 0;
+  padding: 2.25rem 1.25rem;
+  border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface-2, #f8fafc) 55%, transparent);
+  color: var(--muted);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+
+  &__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-bottom: 0.35rem;
+    color: color-mix(in srgb, var(--accent) 55%, var(--muted));
+    opacity: 0.85;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 650;
+    color: var(--text);
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-width: 28rem;
+    color: var(--muted);
+  }
 }
 
 .plan-poll-list {

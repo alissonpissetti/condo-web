@@ -1,0 +1,107 @@
+<section class="upgrade-page">
+  <header class="upgrade-page__header">
+    <p class="upgrade-page__eyebrow">Plano atual</p>
+    <h1 class="upgrade-page__title">
+      @if (requestedFeatureLabel(); as label) {
+        {{ label }} está disponível em um plano superior
+      } @else {
+        Recurso bloqueado neste plano
+      }
+    </h1>
+    @if (planName()) {
+      <p class="upgrade-page__lead">
+        Seu condomínio está no plano <strong>{{ planName() }}</strong>. Alguns
+        módulos do painel não estão incluídos nesse plano.
+      </p>
+    } @else if (!loading()) {
+      <p class="upgrade-page__lead">
+        Alguns módulos do painel não estão incluídos no plano atual deste
+        condomínio.
+      </p>
+    }
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Carregando informações do plano…</p>
+  } @else {
+    <div class="upgrade-card">
+      <div class="upgrade-card__icon" aria-hidden="true">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          width="32"
+          height="32"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+          <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+          <circle cx="12" cy="15.5" r="1.2" fill="currentColor"></circle>
+        </svg>
+      </div>
+      <div class="upgrade-card__content">
+        @if (requestedFeatureLabel(); as label) {
+          <h2 class="upgrade-card__title">
+            Libere <strong>{{ label }}</strong>
+          </h2>
+          <p class="upgrade-card__text">
+            Para usar este módulo, altere o plano do condomínio em «Meus
+            condomínios» e escolha um plano que inclua este recurso.
+          </p>
+        } @else {
+          <h2 class="upgrade-card__title">Expanda seu plano</h2>
+          <p class="upgrade-card__text">
+            Escolha um plano que inclua os módulos bloqueados para aproveitar
+            todos os recursos do painel.
+          </p>
+        }
+
+        @if (blockedFeatures().length > 0) {
+          <div class="upgrade-card__blocked">
+            <p class="upgrade-card__blocked-title">
+              Recursos bloqueados no plano atual:
+            </p>
+            <ul class="upgrade-card__blocked-list">
+              @for (k of blockedFeatures(); track k) {
+                <li>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>{{ featureLabels[k] }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <div class="upgrade-card__actions">
+          <a
+            class="btn primary"
+            [routerLink]="['/painel/condominios']"
+            >Alterar plano do condomínio</a
+          >
+          <a
+            class="btn ghost"
+            [routerLink]="['/painel/condominio', condoId(), 'editar']"
+            >Voltar ao condomínio</a
+          >
+        </div>
+      </div>
+    </div>
+  }
+</section>

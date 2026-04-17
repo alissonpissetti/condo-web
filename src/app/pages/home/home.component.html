@@ -26,22 +26,11 @@
 <main>
   <section class="hero layout-box">
     <div class="hero__inner">
-      <div class="hero__logo-slot">
-        <img
-          class="hero__logo"
-          src="/logo-dark.png"
-          width="677"
-          height="369"
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-        />
-      </div>
       <p class="eyebrow">Gestão de condomínios online</p>
       <h1>Administre o seu condomínio com clareza e segurança</h1>
       <p class="lede">
-        O Meu Condomínio centraliza informações, unidades e agrupamentos num só
-        lugar — comece em minutos com a sua conta.
+        Centralize informações, unidades e agrupamentos num só lugar — comece
+        em minutos com a sua conta.
       </p>
       <div class="hero__ctas">
         @if (!auth.isAuthenticated()) {
@@ -194,6 +183,13 @@
       <span class="footer-name">Meu Condomínio</span>
       <span class="footer-year">· {{ year }}</span>
     </div>
-    <span class="muted">Plataforma em evolução contínua</span>
+    <div class="footer-meta">
+      <span class="muted">Plataforma em evolução contínua</span>
+      <nav class="footer-legal" aria-label="Documentos legais">
+        <a routerLink="/privacidade">Política de privacidade</a>
+        <span class="footer-legal__sep" aria-hidden="true">·</span>
+        <a routerLink="/termos">Termos de uso</a>
+      </nav>
+    </div>
   </div>
 </footer>

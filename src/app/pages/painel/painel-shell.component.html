@@ -1,14 +1,75 @@
-<div class="shell">
-  <aside class="sidebar" aria-label="Menu principal">
-    <a routerLink="/" class="brand" aria-label="Meu Condomínio — início">
-      <img
-        class="brand-logo"
-        src="/logo-white.png"
-        width="677"
-        height="369"
-        alt=""
-      />
+<div class="shell" [class.shell--mobile-nav-open]="mobileNavOpen()">
+  <header class="mobile-topbar">
+    <button
+      type="button"
+      class="mobile-topbar__menu"
+      [attr.aria-expanded]="mobileNavOpen()"
+      aria-controls="painel-sidebar"
+      aria-label="Abrir menu"
+      (click)="toggleMobileNav()"
+    >
+      <span class="mobile-topbar__menu-lines" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+    </button>
+    <a routerLink="/" class="mobile-topbar__brand" aria-label="Meu Condomínio — início">
+      <img src="/logo-white.png" alt="" width="677" height="369" />
     </a>
+    <span class="mobile-topbar__spacer" aria-hidden="true"></span>
+  </header>
+
+  <button
+    type="button"
+    class="sidebar-backdrop"
+    aria-label="Fechar menu"
+    (click)="closeMobileNav()"
+    tabindex="-1"
+  ></button>
+
+  <aside
+    id="painel-sidebar"
+    class="sidebar"
+    aria-label="Menu principal"
+  >
+    <div class="sidebar__head">
+      <a
+        routerLink="/"
+        class="brand"
+        aria-label="Meu Condomínio — início"
+        (click)="closeMobileNav()"
+      >
+        <img
+          class="brand-logo"
+          src="/logo-white.png"
+          width="677"
+          height="369"
+          alt=""
+        />
+      </a>
+      <button
+        type="button"
+        class="sidebar__close"
+        aria-label="Fechar menu"
+        (click)="closeMobileNav()"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 6l12 12M18 6l-12 12"></path>
+        </svg>
+      </button>
+    </div>
 
     <nav class="nav">
       <a
@@ -39,31 +100,153 @@
           </button>
           @if (gestaoExpanded()) {
             <div id="sidebar-gestao-panel" class="nav-section__panel">
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'editar']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Editar</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'unidades']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Unidades</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'convites']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Convites</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'membros']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Membros</a
-              >
-              @if (navData.tree().length > 0) {
+              @if (planFeatures.isBlocked('editCondominium')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'editCondominium' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>{{
+                    condoAccess.canManage() ? 'Editar' : 'Dados do condomínio'
+                  }}</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'editar']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >{{
+                    condoAccess.canManage() ? 'Editar' : 'Dados do condomínio'
+                  }}</a
+                >
+              }
+
+              @if (planFeatures.isBlocked('units')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'units' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Unidades</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'unidades']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Unidades</a
+                >
+              }
+
+              @if (condoAccess.canManage()) {
+                @if (planFeatures.isBlocked('invitations')) {
+                  <a
+                    class="nav-link--locked"
+                    [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                    [queryParams]="{ feature: 'invitations' }"
+                    title="Recurso não incluso no plano atual"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      class="nav-lock"
+                    >
+                      <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                    </svg>
+                    <span>Convites</span>
+                  </a>
+                } @else {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'convites']"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    >Convites</a
+                  >
+                }
+
+                @if (planFeatures.isBlocked('members')) {
+                  <a
+                    class="nav-link--locked"
+                    [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                    [queryParams]="{ feature: 'members' }"
+                    title="Recurso não incluso no plano atual"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      class="nav-lock"
+                    >
+                      <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                    </svg>
+                    <span>Membros</span>
+                  </a>
+                } @else {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'membros']"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    >Membros</a
+                  >
+                }
+              }
+
+              @if (
+                condoAccess.canManage() &&
+                navData.tree().length > 0 &&
+                !planFeatures.isBlocked('unitShortcuts')
+              ) {
                 <div class="nav-subsection">
                   <button
                     type="button"
@@ -97,6 +280,33 @@
                     </div>
                   }
                 </div>
+              } @else if (
+                condoAccess.canManage() && planFeatures.isBlocked('unitShortcuts')
+              ) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'unitShortcuts' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Atalhos por unidade</span>
+                </a>
               }
             </div>
           }
@@ -116,34 +326,147 @@
           </button>
           @if (financeiroExpanded()) {
             <div id="sidebar-financeiro-panel" class="nav-section__panel">
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'transacoes']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Transações</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'extrato']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Extrato</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'fundos']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Fundos</a
-              >
-              <a
-                [routerLink]="[
-                  '/painel/condominio',
-                  condoId,
-                  'taxas-condominiais',
-                ]"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Taxas condominiais</a
-              >
+              @if (condoAccess.canManage()) {
+                @if (planFeatures.isBlocked('financialTransactions')) {
+                  <a
+                    class="nav-link--locked"
+                    [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                    [queryParams]="{ feature: 'financialTransactions' }"
+                    title="Recurso não incluso no plano atual"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      class="nav-lock"
+                    >
+                      <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                    </svg>
+                    <span>Transações</span>
+                  </a>
+                } @else {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'transacoes']"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    >Transações</a
+                  >
+                }
+
+                @if (planFeatures.isBlocked('financialStatement')) {
+                  <a
+                    class="nav-link--locked"
+                    [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                    [queryParams]="{ feature: 'financialStatement' }"
+                    title="Recurso não incluso no plano atual"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      class="nav-lock"
+                    >
+                      <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                    </svg>
+                    <span>Extrato</span>
+                  </a>
+                } @else {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'extrato']"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    >Extrato</a
+                  >
+                }
+
+                @if (planFeatures.isBlocked('funds')) {
+                  <a
+                    class="nav-link--locked"
+                    [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                    [queryParams]="{ feature: 'funds' }"
+                    title="Recurso não incluso no plano atual"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      class="nav-lock"
+                    >
+                      <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                    </svg>
+                    <span>Fundos</span>
+                  </a>
+                } @else {
+                  <a
+                    [routerLink]="['/painel/condominio', condoId, 'fundos']"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    >Fundos</a
+                  >
+                }
+              }
+
+              @if (planFeatures.isBlocked('condoFees')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'condoFees' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Taxas condominiais</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="[
+                    '/painel/condominio',
+                    condoId,
+                    'taxas-condominiais',
+                  ]"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Taxas condominiais</a
+                >
+              }
             </div>
           }
         </div>
@@ -162,18 +485,73 @@
           </button>
           @if (planejamentoExpanded()) {
             <div id="sidebar-planejamento-panel" class="nav-section__panel">
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'planejamento']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Pautas</a
-              >
-              <a
-                [routerLink]="['/painel/condominio', condoId, 'documentos']"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-                >Documentos</a
-              >
+              @if (planFeatures.isBlocked('planning')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'planning' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Pautas</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'planejamento']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Pautas</a
+                >
+              }
+
+              @if (planFeatures.isBlocked('documents')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'documents' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Documentos</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'documentos']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Documentos</a
+                >
+              }
             </div>
           }
         </div>

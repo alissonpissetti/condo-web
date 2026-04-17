@@ -1,4 +1,11 @@
-import { Component, DestroyRef, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  HostListener,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   NavigationEnd,
@@ -9,7 +16,9 @@ import {
 } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { AuthService } from '../../core/auth.service';
+import { CondominiumAccessStore } from '../../core/condominium-access.store';
 import { CondominiumNavDataService } from '../../core/condominium-nav-data.service';
+import { CondominiumPlanFeaturesStore } from '../../core/condominium-plan-features.store';
 import { SelectedCondominiumService } from '../../core/selected-condominium.service';
 
 const SK_GESTAO = 'condo.sidebar.gestao';
@@ -50,6 +59,8 @@ export class PainelShellComponent {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly selectedCondo = inject(SelectedCondominiumService);
   protected readonly navData = inject(CondominiumNavDataService);
+  protected readonly condoAccess = inject(CondominiumAccessStore);
+  protected readonly planFeatures = inject(CondominiumPlanFeaturesStore);
 
   protected readonly gestaoExpanded = signal(
     readSidebarBool(SK_GESTAO, true),
@@ -64,10 +75,30 @@ export class PainelShellComponent {
     readSidebarBool(SK_UNIDADES_NESTED, true),
   );
 
+  /** Drawer lateral no mobile (off-canvas). Fechado por padrão. */
+  protected readonly mobileNavOpen = signal(false);
+
   constructor() {
     effect(() => {
       const id = this.selectedCondo.selectedId();
       this.navData.refresh(id);
+      this.condoAccess.refresh(id);
+      if (id) {
+        this.planFeatures.ensureLoaded(id);
+      } else {
+        this.planFeatures.clear();
+      }
+    });
+
+    /** Trava o scroll do body enquanto o drawer mobile está aberto. */
+    effect(() => {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      document.body.classList.toggle(
+        'painel-mobile-nav-open',
+        this.mobileNavOpen(),
+      );
     });
 
     this.router.events
@@ -76,6 +107,7 @@ export class PainelShellComponent {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => {
+        this.closeMobileNav();
         const url = this.router.url;
         if (
           /\/painel\/condominio\/[^/]+\/(editar|unidades|convites|membros)(\/|$|\?|#)/.test(
@@ -134,7 +166,27 @@ export class PainelShellComponent {
     writeSidebarBool(SK_UNIDADES_NESTED, v);
   }
 
+  toggleMobileNav(): void {
+    this.mobileNavOpen.update((v) => !v);
+  }
+
+  openMobileNav(): void {
+    this.mobileNavOpen.set(true);
+  }
+
+  closeMobileNav(): void {
+    if (this.mobileNavOpen()) {
+      this.mobileNavOpen.set(false);
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closeMobileNav();
+  }
+
   logout(): void {
+    this.closeMobileNav();
     this.selectedCondo.clear();
     this.auth.logout();
   }

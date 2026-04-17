@@ -334,7 +334,7 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   protected fmtDate(iso: string): string {
     try {
-      return new Date(iso).toLocaleString('pt-PT', {
+      return new Date(iso).toLocaleString('pt-BR', {
         dateStyle: 'short',
         timeStyle: 'short',
       });

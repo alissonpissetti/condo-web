@@ -14,6 +14,8 @@ export interface GroupingRow {
 export interface UnitPersonRef {
   id: string;
   fullName: string;
+  /** Telefone na ficha (formato normalizado na API quando aplicável). */
+  phone?: string | null;
 }
 
 export interface UnitRow {
@@ -23,9 +25,13 @@ export interface UnitRow {
   floor: string | null;
   notes: string | null;
   ownerPersonId: string | null;
+  /** Primeiro responsável (legado); preferir `responsiblePeople`. */
   responsiblePersonId: string | null;
   ownerPerson?: UnitPersonRef | null;
   responsiblePerson?: UnitPersonRef | null;
+  /** Todas as pessoas responsáveis pela unidade. */
+  responsiblePeople?: UnitPersonRef[];
+  responsibleDisplayName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,7 +57,11 @@ export class CondominiumManagementService {
       billingPixKey?: string;
       billingPixBeneficiaryName?: string;
       billingPixCity?: string;
+      transparencyPdfIncludePixQrCode?: boolean;
       syndicWhatsappForReceipts?: string;
+      billingChargeModel?: string;
+      billingDefaultDueDay?: number;
+      billingLateInterestBps?: number;
     },
   ): Observable<Condominium> {
     return this.http.patch<Condominium>(
@@ -177,6 +187,34 @@ export class CondominiumManagementService {
   ): Observable<void> {
     return this.http.delete<void>(
       `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/responsible`,
+    );
+  }
+
+  removeOneUnitResponsible(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+    personId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/responsible/${personId}`,
+    );
+  }
+
+  patchUnitPersonPhone(
+    condominiumId: string,
+    groupingId: string,
+    unitId: string,
+    personId: string,
+    body: { phone?: string },
+  ): Observable<{ id: string; fullName: string; phone: string | null }> {
+    return this.http.patch<{
+      id: string;
+      fullName: string;
+      phone: string | null;
+    }>(
+      `${environment.apiUrl}/condominiums/${condominiumId}/groupings/${groupingId}/units/${unitId}/people/${personId}/phone`,
+      body,
     );
   }
 
