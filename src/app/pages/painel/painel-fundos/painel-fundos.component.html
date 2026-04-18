@@ -12,23 +12,39 @@
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <section class="form-card">
-      <div class="form-card__head">
-        <h2 class="form-card__title">
-          {{ editingId() ? 'Editar fundo' : 'Criar fundo' }}
-        </h2>
-        <p class="form-card__lede">
-          @if (editingId()) {
-            Altere os blocos abaixo e salve. O período do modo parcelado é
-            recalculado a partir do total, parcelas e 1.ª mensalidade.
-          } @else {
-            Preencha por blocos. O modo <strong>parcelado</strong> calcula o período
-            nas mensalidades a partir da 1.ª data e do número de parcelas.
-          }
-        </p>
-      </div>
+    <section class="form-card fund-form-card">
+      @if (!editingId()) {
+        <button
+          type="button"
+          class="fund-create-toggle"
+          (click)="toggleCreateFundExpanded()"
+          [attr.aria-expanded]="createFundExpanded()"
+          aria-controls="fund-create-panel"
+        >
+          <span class="fund-create-toggle__label">Criar fundo</span>
+          <span class="fund-create-toggle__hint" aria-hidden="true">{{
+            createFundExpanded() ? 'Recolher' : 'Expandir'
+          }}</span>
+        </button>
+      }
+      @if (editingId() || createFundExpanded()) {
+        <div id="fund-create-panel">
+          <div class="form-card__head">
+            <h2 class="form-card__title">
+              {{ editingId() ? 'Editar fundo' : 'Criar fundo' }}
+            </h2>
+            <p class="form-card__lede">
+              @if (editingId()) {
+                Altere os blocos abaixo e salve. O período do modo parcelado é
+                recalculado a partir do total, parcelas e 1.ª mensalidade.
+              } @else {
+                Preencha por blocos. O modo <strong>parcelado</strong> calcula o período
+                nas mensalidades a partir da 1.ª data e do número de parcelas.
+              }
+            </p>
+          </div>
 
-      <form class="fund-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <form class="fund-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         @if (formError(); as fe) {
           <p class="error error--form" role="alert">{{ fe }}</p>
         }
@@ -407,7 +423,9 @@
             }}
           </button>
         </div>
-      </form>
+          </form>
+        </div>
+      }
     </section>
 
     <section class="list-section" aria-labelledby="fundos-lista-titulo">

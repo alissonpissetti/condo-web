@@ -1,0 +1,192 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Comunicação</h1>
+    <p class="page__intro">
+      Informativos do condomínio com anexos. O síndico cria um rascunho, anexa ficheiros e
+      envia por e-mail e SMS (quando os destinatários têm contactos válidos na conta). Os
+      moradores veem os enviados e a leitura fica registrada ao abrir.
+      <span class="page__intro-muted">WhatsApp: em breve.</span>
+    </p>
+  </header>
+
+  @if (readConfirmedBanner()) {
+    <p class="banner banner--ok" role="status">
+      Leitura registrada (link do e-mail).
+      <button type="button" class="btn ghost sm" (click)="dismissReadBanner()">Fechar</button>
+    </p>
+  }
+
+  @if (actionError(); as ae) {
+    <p class="error" role="alert">{{ ae }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    @if (selected(); as sel) {
+      <div class="detail-head">
+        <button type="button" class="btn ghost sm" (click)="closeDetail()">← Voltar à lista</button>
+      </div>
+
+      <article class="form-card comm-detail">
+        <h2 class="form-card__title">{{ sel.title }}</h2>
+        <p class="muted sm">
+          Estado: <strong>{{ sel.status === 'sent' ? 'Enviado' : 'Rascunho' }}</strong>
+          @if (sel.sentAt) {
+            · {{ fmtSentAt(sel.sentAt) }}
+          }
+        </p>
+
+        @if (sel.status === 'sent') {
+          <div class="comm-body poll-body-html" [innerHTML]="safeHtml(sel.body)"></div>
+        } @else if (isMgmt()) {
+          <form [formGroup]="draftForm" (ngSubmit)="saveDraft()" class="comm-draft-form">
+            <label class="field field--block">
+              <span class="field__label">Título</span>
+              <input class="input" type="text" formControlName="title" maxlength="512" />
+            </label>
+            <label class="field field--block">
+              <span class="field__label">Mensagem</span>
+              <app-poll-body-editor formControlName="body" />
+            </label>
+            <div class="comm-draft-actions">
+              <button type="submit" class="btn primary" [disabled]="busy()">Salvar rascunho</button>
+              <button
+                type="button"
+                class="btn primary"
+                [disabled]="busy()"
+                (click)="sendSelected()"
+              >
+                Enviar
+              </button>
+            </div>
+          </form>
+        } @else {
+          <p class="muted">Este informativo ainda não foi enviado.</p>
+        }
+
+        @if (sel.attachments?.length) {
+          <h3 class="comm-subh">Anexos</h3>
+          <ul class="comm-att-list">
+            @for (a of sel.attachments; track a.id) {
+              <li class="comm-att-row">
+                <span>{{ a.originalFilename }}</span>
+                <span class="muted sm"
+                  >{{ a.mimeType }} · {{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span
+                >
+                <div class="comm-att-row__actions">
+                  <button
+                    type="button"
+                    class="btn ghost sm"
+                    [disabled]="busy()"
+                    (click)="downloadAttachment(a)"
+                  >
+                    Download
+                  </button>
+                  @if (isMgmt() && sel.status === 'draft') {
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="removeAttachment(a)"
+                    >
+                      Remover
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (isMgmt() && sel.status === 'draft') {
+          <div class="comm-upload">
+            <label class="btn ghost sm comm-file-label">
+              Adicionar anexo
+              <input
+                type="file"
+                class="sr-only"
+                [disabled]="busy()"
+                (change)="onAttachmentSelected($event)"
+              />
+            </label>
+            <p class="muted sm">
+              Tipos permitidos: PDF, imagens, Word, texto, áudio e vídeo (MP4, WebM, MOV), com
+              limites de tamanho definidos na API.
+            </p>
+          </div>
+        }
+
+        @if (isMgmt() && sel.status === 'sent' && sel.recipients?.length) {
+          <h3 class="comm-subh">Destinatários</h3>
+          <div class="comm-table-wrap">
+            <table class="comm-table">
+              <thead>
+                <tr>
+                  <th>E-mail</th>
+                  <th>SMS</th>
+                  <th>Leitura</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of sel.recipients; track r.id) {
+                  <tr>
+                    <td>
+                      <span [ngClass]="{ 'text-err': r.emailStatus === 'failed' }">{{
+                        channelLabel(r.emailStatus)
+                      }}</span>
+                      @if (r.emailError) {
+                        <span class="muted sm">{{ r.emailError }}</span>
+                      }
+                    </td>
+                    <td>
+                      <span [ngClass]="{ 'text-err': r.smsStatus === 'failed' }">{{
+                        channelLabel(r.smsStatus)
+                      }}</span>
+                      @if (r.smsError) {
+                        <span class="muted sm">{{ r.smsError }}</span>
+                      }
+                    </td>
+                    <td>{{ recipientRead(r) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </article>
+    } @else {
+      @if (isMgmt()) {
+        <div class="list-toolbar">
+          <button type="button" class="btn primary" [disabled]="busy()" (click)="createDraft()">
+            Novo informativo
+          </button>
+        </div>
+      }
+
+      @if (items().length === 0) {
+        <p class="muted">Nenhum informativo neste condomínio.</p>
+      } @else {
+        <ul class="comm-list">
+          @for (c of items(); track c.id) {
+            <li>
+              <button type="button" class="comm-list__btn" (click)="navigateToDetail(c.id)">
+                <span class="comm-list__title">{{ c.title }}</span>
+                <span
+                  class="comm-pill"
+                  [ngClass]="c.status === 'sent' ? 'comm-pill--sent' : 'comm-pill--draft'"
+                  >{{ c.status === 'sent' ? 'Enviado' : 'Rascunho' }}</span
+                >
+                @if (c.sentAt) {
+                  <span class="muted sm">{{ fmtSentAt(c.sentAt) }}</span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+</div>

@@ -142,6 +142,10 @@
   &--amber {
     background: linear-gradient(180deg, #f59e0b, #d97706);
   }
+
+  &--violet {
+    background: linear-gradient(180deg, #6366f1, #4f46e5);
+  }
 }
 
 .form-card__body {
@@ -359,4 +363,41 @@
   .field--uf {
     max-width: none;
   }
+}
+
+.sig-pad__status {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.sig-pad {
+  margin-bottom: 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.sig-pad__canvas {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.sig-pad__msg {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.sig-pad__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }

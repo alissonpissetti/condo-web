@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import {
   FormBuilder,
+  FormsModule,
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
@@ -10,16 +11,20 @@ import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   PlanningApiService,
   type CondominiumDocumentRow,
+  type PlanningPoll,
 } from '../../../core/planning-api.service';
 
+/**
+ * Fluxos de atas em PDF (antes na rota «Documentos»), agora integrados em Planejamento.
+ */
 @Component({
-  selector: 'app-painel-documentos',
+  selector: 'app-painel-planejamento-atas-section',
   standalone: true,
-  imports: [ReactiveFormsModule],
-  templateUrl: './painel-documentos.component.html',
-  styleUrl: './painel-documentos.component.scss',
+  imports: [ReactiveFormsModule, FormsModule],
+  templateUrl: './painel-planejamento-atas-section.component.html',
+  styleUrl: './painel-planejamento-atas-section.component.scss',
 })
-export class PainelDocumentosComponent implements OnInit {
+export class PainelPlanejamentoAtasSectionComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(PlanningApiService);
   private readonly fb = inject(FormBuilder);
@@ -39,6 +44,16 @@ export class PainelDocumentosComponent implements OnInit {
     adminUserIds: [''],
   });
 
+  protected readonly meetingTemplateForm = this.fb.nonNullable.group({
+    title: ['', [Validators.required, Validators.minLength(3)]],
+    meetingAt: [''],
+    location: [''],
+    agendaNotes: [''],
+  });
+
+  protected readonly polls = signal<PlanningPoll[]>([]);
+  protected pollForMinutesId = '';
+
   private condominiumId = '';
 
   ngOnInit(): void {
@@ -50,10 +65,30 @@ export class PainelDocumentosComponent implements OnInit {
     }
     this.condominiumId = id;
     this.api.access(id).subscribe({
-      next: (a) => this.access.set(a.access as { kind: string; role?: string }),
+      next: (a) =>
+        this.access.set(a.access as { kind: string; role?: string }),
       error: () => this.access.set(null),
     });
     this.reload();
+    this.api.listPolls(this.condominiumId).subscribe({
+      next: (list) => this.polls.set(list),
+      error: () => this.polls.set([]),
+    });
+  }
+
+  protected docKindLabel(kind: string): string {
+    switch (kind) {
+      case 'assembly_minutes_draft':
+        return 'Ata de assembleia (rascunho)';
+      case 'assembly_minutes_final':
+        return 'Ata de assembleia (definitiva)';
+      case 'meeting_minutes_draft':
+        return 'Ata de reunião (modelo)';
+      case 'meeting_minutes_final':
+        return 'Ata de reunião (definitiva)';
+      default:
+        return kind;
+    }
   }
 
   protected isSyndicOrOwner(): boolean {
@@ -89,6 +124,60 @@ export class PainelDocumentosComponent implements OnInit {
         a.download = `${d.title.replace(/\s+/g, '_')}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.actionError.set(this.msg(err));
+      },
+    });
+  }
+
+  submitMeetingTemplate(): void {
+    if (this.meetingTemplateForm.invalid) {
+      this.meetingTemplateForm.markAllAsTouched();
+      return;
+    }
+    const v = this.meetingTemplateForm.getRawValue();
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.api
+      .createMeetingMinutesTemplate(this.condominiumId, {
+        title: v.title.trim(),
+        meetingAt: v.meetingAt.trim() || undefined,
+        location: v.location.trim() || undefined,
+        agendaNotes: v.agendaNotes.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.meetingTemplateForm.reset({
+            title: '',
+            meetingAt: '',
+            location: '',
+            agendaNotes: '',
+          });
+          this.reload();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.msg(err));
+        },
+      });
+  }
+
+  generateMinutesFromPoll(): void {
+    const pollId = this.pollForMinutesId.trim();
+    if (!pollId) {
+      this.actionError.set('Selecione uma pauta.');
+      return;
+    }
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.api.generateMinutesDraft(this.condominiumId, pollId).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.pollForMinutesId = '';
+        this.reload();
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);

@@ -188,6 +188,68 @@
           </div>
         </section>
 
+        <section class="form-card" aria-labelledby="sec-assinatura">
+          <div class="form-card__accent form-card__accent--violet" aria-hidden="true"></div>
+          <div class="form-card__body">
+            <div class="form-card__head">
+              <h2 id="sec-assinatura" class="form-card__title">Assinatura digital</h2>
+              <p class="form-card__hint">
+                Desenhe com o rato ou o dedo. A imagem é gravada na sua conta e usada
+                automaticamente nos PDFs de atas e modelos que gerar na aplicação.
+              </p>
+            </div>
+            @if (hasSavedSignature() && signatureRecordedLabel(); as sigLbl) {
+              <p class="sig-pad__status muted">
+                Assinatura registada em <strong>{{ sigLbl }}</strong>.
+              </p>
+            } @else {
+              <p class="sig-pad__status muted">Ainda não tem assinatura gravada.</p>
+            }
+            <div class="sig-pad">
+              <canvas
+                #sigPad
+                class="sig-pad__canvas"
+                aria-label="Área para desenhar a assinatura"
+                (pointerdown)="sigPointerDown($event)"
+                (pointermove)="sigPointerMove($event)"
+                (pointerup)="sigPointerUp($event)"
+                (pointercancel)="sigPointerUp($event)"
+              ></canvas>
+            </div>
+            @if (sigMessage(); as sm) {
+              <p class="sig-pad__msg" role="status">{{ sm }}</p>
+            }
+            <div class="sig-pad__actions">
+              <button
+                type="button"
+                class="btn btn--secondary"
+                [disabled]="sigBusy()"
+                (click)="clearSignaturePad()"
+              >
+                Limpar desenho
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                [disabled]="sigBusy()"
+                (click)="saveSignature()"
+              >
+                {{ sigBusy() ? 'A gravar…' : 'Gravar assinatura' }}
+              </button>
+              @if (hasSavedSignature()) {
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  [disabled]="sigBusy()"
+                  (click)="deleteSignature()"
+                >
+                  Apagar assinatura guardada
+                </button>
+              }
+            </div>
+          </div>
+        </section>
+
         <section class="form-card" aria-labelledby="sec-senha">
           <div class="form-card__accent form-card__accent--amber" aria-hidden="true"></div>
           <div class="form-card__body">

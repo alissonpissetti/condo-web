@@ -135,10 +135,23 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/documentos',
+        pathMatch: 'full',
+        redirectTo: 'condominio/:condominiumId/planejamento',
+      },
+      {
+        path: 'condominio/:condominiumId/comunicacao/:communicationId',
         canActivate: [selectedCondominiumGuard, planFeatureGuard('documents')],
         loadComponent: () =>
-          import('./painel-documentos/painel-documentos.component').then(
-            (m) => m.PainelDocumentosComponent,
+          import('./painel-comunicacao/painel-comunicacao.component').then(
+            (m) => m.PainelComunicacaoComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/comunicacao',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('documents')],
+        loadComponent: () =>
+          import('./painel-comunicacao/painel-comunicacao.component').then(
+            (m) => m.PainelComunicacaoComponent,
           ),
       },
     ],

@@ -74,6 +74,8 @@ export class PainelFundosComponent implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly editingId = signal<string | null>(null);
+  /** Formulário «Criar fundo» recolhido por defeito (só criação; edição abre sempre). */
+  protected readonly createFundExpanded = signal(false);
 
   protected readonly allocKind = signal<AllocKind>('all_units_equal');
   protected readonly selectedUnitIds = signal<string[]>([]);
@@ -145,6 +147,10 @@ export class PainelFundosComponent implements OnInit {
     this.parcelEntryMode.set(mode);
   }
 
+  toggleCreateFundExpanded(): void {
+    this.createFundExpanded.update((v) => !v);
+  }
+
   startEdit(f: FinancialFund): void {
     this.formError.set(null);
     this.editingId.set(f.id);
@@ -165,6 +171,7 @@ export class PainelFundosComponent implements OnInit {
 
   cancelEdit(): void {
     this.editingId.set(null);
+    this.createFundExpanded.set(false);
     this.formError.set(null);
     this.parcelEntryMode.set('byInstallments');
     this.form.reset({

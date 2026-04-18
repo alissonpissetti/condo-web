@@ -9,6 +9,17 @@ export function todayLocalIsoDate(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Data civil local há `daysAgo` dias (AAAA-MM-DD), à meia-noite local. */
+export function localIsoDateDaysAgo(daysAgo: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - daysAgo);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Exibição de datas em pt-BR (DD/MM/AAAA).
  * Aceita YYYY-MM-DD ou ISO com hora; para instantes usa o **calendário UTC**

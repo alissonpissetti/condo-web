@@ -36,7 +36,7 @@ export interface GovernanceEligibleAccount {
 }
 
 export type PollStatus = 'draft' | 'open' | 'closed' | 'decided';
-export type AssemblyType = 'ordinary' | 'election';
+export type AssemblyType = 'ordinary' | 'election' | 'ata';
 
 export interface PlanningPollOption {
   id: string;
@@ -62,6 +62,8 @@ export interface PlanningPoll {
   condominiumId: string;
   title: string;
   body: string | null;
+  /** Data civil de competência (AAAA-MM-DD). */
+  competenceDate?: string;
   opensAt: string;
   closesAt: string;
   status: PollStatus;
@@ -179,9 +181,34 @@ export class PlanningApiService {
     );
   }
 
-  listPolls(condominiumId: string): Observable<PlanningPoll[]> {
+  listPolls(
+    condominiumId: string,
+    params?: {
+      q?: string;
+      registeredFrom?: string;
+      registeredTo?: string;
+      limit?: number;
+    },
+  ): Observable<PlanningPoll[]> {
+    let httpParams = new HttpParams();
+    const p = params ?? {};
+    const q = p.q?.trim();
+    if (q) {
+      httpParams = httpParams.set('q', q);
+    } else {
+      if (p.registeredFrom?.trim()) {
+        httpParams = httpParams.set('registeredFrom', p.registeredFrom.trim());
+      }
+      if (p.registeredTo?.trim()) {
+        httpParams = httpParams.set('registeredTo', p.registeredTo.trim());
+      }
+    }
+    if (p.limit != null) {
+      httpParams = httpParams.set('limit', String(p.limit));
+    }
     return this.http.get<PlanningPoll[]>(
       `${this.base}/condominiums/${condominiumId}/planning/polls`,
+      { params: httpParams },
     );
   }
 
@@ -213,6 +240,7 @@ export class PlanningApiService {
     body: {
       title: string;
       body?: string;
+      competenceDate?: string;
       opensAt: string;
       closesAt: string;
       assemblyType: AssemblyType;
@@ -236,6 +264,16 @@ export class PlanningApiService {
   closePoll(condominiumId: string, pollId: string): Observable<PlanningPoll> {
     return this.http.post<PlanningPoll>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/close`,
+      {},
+    );
+  }
+
+  finalizeAtaPoll(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<PlanningPoll> {
+    return this.http.post<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/finalize-ata`,
       {},
     );
   }
@@ -268,8 +306,12 @@ export class PlanningApiService {
     patch: {
       body?: string;
       title?: string;
+      competenceDate?: string;
       opensAt?: string;
       closesAt?: string;
+      assemblyType?: AssemblyType;
+      allowMultiple?: boolean;
+      options?: { label: string }[];
     },
   ): Observable<PlanningPoll> {
     return this.http.patch<PlanningPoll>(
@@ -335,6 +377,21 @@ export class PlanningApiService {
     return this.http.post<CondominiumDocumentRow>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/minutes/draft`,
       {},
+    );
+  }
+
+  createMeetingMinutesTemplate(
+    condominiumId: string,
+    body: {
+      title: string;
+      meetingAt?: string;
+      location?: string;
+      agendaNotes?: string;
+    },
+  ): Observable<CondominiumDocumentRow> {
+    return this.http.post<CondominiumDocumentRow>(
+      `${this.base}/condominiums/${condominiumId}/documents/meeting-minutes-template`,
+      body,
     );
   }
 

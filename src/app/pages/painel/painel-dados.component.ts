@@ -5,7 +5,14 @@ import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { BRAZIL_STATES } from '../../core/br-states';
 import { CepService } from '../../core/cep.service';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -102,6 +109,19 @@ export class PainelDadosComponent implements OnInit {
   /** Id da entidade `people` quando existir. */
   protected readonly personRecordId = signal<string | null>(null);
 
+  protected readonly hasSavedSignature = signal(false);
+  protected readonly signatureRecordedLabel = signal<string | null>(null);
+  protected readonly sigBusy = signal(false);
+  protected readonly sigMessage = signal<string | null>(null);
+
+  private readonly sigPad = viewChild<ElementRef<HTMLCanvasElement>>('sigPad');
+  private sigCtx: CanvasRenderingContext2D | null = null;
+  private readonly sigCssW = 440;
+  private readonly sigCssH = 150;
+  private sigDrawing = false;
+  private sigLastX = 0;
+  private sigLastY = 0;
+
   protected readonly form = this.fb.nonNullable.group(
     {
       email: ['', [Validators.required, Validators.email]],
@@ -135,6 +155,7 @@ export class PainelDadosComponent implements OnInit {
         this.hasPersonProfile.set(!!me.person);
         this.initialPersonCpf.set(me.person?.cpf ?? null);
         this.personRecordId.set(me.person?.id ?? null);
+        this.applySignatureMetaFromMe(me);
         this.accountSummary.set({
           id: me.id,
           createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-BR', {
@@ -163,6 +184,10 @@ export class PainelDadosComponent implements OnInit {
           },
         });
         this.loading.set(false);
+        setTimeout(() => {
+          this.initSignaturePad();
+          this.loadSavedSignatureOntoPad();
+        }, 0);
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
@@ -171,6 +196,208 @@ export class PainelDadosComponent implements OnInit {
         );
       },
     });
+  }
+
+  /** Repõe no canvas a imagem gravada no servidor (após reload). */
+  private loadSavedSignatureOntoPad(): void {
+    if (!this.hasSavedSignature()) {
+      return;
+    }
+    this.auth.getMySignatureBlob().subscribe({
+      next: (blob) => {
+        if (!blob || blob.size < 32) {
+          return;
+        }
+        const ref = this.sigPad();
+        if (!ref) {
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          if (!this.sigCtx) {
+            this.initSignaturePad();
+          }
+          const ctx = this.sigCtx;
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, this.sigCssW, this.sigCssH);
+          ctx.drawImage(img, 0, 0, this.sigCssW, this.sigCssH);
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => URL.revokeObjectURL(url);
+        img.src = url;
+      },
+      error: () => {
+        /* 404 ou rede — mantém canvas em branco */
+      },
+    });
+  }
+
+  protected initSignaturePad(): void {
+    const ref = this.sigPad();
+    if (!ref) {
+      return;
+    }
+    const el = ref.nativeElement;
+    const dpr = Math.min(
+      typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+      2,
+    );
+    el.width = Math.floor(this.sigCssW * dpr);
+    el.height = Math.floor(this.sigCssH * dpr);
+    el.style.width = `${this.sigCssW}px`;
+    el.style.height = `${this.sigCssH}px`;
+    const ctx = el.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2.1;
+    ctx.strokeStyle = '#0f172a';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, this.sigCssW, this.sigCssH);
+    this.sigCtx = ctx;
+  }
+
+  protected clearSignaturePad(): void {
+    this.initSignaturePad();
+    this.sigMessage.set(null);
+  }
+
+  protected sigPointerDown(ev: PointerEvent): void {
+    if (!this.sigCtx) {
+      this.initSignaturePad();
+    }
+    const ctx = this.sigCtx;
+    const el = this.sigPad()?.nativeElement;
+    if (!ctx || !el) {
+      return;
+    }
+    ev.preventDefault();
+    try {
+      el.setPointerCapture(ev.pointerId);
+    } catch {
+      /* ignorar */
+    }
+    const { x, y } = this.sigPadCoords(ev);
+    this.sigDrawing = true;
+    this.sigLastX = x;
+    this.sigLastY = y;
+  }
+
+  protected sigPointerMove(ev: PointerEvent): void {
+    if (!this.sigDrawing || !this.sigCtx) {
+      return;
+    }
+    ev.preventDefault();
+    const ctx = this.sigCtx;
+    const { x, y } = this.sigPadCoords(ev);
+    ctx.beginPath();
+    ctx.moveTo(this.sigLastX, this.sigLastY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    this.sigLastX = x;
+    this.sigLastY = y;
+  }
+
+  protected sigPointerUp(ev: PointerEvent): void {
+    if (!this.sigDrawing) {
+      return;
+    }
+    ev.preventDefault();
+    this.sigDrawing = false;
+    const el = this.sigPad()?.nativeElement;
+    if (el) {
+      try {
+        el.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* ignorar */
+      }
+    }
+  }
+
+  protected saveSignature(): void {
+    const el = this.sigPad()?.nativeElement;
+    if (!el) {
+      return;
+    }
+    this.sigBusy.set(true);
+    this.sigMessage.set(null);
+    const png = el.toDataURL('image/png');
+    this.auth.putMySignature(png).subscribe({
+      next: (me) => {
+        this.sigBusy.set(false);
+        this.sigMessage.set('Assinatura gravada. Passará a aparecer nos PDFs que gerar.');
+        this.applySignatureMetaFromMe(me);
+        setTimeout(() => {
+          this.initSignaturePad();
+          this.loadSavedSignatureOntoPad();
+        }, 0);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.sigBusy.set(false);
+        this.sigMessage.set(
+          this.messageFromHttp(err, 'Não foi possível gravar a assinatura.'),
+        );
+      },
+    });
+  }
+
+  protected deleteSignature(): void {
+    this.sigBusy.set(true);
+    this.sigMessage.set(null);
+    this.auth.deleteMySignature().subscribe({
+      next: (me) => {
+        this.sigBusy.set(false);
+        this.sigMessage.set('Assinatura removida.');
+        this.applySignatureMetaFromMe(me);
+        this.initSignaturePad();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.sigBusy.set(false);
+        this.sigMessage.set(
+          this.messageFromHttp(err, 'Não foi possível remover a assinatura.'),
+        );
+      },
+    });
+  }
+
+  private sigPadCoords(ev: PointerEvent): { x: number; y: number } {
+    const el = this.sigPad()?.nativeElement;
+    if (!el) {
+      return { x: 0, y: 0 };
+    }
+    const r = el.getBoundingClientRect();
+    const x = ((ev.clientX - r.left) / r.width) * this.sigCssW;
+    const y = ((ev.clientY - r.top) / r.height) * this.sigCssH;
+    return { x, y };
+  }
+
+  private applySignatureMetaFromMe(me: {
+    signatureRecordedAt?: string | null;
+  }): void {
+    const raw = me.signatureRecordedAt;
+    const iso =
+      raw != null && String(raw).trim() !== '' ? String(raw).trim() : null;
+    this.hasSavedSignature.set(!!iso);
+    this.signatureRecordedLabel.set(
+      iso
+        ? new Date(iso).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : null,
+    );
   }
 
   lookupCep(): void {
@@ -240,6 +467,7 @@ export class PainelDadosComponent implements OnInit {
         this.hasPersonProfile.set(!!me.person);
         this.initialPersonCpf.set(me.person?.cpf ?? null);
         this.personRecordId.set(me.person?.id ?? null);
+        this.applySignatureMetaFromMe(me);
         this.accountSummary.set({
           id: me.id,
           createdAtLabel: new Date(me.createdAt).toLocaleDateString('pt-BR', {

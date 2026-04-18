@@ -241,73 +241,6 @@
                   >
                 }
               }
-
-              @if (
-                condoAccess.canManage() &&
-                navData.tree().length > 0 &&
-                !planFeatures.isBlocked('unitShortcuts')
-              ) {
-                <div class="nav-subsection">
-                  <button
-                    type="button"
-                    class="nav-subsection__toggle"
-                    [attr.aria-expanded]="unidadesNestedExpanded()"
-                    aria-controls="sidebar-unidades-nested-panel"
-                    (click)="toggleUnidadesNested()"
-                  >
-                    <span class="nav-subsection__toggle-label"
-                      >Atalhos por unidade</span
-                    >
-                    <span class="nav-subsection__chevron" aria-hidden="true"></span>
-                  </button>
-                  @if (unidadesNestedExpanded()) {
-                    <div
-                      id="sidebar-unidades-nested-panel"
-                      class="nav-nested"
-                      aria-label="Atalhos por agrupamento"
-                    >
-                      @for (g of navData.tree(); track g.id) {
-                        <span class="nav-nested__label">{{ g.name }}</span>
-                        @for (u of g.units; track u.id) {
-                          <a
-                            [routerLink]="['/painel/condominio', condoId, 'unidades']"
-                            [fragment]="u.id"
-                            class="nav-nested__link"
-                            >{{ u.identifier }}</a
-                          >
-                        }
-                      }
-                    </div>
-                  }
-                </div>
-              } @else if (
-                condoAccess.canManage() && planFeatures.isBlocked('unitShortcuts')
-              ) {
-                <a
-                  class="nav-link--locked"
-                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
-                  [queryParams]="{ feature: 'unitShortcuts' }"
-                  title="Recurso não incluso no plano atual"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                    class="nav-lock"
-                  >
-                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
-                  </svg>
-                  <span>Atalhos por unidade</span>
-                </a>
-              }
             </div>
           }
         </div>
@@ -508,14 +441,14 @@
                     <rect x="5" y="11" width="14" height="9" rx="2"></rect>
                     <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
                   </svg>
-                  <span>Pautas</span>
+                  <span>Pautas/Atas</span>
                 </a>
               } @else {
                 <a
                   [routerLink]="['/painel/condominio', condoId, 'planejamento']"
                   routerLinkActive="active"
                   [routerLinkActiveOptions]="{ exact: true }"
-                  >Pautas</a
+                  >Pautas/Atas</a
                 >
               }
 
@@ -542,14 +475,14 @@
                     <rect x="5" y="11" width="14" height="9" rx="2"></rect>
                     <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
                   </svg>
-                  <span>Documentos</span>
+                  <span>Comunicação</span>
                 </a>
               } @else {
                 <a
-                  [routerLink]="['/painel/condominio', condoId, 'documentos']"
+                  [routerLink]="['/painel/condominio', condoId, 'comunicacao']"
                   routerLinkActive="active"
-                  [routerLinkActiveOptions]="{ exact: true }"
-                  >Documentos</a
+                  [routerLinkActiveOptions]="{ exact: false }"
+                  >Comunicação</a
                 >
               }
             </div>

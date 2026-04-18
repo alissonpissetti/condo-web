@@ -41,6 +41,19 @@ import Quill from 'quill';
         font-size: 0.92rem;
         min-height: 9rem;
       }
+      .poll-body-editor .ql-editor {
+        line-height: 1.55;
+        min-height: 9rem;
+      }
+      .poll-body-editor .ql-editor p {
+        margin: 0 0 0.55em;
+      }
+      .poll-body-editor .ql-editor p:last-child {
+        margin-bottom: 0;
+      }
+      .poll-body-editor .ql-editor li {
+        margin: 0.15em 0;
+      }
     `,
   ],
   providers: [
@@ -66,11 +79,12 @@ export class PollBodyEditorComponent
     this.quill = new Quill(this.editorEl.nativeElement, {
       theme: 'snow',
       placeholder:
-        'Descrição opcional com formatação: títulos, listas, negrito, links…',
+        'Descrição opcional (títulos, listas, negrito…). Enter = novo parágrafo; Shift+Enter = nova linha no mesmo parágrafo.',
       modules: {
         toolbar: [
           [{ header: [2, 3, false] }],
           ['bold', 'italic', 'underline'],
+          [{ align: [] }],
           [{ list: 'ordered' }, { list: 'bullet' }],
           ['link'],
           ['clean'],

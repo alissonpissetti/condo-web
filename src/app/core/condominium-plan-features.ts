@@ -31,8 +31,8 @@ export const SAAS_PLAN_FEATURE_LABELS: Record<SaasPlanFeatureKey, string> = {
   financialStatement: 'Extrato',
   funds: 'Fundos',
   condoFees: 'Taxas condominiais',
-  planning: 'Pautas / planejamento',
-  documents: 'Documentos',
+  planning: 'Pautas/Atas',
+  documents: 'Comunicação',
 };
 
 export function defaultSaasPlanFeatures(): SaasPlanFeatures {

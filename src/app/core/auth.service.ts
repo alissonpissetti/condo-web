@@ -51,6 +51,8 @@ export interface MeProfile {
   phone: string | null;
   createdAt: string;
   person: MePersonProfile | null;
+  /** ISO 8601 quando existe assinatura digital gravada; null caso contrário. */
+  signatureRecordedAt?: string | null;
 }
 
 export interface UpdateMePersonPayload {
@@ -209,6 +211,23 @@ export class AuthService {
     person?: UpdateMePersonPayload;
   }): Observable<MeProfile> {
     return this.http.patch<MeProfile>(`${environment.apiUrl}/users/me`, body);
+  }
+
+  putMySignature(pngBase64: string): Observable<MeProfile> {
+    return this.http.put<MeProfile>(`${environment.apiUrl}/users/me/signature`, {
+      pngBase64,
+    });
+  }
+
+  deleteMySignature(): Observable<MeProfile> {
+    return this.http.delete<MeProfile>(`${environment.apiUrl}/users/me/signature`);
+  }
+
+  /** PNG gravado na conta (404 se não existir). */
+  getMySignatureBlob(): Observable<Blob> {
+    return this.http.get(`${environment.apiUrl}/users/me/signature`, {
+      responseType: 'blob',
+    });
   }
 
   logout(): void {

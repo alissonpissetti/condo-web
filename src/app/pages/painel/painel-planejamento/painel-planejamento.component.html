@@ -8,17 +8,15 @@
 
   @if (!detailPollId()) {
     <header class="page__header">
-      <h1>Pautas</h1>
+      <h1>Pautas/Atas</h1>
       <p class="page__intro">
-        Crie assembleias com várias opções de voto, escolha única ou múltipla por unidade,
-        descrição em texto formatado e anexos de referência. Encerre a votação, registe a
-        decisão e gere o rascunho da ata em PDF.
+        Crie assembleias com opções de voto (ou uma pauta só «Ata», sem votação no sistema),
+        descrição em texto formatado e anexos. Encerre, registre a decisão (quando houver
+        votação) ou conclua o registro da ata e gere o PDF.
       </p>
     </header>
 
-    @if (listLoading()) {
-      <p class="muted">Carregando…</p>
-    } @else if (loadError()) {
+    @if (loadError()) {
       <p class="plan-banner plan-banner--error" role="alert">{{ loadError() }}</p>
     } @else {
       <div class="plan-stack">
@@ -39,8 +37,13 @@
             @if (createExpanded()) {
               <div id="plan-create-panel" class="plan-create-panel">
                 <p class="form-card__lede plan-create-panel__lede">
-                  Indique assunto, período e descrição; depois as opções de voto (mínimo 2). Em
-                  assembleias <strong>ordinárias</strong> pode permitir escolha múltipla.
+                  @if (createForm.value.assemblyType === 'ata') {
+                    Pauta só para registo de ata: sem opções de voto. Indique assunto, período e
+                    descrição; depois pode abrir a pauta e anexar documentos.
+                  } @else {
+                    Indique assunto, período e descrição; depois as opções de voto (mínimo 2). Em
+                    assembleias <strong>ordinárias</strong> pode permitir escolha múltipla.
+                  }
                 </p>
                 <form
                   class="fund-form"
@@ -84,7 +87,24 @@
                           />
                         </label>
                       </div>
-                      <div class="plan-create-pair">
+                      <label class="field field--block plan-create-competence">
+                        <span class="field__label">Data de competência</span>
+                        <input
+                          type="date"
+                          class="input plan-create-competence__input"
+                          formControlName="competenceDate"
+                        />
+                        <p class="form-section__hint plan-hint-tight">
+                          Por padrão é hoje (data do registro). Ajuste se a matéria for de outro
+                          dia civil.
+                        </p>
+                      </label>
+                      <div
+                        class="plan-create-pair"
+                        [class.plan-create-pair--single]="
+                          createForm.getRawValue().assemblyType === 'ata'
+                        "
+                      >
                         <label class="field field--block">
                           <span class="field__label">Tipo de assembleia</span>
                           <select
@@ -93,31 +113,34 @@
                           >
                             <option value="ordinary">Ordinária</option>
                             <option value="election">Eleição</option>
+                            <option value="ata">Ata (sem votação)</option>
                           </select>
                         </label>
-                        <div
-                          class="field field--block plan-toggle"
-                          [class.plan-toggle--disabled]="
-                            createForm.getRawValue().assemblyType === 'election'
-                          "
-                        >
-                          <span class="field__label">Votação</span>
-                          <label class="plan-check-line">
-                            <input
-                              type="checkbox"
-                              formControlName="allowMultiple"
-                              [disabled]="
-                                createForm.getRawValue().assemblyType === 'election'
-                              "
-                            />
-                            <span>Múltipla por unidade</span>
-                          </label>
-                          @if (createForm.getRawValue().assemblyType === 'election') {
-                            <p class="form-section__hint plan-hint-tight">
-                              Eleições: escolha única.
-                            </p>
-                          }
-                        </div>
+                        @if (createForm.getRawValue().assemblyType !== 'ata') {
+                          <div
+                            class="field field--block plan-toggle"
+                            [class.plan-toggle--disabled]="
+                              createForm.getRawValue().assemblyType === 'election'
+                            "
+                          >
+                            <span class="field__label">Votação</span>
+                            <label class="plan-check-line">
+                              <input
+                                type="checkbox"
+                                formControlName="allowMultiple"
+                                [disabled]="
+                                  createForm.getRawValue().assemblyType === 'election'
+                                "
+                              />
+                              <span>Múltipla por unidade</span>
+                            </label>
+                            @if (createForm.getRawValue().assemblyType === 'election') {
+                              <p class="form-section__hint plan-hint-tight">
+                                Eleições: escolha única.
+                              </p>
+                            }
+                          </div>
+                        }
                       </div>
                     </div>
                   </div>
@@ -133,47 +156,53 @@
                       </div>
                     </div>
                     <app-poll-body-editor formControlName="body"></app-poll-body-editor>
+                    <p class="plan-body-format-hint muted">
+                      <strong>Enter</strong> inicia um novo parágrafo.
+                      <strong>Shift+Enter</strong> quebra a linha dentro do mesmo parágrafo.
+                    </p>
                   </div>
 
-                  <div class="form-section">
-                    <div class="form-section__head">
-                      <span class="form-section__step" aria-hidden="true">3</span>
-                      <div>
-                        <h3 class="form-section__title">Opções de resposta</h3>
-                        <p class="form-section__hint">Até 24 opções.</p>
-                      </div>
-                    </div>
-                    <div class="plan-options" formArrayName="options">
-                      @for (ctrl of optionsArray.controls; track $index) {
-                        <div class="plan-option-row">
-                          <span class="plan-option-row__idx">{{ $index + 1 }}</span>
-                          <input
-                            type="text"
-                            class="input plan-option-row__input"
-                            placeholder="Texto da opção"
-                            [formControlName]="$index"
-                          />
-                          @if (optionsArray.length > 2) {
-                            <button
-                              type="button"
-                              class="btn ghost sm plan-option-row__rm"
-                              (click)="removeOptionRow($index)"
-                            >
-                              Remover
-                            </button>
-                          }
+                  @if (createForm.value.assemblyType !== 'ata') {
+                    <div class="form-section">
+                      <div class="form-section__head">
+                        <span class="form-section__step" aria-hidden="true">3</span>
+                        <div>
+                          <h3 class="form-section__title">Opções de resposta</h3>
+                          <p class="form-section__hint">Até 24 opções.</p>
                         </div>
-                      }
+                      </div>
+                      <div class="plan-options" formArrayName="options">
+                        @for (ctrl of optionsArray.controls; track $index) {
+                          <div class="plan-option-row">
+                            <span class="plan-option-row__idx">{{ $index + 1 }}</span>
+                            <input
+                              type="text"
+                              class="input plan-option-row__input"
+                              placeholder="Texto da opção"
+                              [formControlName]="$index"
+                            />
+                            @if (optionsArray.length > 2) {
+                              <button
+                                type="button"
+                                class="btn ghost sm plan-option-row__rm"
+                                (click)="removeOptionRow($index)"
+                              >
+                                Remover
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                      <button
+                        type="button"
+                        class="btn ghost plan-add-opt"
+                        (click)="addOptionRow()"
+                        [disabled]="optionsArray.length >= 24 || busy()"
+                      >
+                        + Adicionar opção
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      class="btn ghost plan-add-opt"
-                      (click)="addOptionRow()"
-                      [disabled]="optionsArray.length >= 24 || busy()"
-                    >
-                      + Adicionar opção
-                    </button>
-                  </div>
+                  }
 
                   <div class="form-section plan-submit-wrap">
                     <button type="submit" class="btn primary" [disabled]="busy()">
@@ -188,9 +217,72 @@
 
         <section class="form-card plan-list-card">
           <div class="form-card__head">
-            <h2 class="form-card__title">Pautas</h2>
+            <h2 class="form-card__title">Pautas/Atas</h2>
             <p class="form-card__lede">Abra uma pauta para ver detalhe, votar ou gerir.</p>
           </div>
+          <div class="plan-list-filters" [formGroup]="listFilterForm">
+            <div class="plan-list-filters__row">
+              <label class="field field--block plan-list-filters__date">
+                <span class="field__label">Registrado de (UTC)</span>
+                <input type="date" class="input" formControlName="registeredFrom" />
+              </label>
+              <label class="field field--block plan-list-filters__date">
+                <span class="field__label">Registrado até (UTC)</span>
+                <input type="date" class="input" formControlName="registeredTo" />
+              </label>
+              <label class="field field--block plan-list-filters__search">
+                <span class="field__label">Buscar por título</span>
+                <input
+                  type="search"
+                  class="input"
+                  formControlName="titleQuery"
+                  maxlength="200"
+                  placeholder="Nome da pauta…"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
+            <p class="form-section__hint plan-list-filters__hint">
+              Lista ordenada por <strong>data de competência</strong> (mais recente no topo; em
+              empate, pela data de registro). O filtro de período é pela <strong>data de
+              registro</strong> (UTC; padrão últimos 30 dias). A busca por título ignora o período
+              e devolve no máximo 100 pautas.
+            </p>
+            @if (listSearchActive()) {
+              <p class="plan-list-filters__active muted sm" role="status">
+                Pesquisa ativa por título — período de datas ignorado.
+              </p>
+            }
+            <div class="plan-list-filters__actions">
+              <button
+                type="button"
+                class="btn primary sm"
+                [disabled]="busy() || listLoading()"
+                (click)="applyListFilters()"
+              >
+                Aplicar período
+              </button>
+              <button
+                type="button"
+                class="btn ghost sm"
+                [disabled]="busy() || listLoading()"
+                (click)="searchByTitleOnly()"
+              >
+                Buscar por título
+              </button>
+              <button
+                type="button"
+                class="btn ghost sm"
+                [disabled]="busy() || listLoading()"
+                (click)="clearListFilters()"
+              >
+                Redefinir
+              </button>
+            </div>
+          </div>
+          @if (listLoading()) {
+            <p class="muted plan-list-card__loading">Carregando lista…</p>
+          } @else {
           <div class="plan-list-body">
             @if (polls().length === 0) {
               <div class="plan-list-empty" role="status">
@@ -219,42 +311,72 @@
                     stroke-linecap="round"
                   />
                 </svg>
-                <p class="plan-list-empty__title">Nenhuma pauta ainda</p>
-                <p class="plan-list-empty__hint">
-                  @if (isSyndicOrOwner()) {
-                    Crie uma nova pauta para iniciar uma votação ou assembleia.
+                <p class="plan-list-empty__title">
+                  @if (listSearchActive()) {
+                    Nenhum resultado para esta busca
                   } @else {
-                    Quando o síndico abrir uma pauta, ela aparecerá aqui.
+                    Nenhuma pauta neste período
+                  }
+                </p>
+                <p class="plan-list-empty__hint">
+                  @if (listSearchActive()) {
+                    Tente outro trecho do título ou use «Redefinir» e filtre por datas.
+                  } @else if (isSyndicOrOwner()) {
+                    Crie uma nova pauta ou amplie o período de registro (UTC) acima.
+                  } @else {
+                    Quando o síndico abrir uma pauta no período, ela aparecerá aqui.
                   }
                 </p>
               </div>
             } @else {
               <ul class="plan-poll-list">
                 @for (p of polls(); track p.id) {
-                  <li>
+                  <li class="plan-poll-list__row">
                     <a
                       class="plan-poll-tile"
                       [routerLink]="['/painel/condominio', condominiumId, 'planejamento', p.id]"
                     >
                       <span class="plan-poll-tile__title">{{ p.title }}</span>
+                      <span class="plan-poll-tile__competence muted sm"
+                        >Competência {{ fmtCompetenceBr(p) }}</span
+                      >
                       <span class="plan-poll-tile__meta">
                         <span class="plan-pill plan-pill--{{ p.status }}">{{
                           statusLabel(p.status)
                         }}</span>
-                        <span class="plan-pill plan-pill--neutral">{{
-                          assemblyLabel(p.assemblyType)
-                        }}</span>
+                        <span
+                          class="plan-pill"
+                          [ngClass]="assemblyTypeBadgeClass(p.assemblyType)"
+                          >{{ assemblyLabel(p.assemblyType) }}</span
+                        >
                         @if (pollAllowsMulti(p)) {
                           <span class="plan-pill plan-pill--multi">Múltipla</span>
                         }
                       </span>
                     </a>
+                    @if (
+                      isSyndicOrOwner() &&
+                      (p.status === 'closed' || p.status === 'decided') &&
+                      minutesDraftDocumentIdFor(p)
+                    ) {
+                      <button
+                        type="button"
+                        class="btn ghost sm plan-poll-list__minutes-dl"
+                        [disabled]="busy()"
+                        (click)="downloadMinutesDraft(p)"
+                      >
+                        PDF ata
+                      </button>
+                    }
                   </li>
                 }
               </ul>
             }
           </div>
+          }
         </section>
+
+        <app-painel-planejamento-atas-section />
       </div>
     }
   } @else {
@@ -280,88 +402,332 @@
         @if (selected(); as p) {
         <section class="form-card plan-detail">
           <div class="form-card__head plan-detail__head">
-            <div>
-              <h1 class="plan-detail__h1">{{ p.title }}</h1>
-              <p class="form-card__lede plan-detail__lede">
-                {{ fmtDate(p.opensAt) }} — {{ fmtDate(p.closesAt) }}
-              </p>
-            </div>
-            <div class="plan-detail__badges">
-              <span class="plan-pill plan-pill--{{ p.status }}">{{
-                statusLabel(p.status)
-              }}</span>
-              @if (pollAllowsMulti(p)) {
-                <span class="plan-pill plan-pill--multi">Escolha múltipla</span>
-              } @else {
-                <span class="plan-pill plan-pill--neutral">Escolha única</span>
-              }
-            </div>
-          </div>
-
-          <div class="plan-detail__body">
-            @if (!editingBody() && p.body) {
-              <div class="poll-body-html" [innerHTML]="p.body"></div>
-            }
-            @if (canEditPollContent(p)) {
-              @if (!editingBody()) {
-                <div class="plan-body-actions">
-                  <button
-                    type="button"
-                    class="btn ghost sm"
-                    [disabled]="busy()"
-                    (click)="startEditBody()"
-                  >
-                    Editar descrição
-                  </button>
-                </div>
-              } @else {
+            <div class="plan-detail__head-primary">
+              @if (editingTitle()) {
                 <form
-                  class="plan-body-edit"
-                  [formGroup]="bodyEditForm"
-                  (ngSubmit)="saveBody(p)"
+                  class="plan-title-edit"
+                  [formGroup]="titleEditForm"
+                  (ngSubmit)="saveTitle(p)"
                 >
-                  <app-poll-body-editor formControlName="body"></app-poll-body-editor>
-                  <div class="plan-body-edit__actions">
+                  <label class="field field--block">
+                    <span class="field__label">Título</span>
+                    <input type="text" class="input plan-title-edit__input" formControlName="title" />
+                  </label>
+                  <div class="plan-title-edit__actions">
                     <button type="submit" class="btn primary sm" [disabled]="busy()">
-                      Salvar descrição
+                      Salvar título
                     </button>
                     <button
                       type="button"
                       class="btn ghost sm"
                       [disabled]="busy()"
-                      (click)="cancelEditBody()"
+                      (click)="cancelEditTitle()"
                     >
                       Cancelar
                     </button>
                   </div>
                 </form>
+              } @else {
+                <h1 class="plan-detail__h1">{{ p.title }}</h1>
+                @if (canEditTitle(p)) {
+                  <div class="plan-title-actions">
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="startEditTitle(p)"
+                    >
+                      Editar título
+                    </button>
+                  </div>
+                }
               }
-            }
+              <p class="form-card__lede plan-detail__lede">
+                <span class="plan-detail__lede-label">Período</span>
+                {{ fmtDate(p.opensAt) }} — {{ fmtDate(p.closesAt) }}
+              </p>
+              @if (editingCompetence()) {
+                <form
+                  class="plan-title-edit plan-competence-edit"
+                  [formGroup]="competenceEditForm"
+                  (ngSubmit)="saveCompetenceDate(p)"
+                >
+                  <label class="field field--block">
+                    <span class="field__label">Data de competência</span>
+                    <input
+                      type="date"
+                      class="input plan-title-edit__input"
+                      formControlName="competenceDate"
+                    />
+                  </label>
+                  <div class="plan-title-edit__actions">
+                    <button type="submit" class="btn primary sm" [disabled]="busy()">
+                      Salvar data
+                    </button>
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="cancelEditCompetence()"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              } @else {
+                <p class="form-card__lede plan-detail__lede">
+                  <span class="plan-detail__lede-label">Competência</span>
+                  {{ fmtCompetenceBr(p) }}
+                </p>
+                @if (canEditCompetenceDate(p)) {
+                  <div class="plan-title-actions">
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="startEditCompetence(p)"
+                    >
+                      Editar data de competência
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+            <div class="plan-detail__badges" aria-label="Estado e tipo">
+              <span class="plan-pill plan-pill--{{ p.status }}">{{
+                statusLabel(p.status)
+              }}</span>
+              <span
+                class="plan-pill"
+                [ngClass]="assemblyTypeBadgeClass(p.assemblyType)"
+                >{{ assemblyLabel(p.assemblyType) }}</span
+              >
+              @if (!pollIsAta(p)) {
+                @if (pollAllowsMulti(p)) {
+                  <span class="plan-pill plan-pill--multi">Escolha múltipla</span>
+                } @else {
+                  <span class="plan-pill plan-pill--neutral">Escolha única</span>
+                }
+              }
+            </div>
+          </div>
 
+          @if (isSyndicOrOwner() && p.status === 'draft') {
+            <div class="plan-type-settings plan-detail__draft-panel">
+              <h3 class="plan-subtitle">Tipo de assembleia e opções</h3>
+              <p class="muted plan-type-settings__hint">
+                Em rascunho pode mudar entre ordinária, eleição ou Ata. Ao escolher Ata, as
+                opções de voto são removidas. Ao sair de Ata, preencha pelo menos duas opções
+                antes de salvar.
+              </p>
+              <form
+                class="plan-type-settings__form"
+                [formGroup]="typeSettingsForm"
+                (ngSubmit)="saveTypeSettings(p)"
+              >
+                <div
+                  class="plan-create-pair"
+                  [class.plan-create-pair--single]="
+                    typeSettingsForm.getRawValue().assemblyType === 'ata'
+                  "
+                >
+                  <label class="field field--block">
+                    <span class="field__label">Tipo</span>
+                    <select class="input plan-create-pair__control" formControlName="assemblyType">
+                      <option value="ordinary">Ordinária</option>
+                      <option value="election">Eleição</option>
+                      <option value="ata">Ata (sem votação)</option>
+                    </select>
+                  </label>
+                  @if (typeSettingsForm.getRawValue().assemblyType !== 'ata') {
+                    <div
+                      class="field field--block plan-toggle"
+                      [class.plan-toggle--disabled]="
+                        typeSettingsForm.getRawValue().assemblyType === 'election'
+                      "
+                    >
+                      <span class="field__label">Votação</span>
+                      <label class="plan-check-line">
+                        <input
+                          type="checkbox"
+                          formControlName="allowMultiple"
+                          [disabled]="
+                            typeSettingsForm.getRawValue().assemblyType === 'election'
+                          "
+                        />
+                        <span>Múltipla por unidade</span>
+                      </label>
+                      @if (typeSettingsForm.getRawValue().assemblyType === 'election') {
+                        <p class="form-section__hint plan-hint-tight">
+                          Eleições: escolha única.
+                        </p>
+                      }
+                    </div>
+                  }
+                </div>
+                @if (typeSettingsForm.getRawValue().assemblyType !== 'ata') {
+                  <div class="plan-options plan-type-settings__options" formArrayName="options">
+                    @for (ctrl of typeSettingsOptions.controls; track $index) {
+                      <div class="plan-option-row">
+                        <span class="plan-option-row__idx">{{ $index + 1 }}</span>
+                        <input
+                          type="text"
+                          class="input plan-option-row__input"
+                          placeholder="Texto da opção"
+                          [formControlName]="$index"
+                        />
+                        @if (typeSettingsOptions.length > 2) {
+                          <button
+                            type="button"
+                            class="btn ghost sm plan-option-row__rm"
+                            (click)="removeTypeSettingOptionRow($index)"
+                          >
+                            Remover
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    class="btn ghost plan-add-opt"
+                    (click)="addTypeSettingOptionRow()"
+                    [disabled]="typeSettingsOptions.length >= 24 || busy()"
+                  >
+                    + Adicionar opção
+                  </button>
+                }
+                <button type="submit" class="btn primary sm plan-type-settings__submit" [disabled]="busy()">
+                  Salvar tipo e opções
+                </button>
+              </form>
+            </div>
+          }
+
+          <div class="plan-detail__body">
+            <section
+              class="plan-detail__section plan-detail__section--description"
+              aria-labelledby="plan-detail-desc-heading"
+            >
+              <h3 class="plan-subtitle" id="plan-detail-desc-heading">Descrição</h3>
+              @if (!editingBody() && p.body) {
+                <div
+                  class="poll-body-html plan-detail__prose"
+                  [innerHTML]="safePollBody(p.body)"
+                ></div>
+              } @else if (!editingBody() && !p.body) {
+                <p class="muted plan-detail__empty-desc">
+                  @if (canEditPollContent(p)) {
+                    Ainda sem texto. Use «Editar descrição» para adicionar o conteúdo da pauta.
+                  } @else {
+                    Sem descrição nesta pauta.
+                  }
+                </p>
+              }
+              @if (canEditPollContent(p)) {
+                @if (!editingBody()) {
+                  <div class="plan-body-actions">
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      [disabled]="busy()"
+                      (click)="startEditBody()"
+                    >
+                      Editar descrição
+                    </button>
+                  </div>
+                } @else {
+                  <form
+                    class="plan-body-edit"
+                    [formGroup]="bodyEditForm"
+                    (ngSubmit)="saveBody(p)"
+                  >
+                    <app-poll-body-editor formControlName="body"></app-poll-body-editor>
+                    <p class="plan-body-format-hint muted">
+                      <strong>Enter</strong> inicia um novo parágrafo.
+                      <strong>Shift+Enter</strong> quebra a linha dentro do mesmo parágrafo (útil
+                      após títulos ou em listas).
+                    </p>
+                    <div class="plan-body-edit__actions">
+                      <button type="submit" class="btn primary sm" [disabled]="busy()">
+                        Salvar descrição
+                      </button>
+                      <button
+                        type="button"
+                        class="btn ghost sm"
+                        [disabled]="busy()"
+                        (click)="cancelEditBody()"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                }
+              }
+            </section>
+
+            <section class="plan-detail__section" aria-labelledby="plan-detail-attach-heading">
             <div class="plan-attachments">
-              <h3 class="plan-subtitle">Anexos</h3>
+              <h3 class="plan-subtitle" id="plan-detail-attach-heading">Anexos</h3>
               @if ((p.attachments?.length ?? 0) === 0) {
                 <p class="muted plan-attachments__empty">Nenhum anexo.</p>
               } @else {
                 <ul class="plan-attachments__list">
                   @for (a of p.attachments ?? []; track a.id) {
-                    <li class="plan-attachments__row">
+                    <li
+                      class="plan-attachments__row"
+                      [class.plan-attachments__row--editable]="canEditPollContent(p)"
+                    >
                       <span
                         class="plan-attachments__badge"
                         [attr.title]="a.mimeType"
                         >{{ attachmentKindLabel(a) }}</span
                       >
                       <div class="plan-attachments__body">
-                        <button
-                          type="button"
-                          class="plan-attachments__link"
-                          (click)="downloadAttachment(p, a)"
+                        <div class="plan-attachments__title-row">
+                          <span class="plan-attachments__filename">{{
+                            a.originalFilename
+                          }}</span>
+                        </div>
+                        @if (attachmentShowsMediaPreview(a)) {
+                          @if (previewSrc(p, a); as src) {
+                            @if (isAudioAttachment(a)) {
+                              <audio
+                                class="plan-attachments__audio"
+                                controls
+                                preload="metadata"
+                                [src]="src"
+                              ></audio>
+                            } @else if (isImageAttachment(a)) {
+                              <img
+                                class="plan-attachments__thumb"
+                                [src]="src"
+                                [attr.alt]="
+                                  'Pré-visualização: ' +
+                                  (a.originalFilename || 'anexo')
+                                "
+                                loading="lazy"
+                              />
+                            }
+                          } @else {
+                            <p class="plan-attachments__preview-hint muted">
+                              A carregar pré-visualização…
+                            </p>
+                          }
+                        }
+                        <div class="plan-attachments__actions">
+                          <button
+                            type="button"
+                            class="btn ghost sm plan-attachments__dl"
+                            (click)="downloadAttachment(p, a)"
+                          >
+                            Download
+                          </button>
+                        </div>
+                        <span class="plan-attachments__meta"
+                          >{{ formatBytes(a.sizeBytes) }} ·
+                          {{ (a.mimeType || '').trim() || '—' }}</span
                         >
-                          {{ a.originalFilename }}
-                        </button>
-                        <span class="plan-attachments__meta">{{
-                          formatBytes(a.sizeBytes)
-                        }}</span>
                       </div>
                       @if (canEditPollContent(p)) {
                         <button
@@ -393,7 +759,7 @@
                   #pollAttachmentFile
                   class="sr-only"
                   [disabled]="busy()"
-                  accept=".pdf,.doc,.docx,.txt,image/*"
+                  accept=".pdf,.doc,.docx,.txt,.opus,.oga,image/*,audio/*"
                   (change)="onAttachmentSelected(p, $event)"
                 />
                 <button
@@ -405,24 +771,35 @@
                   Adicionar arquivo
                 </button>
                 <p class="form-section__hint plan-hint-tight">
-                  PDF, Word, texto ou imagem. Pode anexar quantos precisar (máx. 20 MB
-                  cada). Disponível em rascunho ou votação aberta.
+                  PDF, Word, texto, imagem ou áudio (incl. ficheiros .opus do WhatsApp).
+                  Pode anexar quantos precisar (máx. 20 MB cada). Disponível em rascunho ou
+                  votação aberta.
                 </p>
               }
             </div>
+            </section>
 
+            <section class="plan-detail__section" aria-labelledby="plan-detail-options-heading">
             <div class="plan-options-preview">
-              <h3 class="plan-subtitle">Opções</h3>
-              <ol class="plan-options-preview__list">
-                @for (o of p.options ?? []; track o.id) {
-                  <li>{{ o.label }}</li>
-                }
-              </ol>
+              <h3 class="plan-subtitle" id="plan-detail-options-heading">Opções</h3>
+              @if (pollIsAta(p)) {
+                <p class="muted plan-options-preview__ata">
+                  Esta pauta é só para registro de ata: não há opções de voto no sistema.
+                </p>
+              } @else {
+                <ol class="plan-options-preview__list">
+                  @for (o of p.options ?? []; track o.id) {
+                    <li>{{ o.label }}</li>
+                  }
+                </ol>
+              }
             </div>
+            </section>
 
             @if (canShowVotePanel(p)) {
+              <section class="plan-detail__section" aria-labelledby="plan-detail-vote-heading">
               <div class="plan-vote-block">
-                <h3 class="plan-subtitle">
+                <h3 class="plan-subtitle" id="plan-detail-vote-heading">
                   @if (isSyndicOrOwner()) {
                     Voto (titular / síndico)
                   } @else {
@@ -481,34 +858,42 @@
                   </button>
                 </form>
               </div>
+              </section>
             }
 
-            @if (isMgmt() && results(); as r) {
+            @if (isMgmt() && !pollIsAta(p) && results(); as r) {
+              <section class="plan-detail__section" aria-labelledby="plan-detail-results-heading">
               <div class="plan-results">
-                <h3 class="plan-subtitle">Resultados</h3>
-                <p class="plan-results__summary muted">
-                  {{ r.unitsVoted }} unidade(s) votaram ·
-                  {{ r.totalOptionSelections }} marcações no total
-                  @if (r.allowMultiple) {
-                    <span class="plan-results__note"> (pauta de escolha múltipla)</span>
-                  }
-                </p>
-                <ul class="plan-result-bars">
-                  @for (o of r.options; track o.id) {
-                    <li class="plan-result-row">
-                      <div class="plan-result-row__top">
-                        <span class="plan-result-row__label">{{ o.label }}</span>
-                        <span class="plan-result-row__n">{{ o.votes }}</span>
-                      </div>
-                      <div class="plan-result-bar" aria-hidden="true">
-                        <div
-                          class="plan-result-bar__fill"
-                          [style.width.%]="resultBarPercent(o.votes, r)"
-                        ></div>
-                      </div>
-                    </li>
-                  }
-                </ul>
+                <h3 class="plan-subtitle" id="plan-detail-results-heading">Resultados</h3>
+                @if (r.options.length === 0) {
+                  <p class="muted plan-results__empty">
+                    Sem votação por opções nesta pauta.
+                  </p>
+                } @else {
+                  <p class="plan-results__summary muted">
+                    {{ r.unitsVoted }} unidade(s) votaram ·
+                    {{ r.totalOptionSelections }} marcações no total
+                    @if (r.allowMultiple) {
+                      <span class="plan-results__note"> (pauta de escolha múltipla)</span>
+                    }
+                  </p>
+                  <ul class="plan-result-bars">
+                    @for (o of r.options; track o.id) {
+                      <li class="plan-result-row">
+                        <div class="plan-result-row__top">
+                          <span class="plan-result-row__label">{{ o.label }}</span>
+                          <span class="plan-result-row__n">{{ o.votes }}</span>
+                        </div>
+                        <div class="plan-result-bar" aria-hidden="true">
+                          <div
+                            class="plan-result-bar__fill"
+                            [style.width.%]="resultBarPercent(o.votes, r)"
+                          ></div>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
                 @if (r.votesByUnit && r.votesByUnit.length > 0) {
                   <div class="plan-results-by-unit">
                     <h4 class="plan-results-by-unit__title">Voto por unidade</h4>
@@ -530,9 +915,11 @@
                   </div>
                 }
               </div>
+              </section>
             }
 
             @if (isSyndicOrOwner()) {
+              <section class="plan-detail__section plan-detail__section--mgmt" aria-label="Ações da pauta">
               <div class="plan-mgmt">
                 @if (p.status === 'draft') {
                   <button
@@ -541,7 +928,7 @@
                     [disabled]="busy()"
                     (click)="openPoll(p)"
                   >
-                    Abrir votação
+                    {{ pollIsAta(p) ? 'Abrir pauta' : 'Abrir votação' }}
                   </button>
                 }
                 @if (p.status === 'open') {
@@ -554,7 +941,17 @@
                     Encerrar
                   </button>
                 }
-                @if (p.status === 'closed') {
+                @if (p.status === 'closed' && pollIsAta(p)) {
+                  <button
+                    type="button"
+                    class="btn primary"
+                    [disabled]="busy()"
+                    (click)="finalizeAta(p)"
+                  >
+                    Concluir registro da ata
+                  </button>
+                }
+                @if (p.status === 'closed' && !pollIsAta(p)) {
                   <form
                     [formGroup]="decideForm"
                     (ngSubmit)="decide(p)"
@@ -575,16 +972,38 @@
                   </form>
                 }
                 @if (p.status === 'closed' || p.status === 'decided') {
-                  <button
-                    type="button"
-                    class="btn ghost"
-                    [disabled]="busy()"
-                    (click)="generateMinutes(p)"
-                  >
-                    Gerar PDF da ata
-                  </button>
+                  <div class="plan-minutes-pdf plan-mgmt__minutes">
+                    <p class="plan-minutes-pdf__hint">
+                      Gere o rascunho em PDF (sempre atualizado ao clicar). O download inicia logo
+                      em seguida; pode fazer o download de novo aqui ou na lista de PDFs em
+                      Planejamento. As
+                      assinaturas digitais no PDF são as de «Meus dados» do síndico e do
+                      subsíndico (se existir na gestão do condomínio).
+                    </p>
+                    <div class="plan-minutes-pdf__actions">
+                      <button
+                        type="button"
+                        class="btn ghost"
+                        [disabled]="busy()"
+                        (click)="generateMinutes(p)"
+                      >
+                        Gerar / atualizar PDF da ata
+                      </button>
+                      @if (minutesDraftDocumentIdFor(p)) {
+                        <button
+                          type="button"
+                          class="btn primary"
+                          [disabled]="busy()"
+                          (click)="downloadMinutesDraft(p)"
+                        >
+                          Download PDF da ata
+                        </button>
+                      }
+                    </div>
+                  </div>
                 }
               </div>
+              </section>
             }
           </div>
         </section>

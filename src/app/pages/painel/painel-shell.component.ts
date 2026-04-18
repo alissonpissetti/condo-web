@@ -24,7 +24,6 @@ import { SelectedCondominiumService } from '../../core/selected-condominium.serv
 const SK_GESTAO = 'condo.sidebar.gestao';
 const SK_FINANCEIRO = 'condo.sidebar.financeiro';
 const SK_PLANEJAMENTO = 'condo.sidebar.planejamento';
-const SK_UNIDADES_NESTED = 'condo.sidebar.unidadesNested';
 
 function readSidebarBool(key: string, defaultValue: boolean): boolean {
   if (typeof sessionStorage === 'undefined') {
@@ -58,7 +57,7 @@ export class PainelShellComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly selectedCondo = inject(SelectedCondominiumService);
-  protected readonly navData = inject(CondominiumNavDataService);
+  private readonly navData = inject(CondominiumNavDataService);
   protected readonly condoAccess = inject(CondominiumAccessStore);
   protected readonly planFeatures = inject(CondominiumPlanFeaturesStore);
 
@@ -70,9 +69,6 @@ export class PainelShellComponent {
   );
   protected readonly planejamentoExpanded = signal(
     readSidebarBool(SK_PLANEJAMENTO, true),
-  );
-  protected readonly unidadesNestedExpanded = signal(
-    readSidebarBool(SK_UNIDADES_NESTED, true),
   );
 
   /** Drawer lateral no mobile (off-canvas). Fechado por padrão. */
@@ -130,7 +126,7 @@ export class PainelShellComponent {
           }
         }
         if (
-          /\/painel\/condominio\/[^/]+\/(planejamento|documentos)(\/|$|\?|#)/.test(
+          /\/painel\/condominio\/[^/]+\/(planejamento|comunicacao)(\/|$|\?|#)/.test(
             url,
           )
         ) {
@@ -158,12 +154,6 @@ export class PainelShellComponent {
     const v = !this.planejamentoExpanded();
     this.planejamentoExpanded.set(v);
     writeSidebarBool(SK_PLANEJAMENTO, v);
-  }
-
-  toggleUnidadesNested(): void {
-    const v = !this.unidadesNestedExpanded();
-    this.unidadesNestedExpanded.set(v);
-    writeSidebarBool(SK_UNIDADES_NESTED, v);
   }
 
   toggleMobileNav(): void {
