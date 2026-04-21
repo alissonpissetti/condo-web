@@ -1,0 +1,187 @@
+<section class="suporte" aria-labelledby="suporte-titulo">
+  <header class="suporte__header">
+    <h1 id="suporte-titulo">Suporte e pedidos</h1>
+    <p class="suporte__intro">
+      Reporte erros, peça correções ou sugira melhorias e novas funcionalidades para a
+      plataforma. Pode associar um condomínio como contexto ou deixar em branco para um
+      pedido geral. Para contacto imediato, use o WhatsApp abaixo — a mensagem inclui o seu
+      nome e o condomínio que está selecionado no painel neste momento.
+    </p>
+  </header>
+
+  @if (loadError()) {
+    <div class="flash flash--error" role="alert">{{ loadError() }}</div>
+  }
+
+  @if (loading()) {
+    <p class="suporte__loading muted">Carregando…</p>
+  } @else if (!loadError()) {
+    <div class="suporte__layout">
+      @if (listError()) {
+        <div class="flash flash--error" role="alert">{{ listError() }}</div>
+      }
+
+      <section
+        class="form-card form-card--whatsapp"
+        aria-labelledby="wa-suporte-titulo"
+      >
+        <div class="form-card__accent form-card__accent--whatsapp" aria-hidden="true"></div>
+        <div class="form-card__body">
+          <div class="form-card__head">
+            <h2 id="wa-suporte-titulo" class="form-card__title">WhatsApp</h2>
+            <p class="form-card__hint">
+              Fale connosco em
+              <strong>(41) 99989-7602</strong>. O link abre o WhatsApp com uma mensagem
+              já preenchida com o seu nome e o condomínio que está selecionado no menu do
+              painel (se houver).
+            </p>
+          </div>
+          <div class="wa-actions">
+            <a
+              class="btn btn--wa"
+              [href]="whatsappSupportHref()"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Abrir conversa no WhatsApp
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-card" aria-labelledby="nova-solicitacao">
+        <div class="form-card__accent" aria-hidden="true"></div>
+        <div class="form-card__body">
+          <div class="form-card__head">
+            <h2 id="nova-solicitacao" class="form-card__title">Nova solicitação</h2>
+            <p class="form-card__hint">
+              Seja específico: passos para reproduzir, ecrã ou URL, e o resultado esperado.
+            </p>
+          </div>
+
+          @if (formError()) {
+            <div class="flash flash--error" role="alert">{{ formError() }}</div>
+          }
+          @if (formSuccess()) {
+            <div class="flash flash--ok" role="status">{{ formSuccess() }}</div>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="submit()" class="suporte-form" novalidate>
+            <div class="field-grid field-grid--1">
+              <label class="field">
+                <span class="field__label">Tipo</span>
+                <select formControlName="category">
+                  <option [ngValue]="null" disabled>Escolha…</option>
+                  @for (opt of categoryOptions; track opt.value) {
+                    <option [ngValue]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+                @for (msg of fieldErrorsPt(form.controls.category); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field">
+                <span class="field__label">Condomínio (opcional)</span>
+                <select formControlName="condominiumId">
+                  <option value="">Nenhum — pedido geral à plataforma</option>
+                  @for (c of condominiums(); track c.id) {
+                    <option [value]="c.id">{{ c.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="field__label">Assunto</span>
+                <input type="text" formControlName="title" maxlength="512" autocomplete="off" />
+                @for (msg of fieldErrorsPt(form.controls.title); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+
+              <label class="field">
+                <span class="field__label">Descrição</span>
+                <textarea
+                  formControlName="body"
+                  rows="8"
+                  spellcheck="true"
+                  placeholder="Descreva o problema ou a ideia com o máximo de detalhe possível."
+                ></textarea>
+                @for (msg of fieldErrorsPt(form.controls.body); track msg) {
+                  <small class="field-error">{{ msg }}</small>
+                }
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn primary" [disabled]="saving()">
+                {{ saving() ? 'A enviar…' : 'Enviar solicitação' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="form-card" aria-labelledby="lista-solicitacoes">
+        <div class="form-card__accent form-card__accent--teal" aria-hidden="true"></div>
+        <div class="form-card__body">
+          <div class="form-card__head form-card__head--row">
+            <div>
+              <h2 id="lista-solicitacoes" class="form-card__title">As minhas solicitações</h2>
+              <p class="form-card__hint">Clique numa linha para ver a descrição completa.</p>
+            </div>
+            <button type="button" class="btn btn--ghost" (click)="refreshList()">Atualizar</button>
+          </div>
+
+          @if (tickets().length === 0) {
+            <p class="muted">Ainda não tem solicitações registadas.</p>
+          } @else {
+            <div class="ticket-table-wrap">
+              <table class="ticket-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Data</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Assunto</th>
+                    <th scope="col">Condomínio</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (t of tickets(); track t.id) {
+                    <tr
+                      class="ticket-row"
+                      [class.ticket-row--open]="expandedId() === t.id"
+                      (click)="toggleExpand(t.id)"
+                      (keydown.enter)="toggleExpand(t.id)"
+                      (keydown.space)="$event.preventDefault(); toggleExpand(t.id)"
+                      tabindex="0"
+                      role="button"
+                      [attr.aria-expanded]="expandedId() === t.id"
+                    >
+                      <td>{{ t.createdAt | date: 'short' }}</td>
+                      <td>{{ categoryLabel(t.category) }}</td>
+                      <td class="ticket-table__title">{{ t.title }}</td>
+                      <td>{{ condoLabel(t.condominiumId) }}</td>
+                      <td>{{ statusLabelPt(t.status) }}</td>
+                    </tr>
+                    @if (expandedId() === t.id) {
+                      <tr class="ticket-detail-row">
+                        <td colspan="5">
+                          <div class="ticket-detail">
+                            <h3 class="ticket-detail__h">Descrição</h3>
+                            <pre class="ticket-detail__body">{{ t.body }}</pre>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+  }
+</section>

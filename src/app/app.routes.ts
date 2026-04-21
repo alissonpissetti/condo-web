@@ -27,6 +27,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'comunicado/publico',
+    loadComponent: () =>
+      import('./pages/comunicado-publico/comunicado-publico.component').then(
+        (m) => m.ComunicadoPublicoComponent,
+      ),
+  },
+  {
     path: 'auth/forgot-password',
     loadComponent: () =>
       import('./pages/forgot-password/forgot-password.component').then(

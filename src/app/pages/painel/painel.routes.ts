@@ -23,6 +23,13 @@ export const painelRoutes: Routes = [
           import('./painel-dados.component').then((m) => m.PainelDadosComponent),
       },
       {
+        path: 'suporte',
+        loadComponent: () =>
+          import('./painel-suporte/painel-suporte.component').then(
+            (m) => m.PainelSuporteComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/upgrade',
         canActivate: [selectedCondominiumGuard],
         loadComponent: () =>

@@ -1,6 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
 const EXACT: Record<string, string> = {
+  'Link inválido.':
+    'Este link não foi reconhecido. Use o link completo enviado por e-mail ou SMS (incluindo todo o texto após token=) ou peça um novo envio.',
+  'Comunicado não encontrado.':
+    'Este comunicado não está disponível (pode ter sido retirado ou ainda não foi enviado).',
+  'Token inválido.': 'O link está incompleto ou o token é inválido.',
   'Email already registered': 'Este e-mail já está cadastrado.',
   'Phone already registered': 'Este telefone já está cadastrado.',
   'Usuário não encontrado.': 'Conta não encontrada.',

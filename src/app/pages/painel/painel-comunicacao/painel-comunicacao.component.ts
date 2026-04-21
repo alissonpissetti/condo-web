@@ -11,17 +11,28 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import type { Condominium } from '../../../core/auth.service';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   CommunicationsApiService,
+  type AudiencePreviewUser,
   type Communication,
   type CommunicationAttachmentRow,
+  type CommunicationAudienceScope,
   type CommunicationRecipientRow,
   type DeliveryChannelStatus,
+  type RecipientDeliveryPrefPayload,
 } from '../../../core/communications-api.service';
+import {
+  CondominiumManagementService,
+  type GroupingWithUnits,
+} from '../../../core/condominium-management.service';
 import { formatDateTimeDdMmYyyyHhMm } from '../../../core/date-display';
 import { PlanningApiService } from '../../../core/planning-api.service';
 import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.component';
+import { switchMap } from 'rxjs';
+
+type DeliveryToggle = { email: boolean; sms: boolean; whatsapp: boolean };
 
 @Component({
   selector: 'app-painel-comunicacao',
@@ -36,6 +47,7 @@ export class PainelComunicacaoComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(CommunicationsApiService);
   private readonly planning = inject(PlanningApiService);
+  private readonly mgmt = inject(CondominiumManagementService);
   private readonly fb = inject(FormBuilder);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -50,12 +62,30 @@ export class PainelComunicacaoComponent implements OnInit {
   );
   protected readonly readConfirmedBanner = signal(false);
 
+  protected readonly groupingsWithUnits = signal<GroupingWithUnits[]>([]);
+  protected readonly structureBusy = signal(false);
+  private structureLoaded = false;
+
+  protected readonly audienceScope = signal<CommunicationAudienceScope>('units');
+  protected readonly selectedUnitIds = signal<string[]>([]);
+  protected readonly selectedGroupingIds = signal<string[]>([]);
+  protected readonly channelEmail = signal(true);
+  protected readonly channelSms = signal(true);
+  protected readonly channelWhatsapp = signal(false);
+
+  protected readonly previewBusy = signal(false);
+  protected readonly previewUsers = signal<AudiencePreviewUser[]>([]);
+  /** Preferências por `userId` (alinhadas à pré-visualização atual). */
+  protected readonly deliveryPrefs = signal<Record<string, DeliveryToggle>>({});
+
   protected readonly draftForm = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.maxLength(512)]],
     body: [''],
   });
 
   private condominiumId = '';
+  /** Nome do condomínio para textos de pré-visualização (SMS / e-mail). */
+  protected readonly condoName = signal('Condomínio');
 
   constructor() {
     this.route.queryParamMap
@@ -75,6 +105,15 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.condominiumId = id;
+    this.mgmt.getCondominium(id).subscribe({
+      next: (co: Condominium) => {
+        const n = co.name?.trim();
+        if (n) {
+          this.condoName.set(n);
+        }
+      },
+      error: () => {},
+    });
     this.planning.access(id).subscribe({
       next: (a) =>
         this.access.set(a.access as { kind: string; role?: string }),
@@ -109,6 +148,228 @@ export class PainelComunicacaoComponent implements OnInit {
     this.readConfirmedBanner.set(false);
   }
 
+  protected flatUnitOptions(): { id: string; label: string }[] {
+    const out: { id: string; label: string }[] = [];
+    for (const g of this.groupingsWithUnits()) {
+      const gn = g.name.trim() || '—';
+      for (const u of g.units) {
+        out.push({
+          id: u.id,
+          label: `${gn} · ${u.identifier.trim() || '—'}`,
+        });
+      }
+    }
+    return out.sort((a, b) =>
+      a.label.localeCompare(b.label, 'pt', { sensitivity: 'base' }),
+    );
+  }
+
+  protected groupingOptions(): { id: string; name: string }[] {
+    return this.groupingsWithUnits().map((g) => ({
+      id: g.id,
+      name: g.name.trim() || '—',
+    }));
+  }
+
+  protected loadAudienceStructure(): void {
+    if (this.structureLoaded) {
+      return;
+    }
+    this.structureBusy.set(true);
+    this.mgmt.loadGroupingsWithUnits(this.condominiumId).subscribe({
+      next: (rows) => {
+        this.structureLoaded = true;
+        this.groupingsWithUnits.set(rows);
+        this.structureBusy.set(false);
+      },
+      error: () => {
+        this.structureBusy.set(false);
+      },
+    });
+  }
+
+  protected setAudienceScope(scope: CommunicationAudienceScope): void {
+    this.audienceScope.set(scope);
+    this.previewUsers.set([]);
+    this.deliveryPrefs.set({});
+  }
+
+  protected toggleUnitInAudience(unitId: string): void {
+    this.selectedUnitIds.update((arr) => {
+      const s = new Set(arr);
+      if (s.has(unitId)) {
+        s.delete(unitId);
+      } else {
+        s.add(unitId);
+      }
+      return [...s];
+    });
+    this.previewUsers.set([]);
+  }
+
+  protected toggleGroupingInAudience(groupingId: string): void {
+    this.selectedGroupingIds.update((arr) => {
+      const s = new Set(arr);
+      if (s.has(groupingId)) {
+        s.delete(groupingId);
+      } else {
+        s.add(groupingId);
+      }
+      return [...s];
+    });
+    this.previewUsers.set([]);
+  }
+
+  protected selectAllUnits(): void {
+    this.selectedUnitIds.set(this.flatUnitOptions().map((o) => o.id));
+    this.previewUsers.set([]);
+  }
+
+  protected clearUnitSelection(): void {
+    this.selectedUnitIds.set([]);
+    this.previewUsers.set([]);
+  }
+
+  protected selectAllGroupings(): void {
+    this.selectedGroupingIds.set(this.groupingOptions().map((g) => g.id));
+    this.previewUsers.set([]);
+  }
+
+  protected clearGroupingSelection(): void {
+    this.selectedGroupingIds.set([]);
+    this.previewUsers.set([]);
+  }
+
+  protected refreshPreview(): void {
+    if (!this.isMgmt()) {
+      return;
+    }
+    this.previewBusy.set(true);
+    this.actionError.set(null);
+    const scope = this.audienceScope();
+    const body =
+      scope === 'units'
+        ? {
+            scope,
+            unitIds: this.selectedUnitIds().length
+              ? this.selectedUnitIds()
+              : undefined,
+          }
+        : {
+            scope,
+            groupingIds: this.selectedGroupingIds().length
+              ? this.selectedGroupingIds()
+              : undefined,
+          };
+    this.api.previewAudience(this.condominiumId, body).subscribe({
+      next: (res) => {
+        this.previewUsers.set(res.users);
+        this.syncPrefsWithGlobals(res.users);
+        this.previewBusy.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.previewBusy.set(false);
+        this.actionError.set(this.msg(err));
+      },
+    });
+  }
+
+  private syncPrefsWithGlobals(users: AudiencePreviewUser[]): void {
+    const cur = { ...this.deliveryPrefs() };
+    const g: DeliveryToggle = {
+      email: this.channelEmail(),
+      sms: this.channelSms(),
+      whatsapp: this.channelWhatsapp(),
+    };
+    for (const u of users) {
+      if (!cur[u.userId]) {
+        cur[u.userId] = {
+          email: g.email && u.hasEmail,
+          sms: g.sms && u.hasPhone,
+          whatsapp: g.whatsapp && u.hasPhone,
+        };
+      } else {
+        cur[u.userId] = {
+          email: cur[u.userId]!.email && u.hasEmail,
+          sms: cur[u.userId]!.sms && u.hasPhone,
+          whatsapp: cur[u.userId]!.whatsapp && u.hasPhone,
+        };
+      }
+    }
+    this.deliveryPrefs.set(cur);
+  }
+
+  protected prefFor(userId: string): DeliveryToggle {
+    return (
+      this.deliveryPrefs()[userId] ?? {
+        email: false,
+        sms: false,
+        whatsapp: false,
+      }
+    );
+  }
+
+  protected setPref(
+    userId: string,
+    key: keyof DeliveryToggle,
+    value: boolean,
+  ): void {
+    this.deliveryPrefs.update((m) => ({
+      ...m,
+      [userId]: { ...this.prefFor(userId), [key]: value },
+    }));
+  }
+
+  protected onGlobalChannelChange(): void {
+    this.syncPrefsWithGlobals(this.previewUsers());
+  }
+
+  private parseJsonIds(raw: string | null | undefined): string[] {
+    if (raw == null || !String(raw).trim()) {
+      return [];
+    }
+    try {
+      const v = JSON.parse(String(raw)) as unknown;
+      return Array.isArray(v) ? v.map(String).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private hydrateAudienceFromCommunication(c: Communication): void {
+    const scope: CommunicationAudienceScope =
+      c.audienceScope === 'groupings' ? 'groupings' : 'units';
+    this.audienceScope.set(scope);
+    this.selectedUnitIds.set(this.parseJsonIds(c.audienceUnitIds ?? null));
+    this.selectedGroupingIds.set(
+      this.parseJsonIds(c.audienceGroupingIds ?? null),
+    );
+    this.channelEmail.set(c.channelEmailEnabled !== false);
+    this.channelSms.set(c.channelSmsEnabled !== false);
+    this.channelWhatsapp.set(c.channelWhatsappEnabled === true);
+    let prefs: RecipientDeliveryPrefPayload[] = [];
+    const raw = c.recipientDeliveryPrefs as unknown;
+    if (Array.isArray(raw)) {
+      prefs = raw as RecipientDeliveryPrefPayload[];
+    } else if (typeof raw === 'string' && raw.trim()) {
+      try {
+        prefs = JSON.parse(raw) as RecipientDeliveryPrefPayload[];
+      } catch {
+        prefs = [];
+      }
+    }
+    const map: Record<string, DeliveryToggle> = {};
+    for (const p of prefs) {
+      map[p.userId] = {
+        email: p.email !== false,
+        sms: p.sms !== false,
+        whatsapp: p.whatsapp === true,
+      };
+    }
+    this.deliveryPrefs.set(map);
+    this.previewUsers.set([]);
+  }
+
   protected reloadList(opts?: { silent?: boolean }): void {
     if (!opts?.silent) {
       this.loadError.set(null);
@@ -117,14 +378,10 @@ export class PainelComunicacaoComponent implements OnInit {
     this.api.list(this.condominiumId).subscribe({
       next: (list) => {
         this.items.set(list);
-        if (!opts?.silent) {
-          this.loading.set(false);
-        }
+        this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
-        if (!opts?.silent) {
-          this.loading.set(false);
-        }
+        this.loading.set(false);
         this.loadError.set(this.msg(err));
       },
     });
@@ -145,12 +402,20 @@ export class PainelComunicacaoComponent implements OnInit {
     this.api.getOne(this.condominiumId, id).subscribe({
       next: (c) => {
         this.busy.set(false);
+        this.loading.set(false);
         this.selected.set(c);
+        if (this.isMgmt() && (c.status === 'draft' || c.status === 'sent')) {
+          this.loadAudienceStructure();
+        }
         if (this.isMgmt() && c.status === 'draft') {
+          this.hydrateAudienceFromCommunication(c);
           this.draftForm.patchValue({
             title: c.title,
             body: c.body ?? '',
           });
+        } else if (this.isMgmt() && c.status === 'sent') {
+          this.hydrateAudienceFromCommunication(c);
+          this.draftForm.reset({ title: '', body: '' });
         } else {
           this.draftForm.reset({ title: '', body: '' });
         }
@@ -162,6 +427,7 @@ export class PainelComunicacaoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
+        this.loading.set(false);
         this.actionError.set(this.msg(err));
         this.selected.set(null);
       },
@@ -193,24 +459,84 @@ export class PainelComunicacaoComponent implements OnInit {
       });
   }
 
+  private buildPrefsPayloadForSave(): RecipientDeliveryPrefPayload[] {
+    if (this.previewUsers().length === 0) {
+      return [];
+    }
+    return this.buildPrefsPayload();
+  }
+
+  private buildPrefsPayload(): RecipientDeliveryPrefPayload[] {
+    const users = this.previewUsers();
+    return users.map((u) => {
+      const p = this.prefFor(u.userId);
+      return {
+        userId: u.userId,
+        email: p.email,
+        sms: p.sms,
+        whatsapp: p.whatsapp,
+      };
+    });
+  }
+
+  /** Audiência e canais (informativo já enviado — sem título/corpo). */
+  private buildDeliveryPatchOnly(): {
+    audienceScope: CommunicationAudienceScope;
+    audienceUnitIds?: string[];
+    audienceGroupingIds?: string[];
+    channelEmailEnabled: boolean;
+    channelSmsEnabled: boolean;
+    channelWhatsappEnabled: boolean;
+    recipientDeliveryPrefs: RecipientDeliveryPrefPayload[];
+  } {
+    const scope = this.audienceScope();
+    return {
+      audienceScope: scope,
+      audienceUnitIds:
+        scope === 'units' ? this.selectedUnitIds() : undefined,
+      audienceGroupingIds:
+        scope === 'groupings' ? this.selectedGroupingIds() : undefined,
+      channelEmailEnabled: this.channelEmail(),
+      channelSmsEnabled: this.channelSms(),
+      channelWhatsappEnabled: this.channelWhatsapp(),
+      recipientDeliveryPrefs: this.buildPrefsPayloadForSave(),
+    };
+  }
+
+  private buildDraftPatch(): {
+    title: string;
+    body: string;
+    audienceScope: CommunicationAudienceScope;
+    audienceUnitIds?: string[];
+    audienceGroupingIds?: string[];
+    channelEmailEnabled: boolean;
+    channelSmsEnabled: boolean;
+    channelWhatsappEnabled: boolean;
+    recipientDeliveryPrefs: RecipientDeliveryPrefPayload[];
+  } {
+    const v = this.draftForm.getRawValue();
+    return {
+      title: v.title.trim(),
+      body: v.body,
+      ...this.buildDeliveryPatchOnly(),
+    };
+  }
+
   protected saveDraft(): void {
     const c = this.selected();
     if (!c || c.status !== 'draft' || this.draftForm.invalid) {
       this.draftForm.markAllAsTouched();
       return;
     }
-    const v = this.draftForm.getRawValue();
     this.busy.set(true);
     this.actionError.set(null);
     this.api
-      .update(this.condominiumId, c.id, {
-        title: v.title.trim(),
-        body: v.body,
-      })
+      .update(this.condominiumId, c.id, this.buildDraftPatch())
       .subscribe({
         next: (updated) => {
           this.busy.set(false);
           this.selected.set(updated);
+          this.hydrateAudienceFromCommunication(updated);
           this.reloadList();
         },
         error: (err: HttpErrorResponse) => {
@@ -222,20 +548,76 @@ export class PainelComunicacaoComponent implements OnInit {
 
   protected sendSelected(): void {
     const c = this.selected();
-    if (!c || c.status !== 'draft') return;
+    if (!c || c.status !== 'draft' || this.draftForm.invalid) {
+      this.draftForm.markAllAsTouched();
+      return;
+    }
     this.busy.set(true);
     this.actionError.set(null);
-    this.api.send(this.condominiumId, c.id).subscribe({
-      next: (sent) => {
-        this.busy.set(false);
-        this.selected.set(sent);
-        this.reloadList();
-      },
-      error: (err: HttpErrorResponse) => {
-        this.busy.set(false);
-        this.actionError.set(this.msg(err));
-      },
-    });
+    const patch = this.buildDraftPatch();
+    this.api
+      .update(this.condominiumId, c.id, patch)
+      .pipe(switchMap(() => this.api.send(this.condominiumId, c.id)))
+      .subscribe({
+        next: (sent) => {
+          this.busy.set(false);
+          this.selected.set(sent);
+          this.reloadList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.msg(err));
+        },
+      });
+  }
+
+  protected saveDeliverySettings(): void {
+    const c = this.selected();
+    if (!c || c.status !== 'sent' || !this.isMgmt()) {
+      return;
+    }
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.api
+      .update(this.condominiumId, c.id, this.buildDeliveryPatchOnly())
+      .subscribe({
+        next: (updated) => {
+          this.busy.set(false);
+          this.selected.set(updated);
+          this.hydrateAudienceFromCommunication(updated);
+          this.reloadList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.msg(err));
+        },
+      });
+  }
+
+  /** Grava audiência/canais e dispara novo e-mail/SMS com novos links. */
+  protected resendSelected(): void {
+    const c = this.selected();
+    if (!c || c.status !== 'sent' || !this.isMgmt()) {
+      return;
+    }
+    this.busy.set(true);
+    this.actionError.set(null);
+    const patch = this.buildDeliveryPatchOnly();
+    this.api
+      .update(this.condominiumId, c.id, patch)
+      .pipe(switchMap(() => this.api.send(this.condominiumId, c.id)))
+      .subscribe({
+        next: (updated) => {
+          this.busy.set(false);
+          this.selected.set(updated);
+          this.hydrateAudienceFromCommunication(updated);
+          this.reloadList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.msg(err));
+        },
+      });
   }
 
   protected onAttachmentSelected(ev: Event): void {
@@ -312,11 +694,11 @@ export class PainelComunicacaoComponent implements OnInit {
   protected channelLabel(st: DeliveryChannelStatus): string {
     switch (st) {
       case 'pending':
-        return 'pendente';
+        return 'Pendente';
       case 'sent':
-        return 'enviado';
+        return 'Enviado';
       case 'failed':
-        return 'falhou';
+        return 'Falhou';
       case 'skipped':
         return '—';
       default:
@@ -326,9 +708,58 @@ export class PainelComunicacaoComponent implements OnInit {
 
   protected recipientRead(r: CommunicationRecipientRow): string {
     if (r.readAt) {
-      return `Lido (${formatDateTimeDdMmYyyyHhMm(r.readAt)})`;
+      const src = r.readSource ? ` · ${this.readSourceLabel(r.readSource)}` : '';
+      return `Lido (${formatDateTimeDdMmYyyyHhMm(r.readAt)}${src})`;
     }
     return 'Ainda não lido';
+  }
+
+  protected readChannelLabel(ch: string): string {
+    switch (ch) {
+      case 'email':
+        return 'E-mail';
+      case 'sms':
+        return 'SMS';
+      case 'whatsapp':
+        return 'WhatsApp';
+      case 'legacy_email':
+        return 'E-mail (legado)';
+      case 'app':
+        return 'App / painel';
+      default:
+        return ch;
+    }
+  }
+
+  protected readAccessKindLabel(kind: string): string {
+    switch (kind) {
+      case 'public_view':
+        return 'Abriu a página';
+      case 'attachment_download':
+        return 'Download de anexo';
+      case 'app_panel':
+        return 'Marcou como lido (app)';
+      default:
+        return kind;
+    }
+  }
+
+  private readSourceLabel(
+    src: NonNullable<CommunicationRecipientRow['readSource']>,
+  ): string {
+    switch (src) {
+      case 'app':
+        return 'painel';
+      case 'email_token':
+      case 'email_link':
+        return 'link do e-mail';
+      case 'sms_link':
+        return 'link do SMS';
+      case 'whatsapp_link':
+        return 'link do WhatsApp';
+      default:
+        return src;
+    }
   }
 
   protected fmtSentAt(iso: string | null | undefined): string {

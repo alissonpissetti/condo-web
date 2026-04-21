@@ -5,5 +5,6 @@ export const environment = {
   /**
    * Convites: na API use FRONTEND_PUBLIC_URL = esta origem (ex.: http://localhost:4200).
    * Links: {FRONTEND_PUBLIC_URL}/invitations/{token} → rota `invitations/:token` redireciona ao cadastro.
+   * Comunicados: {FRONTEND_PUBLIC_URL}/comunicado/publico?token=… → leitura pública (regista leitura na API).
    */
 };

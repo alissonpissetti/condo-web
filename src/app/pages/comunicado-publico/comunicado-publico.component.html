@@ -1,0 +1,40 @@
+<div class="public-comm">
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else {
+    @if (error()) {
+      <p class="public-comm__error" role="alert">{{ error() }}</p>
+    } @else {
+      @if (data(); as d) {
+        <header class="public-comm__head">
+          <p class="public-comm__condo">{{ d.condominiumName }}</p>
+          <h1 class="public-comm__title">{{ d.title }}</h1>
+          @if (d.sentAt) {
+            <p class="muted sm">Enviado em {{ fmtSent(d.sentAt) }}</p>
+          }
+        </header>
+        <article class="public-comm__body poll-body-html" [innerHTML]="bodyHtml()"></article>
+        @if (d.attachments.length) {
+          <section class="public-comm__attachments" aria-label="Anexos">
+            <h2 class="public-comm__sub">Anexos</h2>
+            <ul class="public-comm__att-list">
+              @for (a of d.attachments; track a.id) {
+                <li>
+                  @if (a.fileUrl) {
+                    <a [href]="a.fileUrl" class="public-comm__link" target="_blank" rel="noopener noreferrer">{{
+                      a.originalFilename
+                    }}</a>
+                  } @else {
+                    <span>{{ a.originalFilename }}</span>
+                  }
+                  <span class="muted sm">{{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+        <p class="muted sm public-comm__foot">Somente leitura. A abertura desta página registra a sua leitura.</p>
+      }
+    }
+  }
+</div>

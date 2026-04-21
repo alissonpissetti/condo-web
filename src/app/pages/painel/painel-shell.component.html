@@ -84,6 +84,12 @@
         [routerLinkActiveOptions]="{ exact: true }"
         >Meus Condomínios</a
       >
+      <a
+        routerLink="/painel/suporte"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        >Suporte</a
+      >
 
       @if (selectedCondo.selectedId(); as condoId) {
         <div class="nav-divider" role="separator" aria-hidden="true"></div>

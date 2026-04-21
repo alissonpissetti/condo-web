@@ -11,7 +11,27 @@ export type DeliveryChannelStatus =
   | 'failed'
   | 'skipped';
 
-export type CommunicationReadSource = 'app' | 'email_token';
+export type CommunicationReadSource =
+  | 'app'
+  | 'email_token'
+  | 'email_link'
+  | 'sms_link'
+  | 'whatsapp_link';
+
+export type CommunicationReadLinkChannel = 'email' | 'sms' | 'whatsapp';
+
+export interface CommunicationReadConfirmation {
+  userId: string;
+  /** Nome na ficha ou e-mail de quem acedeu (conta do link / app). */
+  readerName: string;
+  unitId: string;
+  unitLabel: string;
+  /** Canal do token (`email`, `sms`, `whatsapp`, `legacy_email`, `app`, …). */
+  channel: string;
+  /** `public_view` | `attachment_download` | `app_panel`. */
+  kind: string;
+  readAt: string;
+}
 
 export interface CommunicationAttachmentRow {
   id: string;
@@ -29,20 +49,46 @@ export interface CommunicationRecipientRow {
   id: string;
   communicationId: string;
   userId: string;
+  /** Nome na ficha ou contacto no momento do envio. */
+  recipientDisplayName?: string | null;
   emailSnapshot: string | null;
   phoneSnapshot: string | null;
   emailStatus: DeliveryChannelStatus;
   smsStatus: DeliveryChannelStatus;
   emailError: string | null;
   smsError: string | null;
+  whatsappStatus?: DeliveryChannelStatus;
+  whatsappError?: string | null;
   readAt: string | null;
   readSource: CommunicationReadSource | null;
   createdAt: string;
 }
 
+export type CommunicationAudienceScope = 'units' | 'groupings';
+
+export interface RecipientDeliveryPrefPayload {
+  userId: string;
+  email?: boolean;
+  sms?: boolean;
+  whatsapp?: boolean;
+}
+
+export interface AudiencePreviewUser {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  phone: string | null;
+  hasEmail: boolean;
+  hasPhone: boolean;
+  unitSummary: string[];
+}
+
 export interface Communication {
   id: string;
   condominiumId: string;
+  /** Quem disparou o último envio/reenvio (gestão). */
+  lastBroadcastUserId?: string | null;
+  lastBroadcastUserName?: string | null;
   title: string;
   body: string | null;
   status: CommunicationStatus;
@@ -50,8 +96,17 @@ export interface Communication {
   sentAt: string | null;
   createdAt: string;
   updatedAt: string;
+  audienceScope?: CommunicationAudienceScope;
+  audienceUnitIds?: string | null;
+  audienceGroupingIds?: string | null;
+  channelEmailEnabled?: boolean;
+  channelSmsEnabled?: boolean;
+  channelWhatsappEnabled?: boolean;
+  recipientDeliveryPrefs?: string | null;
   attachments?: CommunicationAttachmentRow[];
   recipients?: CommunicationRecipientRow[];
+  /** Histórico de acessos (cada abertura de página, download ou leitura no app). Só no detalhe quando aplicável. */
+  readConfirmations?: CommunicationReadConfirmation[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -84,11 +139,35 @@ export class CommunicationsApiService {
   update(
     condominiumId: string,
     communicationId: string,
-    patch: { title?: string; body?: string },
+    patch: {
+      title?: string;
+      body?: string;
+      audienceScope?: CommunicationAudienceScope;
+      audienceUnitIds?: string[];
+      audienceGroupingIds?: string[];
+      channelEmailEnabled?: boolean;
+      channelSmsEnabled?: boolean;
+      channelWhatsappEnabled?: boolean;
+      recipientDeliveryPrefs?: RecipientDeliveryPrefPayload[];
+    },
   ): Observable<Communication> {
     return this.http.patch<Communication>(
       `${this.base}/condominiums/${condominiumId}/communications/${communicationId}`,
       patch,
+    );
+  }
+
+  previewAudience(
+    condominiumId: string,
+    body: {
+      scope: CommunicationAudienceScope;
+      unitIds?: string[];
+      groupingIds?: string[];
+    },
+  ): Observable<{ users: AudiencePreviewUser[] }> {
+    return this.http.post<{ users: AudiencePreviewUser[] }>(
+      `${this.base}/condominiums/${condominiumId}/communications/audience-preview`,
+      body,
     );
   }
 

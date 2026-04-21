@@ -2,10 +2,9 @@
   <header class="page__header">
     <h1>Comunicação</h1>
     <p class="page__intro">
-      Informativos do condomínio com anexos. O síndico cria um rascunho, anexa ficheiros e
-      envia por e-mail e SMS (quando os destinatários têm contactos válidos na conta). Os
-      moradores veem os enviados e a leitura fica registrada ao abrir.
-      <span class="page__intro-muted">WhatsApp: em breve.</span>
+      Informativos com anexos. O síndico escolhe destinatários (contas de usuários ligadas às unidades
+      como proprietário ou responsável), canais (e-mail, SMS e WhatsApp em integração) e envia. A
+      leitura fica registrada ao abrir no painel ou pelo link do e-mail.
     </p>
   </header>
 
@@ -30,133 +29,490 @@
         <button type="button" class="btn ghost sm" (click)="closeDetail()">← Voltar à lista</button>
       </div>
 
-      <article class="form-card comm-detail">
-        <h2 class="form-card__title">{{ sel.title }}</h2>
-        <p class="muted sm">
-          Estado: <strong>{{ sel.status === 'sent' ? 'Enviado' : 'Rascunho' }}</strong>
-          @if (sel.sentAt) {
-            · {{ fmtSentAt(sel.sentAt) }}
-          }
-        </p>
+      @if (isMgmt() && (sel.status === 'draft' || sel.status === 'sent')) {
+        <div class="comm-layout">
+          <div class="comm-layout__row-split">
+            <article class="form-card comm-card comm-card--stretch">
+              <div class="comm-card__inner">
+                @if (sel.status === 'draft') {
+                <div class="comm-card__head">
+                  <div class="comm-card__head-main">
+                    <span class="form-section__step" aria-hidden="true">1</span>
+                    <div class="comm-card__head-text">
+                      <h2 class="comm-card__title">Mensagem do informativo</h2>
+                    </div>
+                  </div>
+                  <div class="comm-card__actions">
+                    <button type="button" class="btn primary" [disabled]="busy()" (click)="saveDraft()">
+                      Salvar rascunho
+                    </button>
+                    <button type="button" class="btn primary" [disabled]="busy()" (click)="sendSelected()">
+                      Enviar
+                    </button>
+                  </div>
+                </div>
+                <form [formGroup]="draftForm" (ngSubmit)="saveDraft()" class="comm-draft-form">
+                <label class="field field--block">
+                  <span class="field__label">Título</span>
+                  <input class="input" type="text" formControlName="title" maxlength="512" />
+                </label>
+                <label class="field field--block">
+                  <span class="field__label">Mensagem</span>
+                  <app-poll-body-editor formControlName="body" />
+                </label>
+                <button type="submit" class="sr-only">Salvar rascunho</button>
+              </form>
 
-        @if (sel.status === 'sent') {
-          <div class="comm-body poll-body-html" [innerHTML]="safeHtml(sel.body)"></div>
-        } @else if (isMgmt()) {
-          <form [formGroup]="draftForm" (ngSubmit)="saveDraft()" class="comm-draft-form">
-            <label class="field field--block">
-              <span class="field__label">Título</span>
-              <input class="input" type="text" formControlName="title" maxlength="512" />
-            </label>
-            <label class="field field--block">
-              <span class="field__label">Mensagem</span>
-              <app-poll-body-editor formControlName="body" />
-            </label>
-            <div class="comm-draft-actions">
-              <button type="submit" class="btn primary" [disabled]="busy()">Salvar rascunho</button>
+              @if (sel.attachments?.length) {
+                <h3 class="comm-subh">Anexos</h3>
+                <ul class="comm-att-list">
+                  @for (a of sel.attachments; track a.id) {
+                    <li class="comm-att-row">
+                      <span>{{ a.originalFilename }}</span>
+                      <span class="muted sm"
+                        >{{ a.mimeType }} · {{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span
+                      >
+                      <div class="comm-att-row__actions">
+                        <button
+                          type="button"
+                          class="btn ghost sm"
+                          [disabled]="busy()"
+                          (click)="downloadAttachment(a)"
+                        >
+                          Baixar
+                        </button>
+                        <button
+                          type="button"
+                          class="btn ghost sm"
+                          [disabled]="busy()"
+                          (click)="removeAttachment(a)"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <div class="comm-upload">
+                <label class="btn ghost sm comm-file-label">
+                  Adicionar anexo
+                  <input
+                    type="file"
+                    class="sr-only"
+                    [disabled]="busy()"
+                    (change)="onAttachmentSelected($event)"
+                  />
+                </label>
+                <p class="muted sm">
+                  Tipos permitidos: PDF, imagens, Word, texto, áudio e vídeo (MP4, WebM, MOV).
+                </p>
+              </div>
+                } @else {
+                <div class="comm-card__head">
+                  <div class="comm-card__head-main">
+                    <div class="comm-card__head-text">
+                      <h2 class="comm-card__title">{{ sel.title }}</h2>
+                      <p class="muted sm">
+                        Estado: <strong>Enviado</strong>
+                        @if (sel.sentAt) {
+                          · {{ fmtSentAt(sel.sentAt) }}
+                        }
+                      </p>
+                      @if (sel.lastBroadcastUserName) {
+                        <p class="muted sm">
+                          Último disparo por: <strong>{{ sel.lastBroadcastUserName }}</strong>
+                        </p>
+                      }
+                    </div>
+                  </div>
+                </div>
+                <p class="muted sm">
+                  Título, mensagem e anexos não podem ser alterados. À direita ajuste a audiência, os
+                  interruptores de canal e a tabela por pessoa; use <strong>Guardar destinatários e canais</strong>
+                  só para gravar, ou <strong>Enviar novamente</strong> para gravar e disparar e-mail/SMS com novos
+                  links.
+                </p>
+                <div class="comm-body poll-body-html" [innerHTML]="safeHtml(sel.body)"></div>
+                @if (sel.attachments?.length) {
+                  <h3 class="comm-subh">Anexos</h3>
+                  <ul class="comm-att-list">
+                    @for (a of sel.attachments; track a.id) {
+                      <li class="comm-att-row">
+                        <span>{{ a.originalFilename }}</span>
+                        <span class="muted sm"
+                          >{{ a.mimeType }} · {{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span
+                        >
+                        <div class="comm-att-row__actions">
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            [disabled]="busy()"
+                            (click)="downloadAttachment(a)"
+                          >
+                            Baixar
+                          </button>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+                }
+              </div>
+            </article>
+
+            <aside class="form-card comm-card comm-card--stretch">
+              <div class="comm-card__inner">
+                <div class="comm-card__head">
+                  <div class="comm-card__head-main">
+                    <span class="form-section__step" aria-hidden="true">2</span>
+                    <div class="comm-card__head-text">
+                      <h2 class="comm-card__title">Destinatários e canais</h2>
+                      @if (sel.status === 'draft') {
+                        <p class="comm-side-hint">
+                          Entram apenas <strong>usuários</strong> com conta ligada à ficha (proprietário ou
+                          responsável). Lista vazia significa todas as unidades ou todos os agrupamentos. O
+                          botão <strong>Enviar</strong> salva o rascunho e a audiência antes de disparar os
+                          canais.
+                        </p>
+                      } @else {
+                        <p class="comm-side-hint">
+                          Ajuste a audiência e os canais para o <strong>próximo envio</strong>. Os links já
+                          enviados continuam válidos. Guarde as alterações ou use <strong>Enviar novamente</strong>
+                          para gravar e notificar.
+                        </p>
+                      }
+                    </div>
+                  </div>
+                </div>
+
+              @if (structureBusy()) {
+                <p class="muted sm">Carregando unidades…</p>
+              }
+
+              <fieldset class="comm-fieldset">
+                <legend class="comm-legend">Audiência</legend>
+                <div class="comm-seg">
+                  <label class="comm-radio">
+                    <input
+                      type="radio"
+                      name="aud"
+                      [checked]="audienceScope() === 'units'"
+                      (change)="setAudienceScope('units')"
+                    />
+                    Por unidade
+                  </label>
+                  <label class="comm-radio">
+                    <input
+                      type="radio"
+                      name="aud"
+                      [checked]="audienceScope() === 'groupings'"
+                      (change)="setAudienceScope('groupings')"
+                    />
+                    Por agrupamento
+                  </label>
+                </div>
+              </fieldset>
+
+              @if (audienceScope() === 'units') {
+                <div class="comm-scroll">
+                  @for (u of flatUnitOptions(); track u.id) {
+                    <label class="comm-check">
+                      <input
+                        type="checkbox"
+                        [checked]="selectedUnitIds().includes(u.id)"
+                        (change)="toggleUnitInAudience(u.id)"
+                      />
+                      <span>{{ u.label }}</span>
+                    </label>
+                  }
+                </div>
+                <div class="comm-mini-actions">
+                  <button type="button" class="btn ghost sm" (click)="selectAllUnits()">
+                    Marcar todas as unidades
+                  </button>
+                  <button type="button" class="btn ghost sm" (click)="clearUnitSelection()">
+                    Limpar seleção
+                  </button>
+                </div>
+              } @else {
+                <div class="comm-scroll">
+                  @for (g of groupingOptions(); track g.id) {
+                    <label class="comm-check">
+                      <input
+                        type="checkbox"
+                        [checked]="selectedGroupingIds().includes(g.id)"
+                        (change)="toggleGroupingInAudience(g.id)"
+                      />
+                      <span>{{ g.name }}</span>
+                    </label>
+                  }
+                </div>
+                <div class="comm-mini-actions">
+                  <button type="button" class="btn ghost sm" (click)="selectAllGroupings()">
+                    Marcar todos os agrupamentos
+                  </button>
+                  <button type="button" class="btn ghost sm" (click)="clearGroupingSelection()">
+                    Limpar seleção
+                  </button>
+                </div>
+              }
+
+              <fieldset class="comm-fieldset">
+                <legend class="comm-legend">Canais padrão</legend>
+                <p class="muted sm comm-fieldset-help">
+                  Valores iniciais para novos destinatários na tabela abaixo; dá para ajustar por
+                  pessoa depois da pré-visualização.
+                </p>
+                <label class="comm-check">
+                  <input
+                    type="checkbox"
+                    [checked]="channelEmail()"
+                    (change)="channelEmail.set($any($event.target).checked); onGlobalChannelChange()"
+                  />
+                  E-mail
+                </label>
+                <label class="comm-check">
+                  <input
+                    type="checkbox"
+                    [checked]="channelSms()"
+                    (change)="channelSms.set($any($event.target).checked); onGlobalChannelChange()"
+                  />
+                  SMS
+                </label>
+                <label class="comm-check">
+                  <input
+                    type="checkbox"
+                    [checked]="channelWhatsapp()"
+                    (change)="channelWhatsapp.set($any($event.target).checked); onGlobalChannelChange()"
+                  />
+                  WhatsApp <span class="muted sm">(integração em breve)</span>
+                </label>
+              </fieldset>
+
               <button
                 type="button"
-                class="btn primary"
-                [disabled]="busy()"
-                (click)="sendSelected()"
+                class="btn ghost comm-preview-btn"
+                [disabled]="busy() || previewBusy() || structureBusy()"
+                (click)="refreshPreview()"
               >
-                Enviar
+                {{ previewBusy() ? 'Calculando…' : 'Atualizar lista de destinatários' }}
               </button>
+
+              @if (previewUsers().length > 0) {
+                <h3 class="comm-subh">Quem recebe (por canal)</h3>
+                <div class="comm-table-wrap">
+                  <table class="comm-table comm-table--dense">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Unidades</th>
+                        <th title="Enviar e-mail">E-mail</th>
+                        <th title="Enviar SMS">SMS</th>
+                        <th title="WhatsApp (em breve)">WApp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (u of previewUsers(); track u.userId) {
+                        <tr>
+                          <td>{{ u.displayName }}</td>
+                          <td class="muted sm">{{ u.unitSummary.join('; ') }}</td>
+                          <td>
+                            @if (u.hasEmail) {
+                              <input
+                                type="checkbox"
+                                [checked]="prefFor(u.userId).email"
+                                (change)="setPref(u.userId, 'email', $any($event.target).checked)"
+                              />
+                            } @else {
+                              <span class="muted">—</span>
+                            }
+                          </td>
+                          <td>
+                            @if (u.hasPhone) {
+                              <input
+                                type="checkbox"
+                                [checked]="prefFor(u.userId).sms"
+                                (change)="setPref(u.userId, 'sms', $any($event.target).checked)"
+                              />
+                            } @else {
+                              <span class="muted">—</span>
+                            }
+                          </td>
+                          <td>
+                            @if (u.hasPhone) {
+                              <input
+                                type="checkbox"
+                                [checked]="prefFor(u.userId).whatsapp"
+                                (change)="setPref(u.userId, 'whatsapp', $any($event.target).checked)"
+                              />
+                            } @else {
+                              <span class="muted">—</span>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              } @else if (!previewBusy()) {
+                <p class="muted sm">
+                  Clique em <strong>Atualizar lista de destinatários</strong> para montar a tabela
+                  com as contas que receberão o informativo.
+                </p>
+              }
+
+              @if (sel.status === 'sent') {
+                <div class="comm-aside-sent-actions">
+                  <button type="button" class="btn ghost" [disabled]="busy()" (click)="saveDeliverySettings()">
+                    Guardar destinatários e canais
+                  </button>
+                  <button type="button" class="btn primary" [disabled]="busy()" (click)="resendSelected()">
+                    Enviar novamente
+                  </button>
+                </div>
+              }
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        @if (sel.status === 'sent' && sel.recipients?.length) {
+          <article class="form-card comm-detail">
+            <h3 class="comm-subh">Último disparo — destinatários</h3>
+            <div class="comm-table-wrap">
+              <table class="comm-table">
+                <thead>
+                  <tr>
+                    <th>Pessoa (conta)</th>
+                    <th>E-mail</th>
+                    <th>SMS</th>
+                    <th>WhatsApp</th>
+                    <th>Leitura</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of sel.recipients; track r.id) {
+                    <tr>
+                      <td>
+                        <strong>{{ r.recipientDisplayName?.trim() || r.emailSnapshot || '—' }}</strong>
+                      </td>
+                      <td>
+                        <span [ngClass]="{ 'text-err': r.emailStatus === 'failed' }">{{
+                          channelLabel(r.emailStatus)
+                        }}</span>
+                        @if (r.emailError) {
+                          <span class="muted sm">{{ r.emailError }}</span>
+                        }
+                      </td>
+                      <td>
+                        <span [ngClass]="{ 'text-err': r.smsStatus === 'failed' }">{{
+                          channelLabel(r.smsStatus)
+                        }}</span>
+                        @if (r.smsError) {
+                          <span class="muted sm">{{ r.smsError }}</span>
+                        }
+                      </td>
+                      <td>
+                        <span
+                          [ngClass]="{
+                            'text-err': r.whatsappStatus === 'failed',
+                          }"
+                          >{{ channelLabel(r.whatsappStatus ?? 'skipped') }}</span
+                        >
+                        @if (r.whatsappError) {
+                          <span class="muted sm">{{ r.whatsappError }}</span>
+                        }
+                      </td>
+                      <td>{{ recipientRead(r) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
-          </form>
-        } @else {
-          <p class="muted">Este informativo ainda não foi enviado.</p>
+          </article>
         }
 
-        @if (sel.attachments?.length) {
-          <h3 class="comm-subh">Anexos</h3>
-          <ul class="comm-att-list">
-            @for (a of sel.attachments; track a.id) {
-              <li class="comm-att-row">
-                <span>{{ a.originalFilename }}</span>
-                <span class="muted sm"
-                  >{{ a.mimeType }} · {{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span
-                >
-                <div class="comm-att-row__actions">
-                  <button
-                    type="button"
-                    class="btn ghost sm"
-                    [disabled]="busy()"
-                    (click)="downloadAttachment(a)"
+        @if (sel.status === 'sent' && sel.readConfirmations?.length) {
+          <article class="form-card comm-detail">
+            <h3 class="comm-subh">Histórico de leituras e acessos</h3>
+            <p class="muted sm comm-read-hint">
+              Cada linha é um acesso registado (página pública, download de anexo ou leitura no app). Os
+              links por e-mail e SMS não expiram.
+            </p>
+            <div class="comm-table-wrap">
+              <table class="comm-table comm-table--dense">
+                <thead>
+                  <tr>
+                    <th>Quem acedeu</th>
+                    <th>Unidade</th>
+                    <th>Canal</th>
+                    <th>Tipo</th>
+                    <th>Registado em</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (
+                    rc of sel.readConfirmations;
+                    track rc.readerName + rc.unitId + rc.channel + rc.kind + rc.readAt
+                  ) {
+                    <tr>
+                      <td><strong>{{ rc.readerName }}</strong></td>
+                      <td>{{ rc.unitLabel }}</td>
+                      <td>{{ readChannelLabel(rc.channel) }}</td>
+                      <td>{{ readAccessKindLabel(rc.kind) }}</td>
+                      <td class="muted sm">{{ fmtSentAt(rc.readAt) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </article>
+        }
+      } @else {
+        <article class="form-card comm-detail">
+          <h2 class="form-card__title">{{ sel.title }}</h2>
+          <p class="muted sm">
+            Estado: <strong>{{ sel.status === 'sent' ? 'Enviado' : 'Rascunho' }}</strong>
+            @if (sel.sentAt) {
+              · {{ fmtSentAt(sel.sentAt) }}
+            }
+          </p>
+
+          @if (sel.status === 'sent') {
+            <div class="comm-body poll-body-html" [innerHTML]="safeHtml(sel.body)"></div>
+          } @else if (isMgmt()) {
+            <p class="muted">Este informativo ainda não foi enviado.</p>
+          } @else {
+            <p class="muted">Este informativo ainda não foi enviado.</p>
+          }
+
+          @if (sel.attachments?.length) {
+            <h3 class="comm-subh">Anexos</h3>
+            <ul class="comm-att-list">
+              @for (a of sel.attachments; track a.id) {
+                <li class="comm-att-row">
+                  <span>{{ a.originalFilename }}</span>
+                  <span class="muted sm"
+                    >{{ a.mimeType }} · {{ (a.sizeBytes / 1024) | number: '1.0-0' }} KB</span
                   >
-                    Download
-                  </button>
-                  @if (isMgmt() && sel.status === 'draft') {
+                  <div class="comm-att-row__actions">
                     <button
                       type="button"
                       class="btn ghost sm"
                       [disabled]="busy()"
-                      (click)="removeAttachment(a)"
+                      (click)="downloadAttachment(a)"
                     >
-                      Remover
+                      Baixar
                     </button>
-                  }
-                </div>
-              </li>
-            }
-          </ul>
-        }
-
-        @if (isMgmt() && sel.status === 'draft') {
-          <div class="comm-upload">
-            <label class="btn ghost sm comm-file-label">
-              Adicionar anexo
-              <input
-                type="file"
-                class="sr-only"
-                [disabled]="busy()"
-                (change)="onAttachmentSelected($event)"
-              />
-            </label>
-            <p class="muted sm">
-              Tipos permitidos: PDF, imagens, Word, texto, áudio e vídeo (MP4, WebM, MOV), com
-              limites de tamanho definidos na API.
-            </p>
-          </div>
-        }
-
-        @if (isMgmt() && sel.status === 'sent' && sel.recipients?.length) {
-          <h3 class="comm-subh">Destinatários</h3>
-          <div class="comm-table-wrap">
-            <table class="comm-table">
-              <thead>
-                <tr>
-                  <th>E-mail</th>
-                  <th>SMS</th>
-                  <th>Leitura</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (r of sel.recipients; track r.id) {
-                  <tr>
-                    <td>
-                      <span [ngClass]="{ 'text-err': r.emailStatus === 'failed' }">{{
-                        channelLabel(r.emailStatus)
-                      }}</span>
-                      @if (r.emailError) {
-                        <span class="muted sm">{{ r.emailError }}</span>
-                      }
-                    </td>
-                    <td>
-                      <span [ngClass]="{ 'text-err': r.smsStatus === 'failed' }">{{
-                        channelLabel(r.smsStatus)
-                      }}</span>
-                      @if (r.smsError) {
-                        <span class="muted sm">{{ r.smsError }}</span>
-                      }
-                    </td>
-                    <td>{{ recipientRead(r) }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </article>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </article>
+      }
     } @else {
       @if (isMgmt()) {
         <div class="list-toolbar">
