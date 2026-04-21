@@ -295,6 +295,17 @@
   word-break: break-word;
 }
 
+.ticket-table__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 0.12em;
+}
+
+.ticket-table__link:hover {
+  color: var(--accent);
+}
+
 .ticket-row {
   cursor: pointer;
   transition: background 0.12s ease;

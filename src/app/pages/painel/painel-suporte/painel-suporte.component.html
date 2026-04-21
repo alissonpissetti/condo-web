@@ -128,7 +128,7 @@
           <div class="form-card__head form-card__head--row">
             <div>
               <h2 id="lista-solicitacoes" class="form-card__title">As minhas solicitações</h2>
-              <p class="form-card__hint">Clique numa linha para ver a descrição completa.</p>
+              <p class="form-card__hint">Clique numa linha para abrir o chamado e o histórico de mensagens.</p>
             </div>
             <button type="button" class="btn btn--ghost" (click)="refreshList()">Atualizar</button>
           </div>
@@ -151,30 +151,25 @@
                   @for (t of tickets(); track t.id) {
                     <tr
                       class="ticket-row"
-                      [class.ticket-row--open]="expandedId() === t.id"
-                      (click)="toggleExpand(t.id)"
-                      (keydown.enter)="toggleExpand(t.id)"
-                      (keydown.space)="$event.preventDefault(); toggleExpand(t.id)"
+                      (click)="openChamado(t.id)"
+                      (keydown.enter)="openChamado(t.id)"
+                      (keydown.space)="$event.preventDefault(); openChamado(t.id)"
                       tabindex="0"
-                      role="button"
-                      [attr.aria-expanded]="expandedId() === t.id"
+                      role="link"
                     >
                       <td>{{ t.createdAt | date: 'short' }}</td>
                       <td>{{ categoryLabel(t.category) }}</td>
-                      <td class="ticket-table__title">{{ t.title }}</td>
+                      <td class="ticket-table__title">
+                        <a
+                          class="ticket-table__link"
+                          [routerLink]="['/painel', 'suporte', 'chamado', t.id]"
+                          (click)="$event.stopPropagation()"
+                          >{{ t.title }}</a
+                        >
+                      </td>
                       <td>{{ condoLabel(t.condominiumId) }}</td>
                       <td>{{ statusLabelPt(t.status) }}</td>
                     </tr>
-                    @if (expandedId() === t.id) {
-                      <tr class="ticket-detail-row">
-                        <td colspan="5">
-                          <div class="ticket-detail">
-                            <h3 class="ticket-detail__h">Descrição</h3>
-                            <pre class="ticket-detail__body">{{ t.body }}</pre>
-                          </div>
-                        </td>
-                      </tr>
-                    }
                   }
                 </tbody>
               </table>

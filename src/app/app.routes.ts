@@ -34,6 +34,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'suporte/chamado/:ticketId',
+    loadComponent: () =>
+      import('./pages/suporte-chamado/suporte-chamado.component').then(
+        (m) => m.SuporteChamadoComponent,
+      ),
+  },
+  {
     path: 'auth/forgot-password',
     loadComponent: () =>
       import('./pages/forgot-password/forgot-password.component').then(

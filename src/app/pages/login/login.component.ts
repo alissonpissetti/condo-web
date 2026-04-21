@@ -5,7 +5,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { translateHttpErrorMessage } from '../../core/api-errors-pt';
 import { AuthService } from '../../core/auth.service';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
@@ -25,6 +25,7 @@ export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly error = signal<string | null>(null);
   protected readonly submitting = signal(false);
@@ -65,7 +66,7 @@ export class LoginComponent {
     this.submitting.set(true);
     const { email, password } = this.form.getRawValue();
     this.auth.login(email, password).subscribe({
-      next: () => void this.router.navigateByUrl('/painel'),
+      next: () => void this.navigateAfterLogin(),
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
         this.error.set(this.messageFromHttp(err));
@@ -123,7 +124,7 @@ export class LoginComponent {
     this.smsVerifying.set(true);
     const { phone, code } = this.smsForm.getRawValue();
     this.auth.verifySmsLogin(phone.trim(), code.trim()).subscribe({
-      next: () => void this.router.navigateByUrl('/painel'),
+      next: () => void this.navigateAfterLogin(),
       error: (err: HttpErrorResponse) => {
         this.smsVerifying.set(false);
         this.error.set(this.messageFromHttp(err));
@@ -142,6 +143,15 @@ export class LoginComponent {
     codeCtrl.clearValidators();
     codeCtrl.setValue('');
     codeCtrl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private navigateAfterLogin(): void {
+    const raw = this.route.snapshot.queryParamMap.get('returnUrl');
+    if (raw?.startsWith('/') && !raw.startsWith('//')) {
+      void this.router.navigateByUrl(raw);
+      return;
+    }
+    void this.router.navigateByUrl('/painel');
   }
 
   private messageFromHttp(err: HttpErrorResponse): string {

@@ -1,0 +1,118 @@
+<div class="chamado" [class.chamado--public]="!painelContext()">
+  @if (!painelContext()) {
+    <header class="chamado__public-head">
+      <a routerLink="/" class="chamado__brand">Meu Condomínio</a>
+      @if (!auth.isAuthenticated()) {
+        <button type="button" class="btn btn--ghost" (click)="goLogin()">Iniciar sessão</button>
+      } @else {
+        <a routerLink="/painel/suporte" class="btn btn--ghost">Ir para o painel</a>
+      }
+    </header>
+  } @else {
+    <nav class="chamado__back">
+      <a routerLink="/painel/suporte" class="chamado__back-link">← Voltar ao suporte</a>
+    </nav>
+  }
+
+  @if (loading()) {
+    <p class="muted">A carregar…</p>
+  } @else if (loadError()) {
+    <div class="flash flash--error" role="alert">{{ loadError() }}</div>
+    @if (painelContext() && !auth.isAuthenticated()) {
+      <p><button type="button" class="btn primary" (click)="goLogin()">Iniciar sessão</button></p>
+    }
+  } @else {
+    @if (ticket(); as tk) {
+    <header class="chamado__record-head">
+      <div class="chamado__meta">
+        <span class="chamado__meta-item">
+          <span class="chamado__meta-label">Estado</span>
+          {{ statusLabelPt(tk.status) }}
+        </span>
+        <span class="chamado__meta-item">
+          <span class="chamado__meta-label">Tipo</span>
+          {{ categoryLabel(tk.category) }}
+        </span>
+        <span class="chamado__meta-item">
+          <span class="chamado__meta-label">Condomínio</span>
+          {{ tk.condominiumName ?? '—' }}
+        </span>
+        <span class="chamado__meta-item">
+          <span class="chamado__meta-label">Aberto em</span>
+          {{ tk.createdAt | date: 'medium' }}
+        </span>
+        @if (tk.updatedAt) {
+          <span class="chamado__meta-item">
+            <span class="chamado__meta-label">Atualizado</span>
+            {{ tk.updatedAt | date: 'medium' }}
+          </span>
+        }
+      </div>
+      <h1 class="chamado__title">{{ tk.title }}</h1>
+    </header>
+
+    <section class="chamado__block" aria-labelledby="pedido-inicial">
+      <h2 id="pedido-inicial" class="chamado__block-title">Pedido inicial</h2>
+      <pre class="chamado__body-text">{{ tk.body }}</pre>
+    </section>
+
+    <section class="chamado__block" aria-labelledby="historico">
+      <h2 id="historico" class="chamado__block-title">Mensagens</h2>
+      @if (messages().length === 0) {
+        <p class="muted">Ainda não há respostas da equipa.</p>
+      } @else {
+        <ul class="chamado__thread">
+          @for (m of messages(); track m.id) {
+            <li
+              class="chamado__msg"
+              [class.chamado__msg--team]="m.fromPlatformAdmin"
+              [class.chamado__msg--user]="!m.fromPlatformAdmin"
+            >
+              <div class="chamado__msg-head">
+                <strong>{{
+                  m.fromPlatformAdmin ? 'Equipa de suporte' : 'Eu'
+                }}</strong>
+                <span class="chamado__msg-date">{{ m.createdAt | date: 'short' }}</span>
+              </div>
+              <pre class="chamado__msg-body">{{ m.body }}</pre>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    @if (canReply() && tk.status !== 'closed') {
+      <section class="chamado__block" aria-labelledby="responder">
+        <h2 id="responder" class="chamado__block-title">A sua resposta</h2>
+        @if (replyError()) {
+          <div class="flash flash--error" role="alert">{{ replyError() }}</div>
+        }
+        @if (replySuccess()) {
+          <div class="flash flash--ok" role="status">{{ replySuccess() }}</div>
+        }
+        <form [formGroup]="replyForm" (ngSubmit)="submitReply()" class="chamado__reply-form">
+          <label class="field">
+            <span class="field__label">Mensagem</span>
+            <textarea formControlName="body" rows="5" spellcheck="true"></textarea>
+            @for (msg of fieldErrorsPt(replyForm.controls.body); track msg) {
+              <small class="field-error">{{ msg }}</small>
+            }
+          </label>
+          <div class="chamado__reply-actions">
+            <button type="submit" class="btn primary" [disabled]="replyBusy()">
+              {{ replyBusy() ? 'A enviar…' : 'Enviar mensagem' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    } @else if (canReply() && tk.status === 'closed') {
+      <p class="chamado__hint muted">Este chamado está encerrado. Não é possível enviar novas mensagens.</p>
+    } @else if (!painelContext()) {
+      <p class="chamado__hint muted">
+        Para enviar uma mensagem à equipa, inicie sessão na sua conta e abra este chamado
+        em <strong>Suporte</strong> no painel (o histórico mantém-se associado à sua conta).
+      </p>
+    }
+    }
+  }
+</div>

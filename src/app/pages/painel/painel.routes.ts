@@ -30,6 +30,13 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'suporte/chamado/:ticketId',
+        loadComponent: () =>
+          import('../suporte-chamado/suporte-chamado.component').then(
+            (m) => m.SuporteChamadoComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/upgrade',
         canActivate: [selectedCondominiumGuard],
         loadComponent: () =>

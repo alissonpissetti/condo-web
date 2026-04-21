@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -58,7 +59,7 @@ function statusLabelPt(s: SupportTicketStatus): string {
 
 @Component({
   selector: 'app-painel-suporte',
-  imports: [ReactiveFormsModule, DatePipe],
+  imports: [ReactiveFormsModule, DatePipe, RouterLink],
   templateUrl: './painel-suporte.component.html',
   styleUrl: './painel-suporte.component.scss',
 })
@@ -75,6 +76,7 @@ export class PainelSuporteComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly api = inject(SupportTicketsApiService);
   private readonly selectedCondo = inject(SelectedCondominiumService);
+  private readonly router = inject(Router);
 
   protected readonly loadError = signal<string | null>(null);
   protected readonly listError = signal<string | null>(null);
@@ -84,7 +86,6 @@ export class PainelSuporteComponent implements OnInit {
   protected readonly saving = signal(false);
   protected readonly tickets = signal<SupportTicketRow[]>([]);
   protected readonly condominiums = signal<Condominium[]>([]);
-  protected readonly expandedId = signal<string | null>(null);
   protected readonly meProfile = signal<MeProfile | null>(null);
 
   private readonly condoNameById = computed(() => {
@@ -157,8 +158,8 @@ export class PainelSuporteComponent implements OnInit {
     return this.condoNameById().get(id) ?? id.slice(0, 8) + '…';
   }
 
-  protected toggleExpand(id: string): void {
-    this.expandedId.update((cur) => (cur === id ? null : id));
+  protected openChamado(id: string): void {
+    void this.router.navigate(['/painel', 'suporte', 'chamado', id]);
   }
 
   protected refreshList(): void {
