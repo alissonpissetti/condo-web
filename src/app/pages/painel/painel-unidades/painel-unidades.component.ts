@@ -438,6 +438,50 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  /** Quantidade de responsáveis com ficha (para escolher o principal em taxas). */
+  protected responsibleWithProfileCount(u: UnitRow): number {
+    return u.responsiblePeople?.length ?? 0;
+  }
+
+  /** Com dois ou mais responsáveis identificados, é preciso designar qual nome usar em taxas. */
+  protected needsFinancialPrincipalPicker(u: UnitRow): boolean {
+    return this.responsibleWithProfileCount(u) >= 2;
+  }
+
+  protected onFinancialPrincipalChange(
+    groupingId: string,
+    u: UnitRow,
+    evt: Event,
+  ): void {
+    if (!this.canManageCondominium()) {
+      return;
+    }
+    const raw = (evt.target as HTMLSelectElement).value.trim();
+    const nextId = raw.length ? raw : null;
+    const cur = u.financialResponsiblePersonId ?? null;
+    if (nextId === cur) {
+      return;
+    }
+    this.clearActionError();
+    this.busy.set(true);
+    this.api
+      .updateUnit(this.condominiumId, groupingId, u.id, {
+        financialResponsiblePersonId: nextId,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.reload();
+          this.navData.refresh(this.condominiumId, { force: true });
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.messageFromHttp(err));
+          this.reload();
+        },
+      });
+  }
+
   removeOneResponsible(
     groupingId: string,
     u: UnitRow,
