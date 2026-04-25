@@ -1,11 +1,10 @@
 <section class="suporte" aria-labelledby="suporte-titulo">
-  <header class="suporte__header">
-    <h1 id="suporte-titulo">Suporte e pedidos</h1>
-    <p class="suporte__intro">
-      Reporte erros, peça correções ou sugira melhorias e novas funcionalidades para a
-      plataforma. Pode associar um condomínio como contexto ou deixar em branco para um
-      pedido geral. Para contacto imediato, use o WhatsApp abaixo — a mensagem inclui o seu
-      nome e o condomínio que está selecionado no painel neste momento.
+  <header class="suporte__hero">
+    <h1 id="suporte-titulo">Solicitações</h1>
+    <p class="suporte__lead">
+      Abra chamados para a plataforma ou para o seu condomínio, com descrição e anexos quando
+      precisar. Para algo urgente, use o WhatsApp — o link já traz o seu nome e o condomínio
+      selecionado no painel.
     </p>
   </header>
 
@@ -14,169 +13,232 @@
   }
 
   @if (loading()) {
-    <p class="suporte__loading muted">Carregando…</p>
+    <div class="suporte__skeleton" aria-busy="true">
+      <div class="suporte__sk suporte__sk--title"></div>
+      <div class="suporte__sk suporte__sk--line"></div>
+      <div class="suporte__sk suporte__sk--line suporte__sk--short"></div>
+    </div>
   } @else if (!loadError()) {
-    <div class="suporte__layout">
-      @if (listError()) {
-        <div class="flash flash--error" role="alert">{{ listError() }}</div>
-      }
+    <div class="suporte__grid">
+      <article class="suporte__card suporte__card--wa" aria-labelledby="wa-suporte-titulo">
+        <h2 id="wa-suporte-titulo" class="suporte__card-title">WhatsApp</h2>
+        <p class="suporte__card-text muted">
+          <strong>(41) 99989-7602</strong> — o link abre o app com mensagem pré-preenchida (nome e
+          condomínio atual do painel, se houver).
+        </p>
+        <a
+          class="btn btn--wa"
+          [href]="whatsappSupportHref()"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Abrir conversa no WhatsApp
+        </a>
+      </article>
 
-      <section
-        class="form-card form-card--whatsapp"
-        aria-labelledby="wa-suporte-titulo"
-      >
-        <div class="form-card__accent form-card__accent--whatsapp" aria-hidden="true"></div>
-        <div class="form-card__body">
-          <div class="form-card__head">
-            <h2 id="wa-suporte-titulo" class="form-card__title">WhatsApp</h2>
-            <p class="form-card__hint">
-              Fale connosco em
-              <strong>(41) 99989-7602</strong>. O link abre o WhatsApp com uma mensagem
-              já preenchida com o seu nome e o condomínio que está selecionado no menu do
-              painel (se houver).
-            </p>
-          </div>
-          <div class="wa-actions">
-            <a
-              class="btn btn--wa"
-              [href]="whatsappSupportHref()"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Abrir conversa no WhatsApp
-            </a>
-          </div>
-        </div>
-      </section>
+      <article class="suporte__card" aria-labelledby="nova-solicitacao">
+        <h2 id="nova-solicitacao" class="suporte__card-title">Nova solicitação</h2>
+        <p class="suporte__card-text muted">
+          Seja específico (passos, URL, telas). Pode anexar capturas, PDFs, áudio ou vídeo —           até
+          {{ maxOpenFiles }} arquivos, {{ formatBytes(maxOpenFileBytes) }} cada. Sem anexos, a
+          descrição precisa de pelo menos 10 caracteres.
+        </p>
 
-      <section class="form-card" aria-labelledby="nova-solicitacao">
-        <div class="form-card__accent" aria-hidden="true"></div>
-        <div class="form-card__body">
-          <div class="form-card__head">
-            <h2 id="nova-solicitacao" class="form-card__title">Nova solicitação</h2>
-            <p class="form-card__hint">
-              Seja específico: passos para reproduzir, ecrã ou URL, e o resultado esperado.
-            </p>
-          </div>
+        @if (formError()) {
+          <div class="flash flash--error" role="alert">{{ formError() }}</div>
+        }
+        @if (formSuccess()) {
+          <div class="flash flash--ok" role="status">{{ formSuccess() }}</div>
+        }
 
-          @if (formError()) {
-            <div class="flash flash--error" role="alert">{{ formError() }}</div>
-          }
-          @if (formSuccess()) {
-            <div class="flash flash--ok" role="status">{{ formSuccess() }}</div>
-          }
+        <form [formGroup]="form" (ngSubmit)="submit()" class="suporte-form" novalidate>
+          <div class="suporte-form__grid">
+            <label class="field">
+              <span class="field__label">Tipo</span>
+              <select formControlName="target">
+                <option [ngValue]="null" disabled>Escolha…</option>
+                @for (opt of targetOptions; track opt.value) {
+                  <option [ngValue]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              @for (msg of fieldErrorsPt(form.controls.target); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
 
-          <form [formGroup]="form" (ngSubmit)="submit()" class="suporte-form" novalidate>
-            <div class="field-grid field-grid--1">
-              <label class="field">
-                <span class="field__label">Tipo</span>
+            <label class="field">
+              <span class="field__label">Categoria</span>
+              @if (form.controls.target.value) {
                 <select formControlName="category">
                   <option [ngValue]="null" disabled>Escolha…</option>
-                  @for (opt of categoryOptions; track opt.value) {
+                  @for (opt of categoryRows(); track opt.value) {
                     <option [ngValue]="opt.value">{{ opt.label }}</option>
                   }
                 </select>
-                @for (msg of fieldErrorsPt(form.controls.category); track msg) {
-                  <small class="field-error">{{ msg }}</small>
+              } @else {
+                <p class="muted sm field-hint">Selecione o tipo acima.</p>
+              }
+              @for (msg of fieldErrorsPt(form.controls.category); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
+
+            <label class="field">
+              <span class="field__label">
+                @if (form.controls.target.value === 'condominium') {
+                  Condomínio
+                } @else {
+                  Condomínio (opcional)
                 }
-              </label>
-
-              <label class="field">
-                <span class="field__label">Condomínio (opcional)</span>
-                <select formControlName="condominiumId">
-                  <option value="">Nenhum — pedido geral à plataforma</option>
-                  @for (c of condominiums(); track c.id) {
-                    <option [value]="c.id">{{ c.name }}</option>
-                  }
-                </select>
-              </label>
-
-              <label class="field">
-                <span class="field__label">Assunto</span>
-                <input type="text" formControlName="title" maxlength="512" autocomplete="off" />
-                @for (msg of fieldErrorsPt(form.controls.title); track msg) {
-                  <small class="field-error">{{ msg }}</small>
+              </span>
+              <select formControlName="condominiumId">
+                @if (form.controls.target.value === 'condominium') {
+                  <option value="" disabled>Selecione…</option>
+                } @else {
+                  <option value="">Nenhum</option>
                 }
-              </label>
-
-              <label class="field">
-                <span class="field__label">Descrição</span>
-                <textarea
-                  formControlName="body"
-                  rows="8"
-                  spellcheck="true"
-                  placeholder="Descreva o problema ou a ideia com o máximo de detalhe possível."
-                ></textarea>
-                @for (msg of fieldErrorsPt(form.controls.body); track msg) {
-                  <small class="field-error">{{ msg }}</small>
+                @for (c of condominiums(); track c.id) {
+                  <option [value]="c.id">{{ c.name }}</option>
                 }
-              </label>
-            </div>
+              </select>
+              @if (form.controls.target.value === 'condominium') {
+                <small class="field-hint muted">Obrigatório. O síndico pode receber cópia por e-mail.</small>
+              } @else {
+                <small class="field-hint muted"
+                  >Opcional na solicitação à plataforma; o síndico pode ser copiado por e-mail.</small
+                >
+              }
+              @for (msg of fieldErrorsPt(form.controls.condominiumId); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
 
-            <div class="form-actions">
-              <button type="submit" class="btn primary" [disabled]="saving()">
-                {{ saving() ? 'A enviar…' : 'Enviar solicitação' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
+            <label class="field">
+              <span class="field__label">Assunto</span>
+              <input type="text" formControlName="title" maxlength="512" autocomplete="off" />
+              @for (msg of fieldErrorsPt(form.controls.title); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
 
-      <section class="form-card" aria-labelledby="lista-solicitacoes">
-        <div class="form-card__accent form-card__accent--teal" aria-hidden="true"></div>
-        <div class="form-card__body">
-          <div class="form-card__head form-card__head--row">
-            <div>
-              <h2 id="lista-solicitacoes" class="form-card__title">As minhas solicitações</h2>
-              <p class="form-card__hint">Clique numa linha para abrir o chamado e o histórico de mensagens.</p>
-            </div>
-            <button type="button" class="btn btn--ghost" (click)="refreshList()">Atualizar</button>
+            <label class="field">
+              <span class="field__label">Descrição</span>
+              <textarea
+                formControlName="body"
+                rows="7"
+                spellcheck="true"
+                placeholder="Descreva o pedido, ou deixe curto se for enviar anexos."
+              ></textarea>
+              @for (msg of fieldErrorsPt(form.controls.body); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
           </div>
 
-          @if (tickets().length === 0) {
-            <p class="muted">Ainda não tem solicitações registadas.</p>
-          } @else {
-            <div class="ticket-table-wrap">
-              <table class="ticket-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Data</th>
-                    <th scope="col">Tipo</th>
-                    <th scope="col">Assunto</th>
-                    <th scope="col">Condomínio</th>
-                    <th scope="col">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (t of tickets(); track t.id) {
-                    <tr
-                      class="ticket-row"
-                      (click)="openChamado(t.id)"
-                      (keydown.enter)="openChamado(t.id)"
-                      (keydown.space)="$event.preventDefault(); openChamado(t.id)"
-                      tabindex="0"
-                      role="link"
-                    >
-                      <td>{{ t.createdAt | date: 'short' }}</td>
-                      <td>{{ categoryLabel(t.category) }}</td>
-                      <td class="ticket-table__title">
-                        <a
-                          class="ticket-table__link"
-                          [routerLink]="['/painel', 'suporte', 'chamado', t.id]"
-                          (click)="$event.stopPropagation()"
-                          >{{ t.title }}</a
-                        >
-                      </td>
-                      <td>{{ condoLabel(t.condominiumId) }}</td>
-                      <td>{{ statusLabelPt(t.status) }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+          <div
+            class="suporte__dropzone"
+            (dragover)="onOpenDragOver($event)"
+            (drop)="onOpenDropFiles($event)"
+          >
+            <input
+              id="suporte-open-files"
+              class="suporte__file-input"
+              type="file"
+              multiple
+              (change)="onOpenFilesSelected($event)"
+            />
+            <label for="suporte-open-files" class="suporte__dropzone-label">
+              <span class="suporte__dropzone-title">Anexar arquivos</span>
+              <span class="suporte__dropzone-hint"
+                >Clique ou arraste para aqui (documentos, imagens, áudio, vídeo)</span
+              >
+            </label>
+          </div>
+
+          @if (pendingOpenFiles().length > 0) {
+            <ul class="suporte__pending" aria-label="Arquivos a enviar">
+              @for (f of pendingOpenFiles(); track $index) {
+                <li class="suporte__pending-row">
+                  <span class="suporte__pending-name">{{ f.name }}</span>
+                  <span class="suporte__pending-meta">{{ formatBytes(f.size) }}</span>
+                  <button
+                    type="button"
+                    class="suporte__pending-remove"
+                    (click)="removeOpenFile($index)"
+                    aria-label="Remover arquivo"
+                  >
+                    ×
+                  </button>
+                </li>
+              }
+            </ul>
+            <button type="button" class="btn btn--text" (click)="clearOpenFiles()">
+              Limpar anexos
+            </button>
           }
+
+          <div class="suporte-form__actions">
+            <button type="submit" class="btn primary" [disabled]="saving()">
+              {{ saving() ? 'Enviando…' : 'Enviar solicitação' }}
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <article class="suporte__card suporte__card--list" aria-labelledby="lista-solicitacoes">
+        <div class="suporte__list-head">
+          <div>
+            <h2 id="lista-solicitacoes" class="suporte__card-title">Minhas solicitações</h2>
+            <p class="suporte__card-text muted">Clique em um cartão para abrir o chamado e a conversa.</p>
+          </div>
+          <button type="button" class="btn btn--ghost" (click)="refreshList()">Atualizar</button>
         </div>
-      </section>
+
+        @if (listError()) {
+          <div class="flash flash--error" role="alert">{{ listError() }}</div>
+        }
+
+        @if (tickets().length === 0) {
+          <p class="suporte__empty muted">Você ainda não tem solicitações registradas.</p>
+        } @else {
+          <ul class="suporte__ticket-list">
+            @for (t of tickets(); track t.id) {
+              <li
+                class="suporte__ticket"
+                role="button"
+                tabindex="0"
+                (click)="openChamado(t.id)"
+                (keydown.enter)="openChamado(t.id)"
+                (keydown.space)="$event.preventDefault(); openChamado(t.id)"
+              >
+                <div class="suporte__ticket-top">
+                  <span class="suporte__badge" [attr.data-status]="t.status">{{
+                    statusLabelPt(t.status)
+                  }}</span>
+                  <time class="suporte__ticket-date" [attr.datetime]="t.createdAt">{{
+                    t.createdAt | date: 'short'
+                  }}</time>
+                </div>
+                <h3 class="suporte__ticket-title">{{ t.title }}</h3>
+                <dl class="suporte__ticket-facts">
+                  <div>
+                    <dt>Tipo</dt>
+                    <dd>{{ targetLabelShort(t.target) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Categoria</dt>
+                    <dd>{{ categoryLabel(t.category) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Condomínio</dt>
+                    <dd>{{ condoLabel(t.condominiumId) }}</dd>
+                  </div>
+                </dl>
+              </li>
+            }
+          </ul>
+        }
+      </article>
     </div>
   }
 </section>

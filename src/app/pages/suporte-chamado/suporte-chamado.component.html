@@ -1,118 +1,218 @@
-<div class="chamado" [class.chamado--public]="!painelContext()">
+<div class="chamado" [class.chamado--painel]="painelContext()" [class.chamado--public]="!painelContext()">
   @if (!painelContext()) {
     <header class="chamado__public-head">
       <a routerLink="/" class="chamado__brand">Meu Condomínio</a>
       @if (!auth.isAuthenticated()) {
-        <button type="button" class="btn btn--ghost" (click)="goLogin()">Iniciar sessão</button>
+        <button type="button" class="btn btn--ghost" (click)="goLogin()">Entrar</button>
       } @else {
         <a routerLink="/painel/suporte" class="btn btn--ghost">Ir para o painel</a>
       }
     </header>
   } @else {
     <nav class="chamado__back">
-      <a routerLink="/painel/suporte" class="chamado__back-link">← Voltar ao suporte</a>
+      <a routerLink="/painel/suporte" class="chamado__back-link">← Voltar às solicitações</a>
     </nav>
   }
 
   @if (loading()) {
-    <p class="muted">A carregar…</p>
+    <div class="chamado__skeleton" aria-busy="true">
+      <div class="chamado__sk chamado__sk--title"></div>
+      <div class="chamado__sk chamado__sk--line"></div>
+      <div class="chamado__sk chamado__sk--line chamado__sk--short"></div>
+    </div>
   } @else if (loadError()) {
     <div class="flash flash--error" role="alert">{{ loadError() }}</div>
     @if (painelContext() && !auth.isAuthenticated()) {
-      <p><button type="button" class="btn primary" (click)="goLogin()">Iniciar sessão</button></p>
+      <p><button type="button" class="btn primary" (click)="goLogin()">Entrar</button></p>
     }
   } @else {
     @if (ticket(); as tk) {
-    <header class="chamado__record-head">
-      <div class="chamado__meta">
-        <span class="chamado__meta-item">
-          <span class="chamado__meta-label">Estado</span>
-          {{ statusLabelPt(tk.status) }}
-        </span>
-        <span class="chamado__meta-item">
-          <span class="chamado__meta-label">Tipo</span>
-          {{ categoryLabel(tk.category) }}
-        </span>
-        <span class="chamado__meta-item">
-          <span class="chamado__meta-label">Condomínio</span>
-          {{ tk.condominiumName ?? '—' }}
-        </span>
-        <span class="chamado__meta-item">
-          <span class="chamado__meta-label">Aberto em</span>
-          {{ tk.createdAt | date: 'medium' }}
-        </span>
-        @if (tk.updatedAt) {
-          <span class="chamado__meta-item">
-            <span class="chamado__meta-label">Atualizado</span>
-            {{ tk.updatedAt | date: 'medium' }}
-          </span>
-        }
-      </div>
-      <h1 class="chamado__title">{{ tk.title }}</h1>
-    </header>
-
-    <section class="chamado__block" aria-labelledby="pedido-inicial">
-      <h2 id="pedido-inicial" class="chamado__block-title">Pedido inicial</h2>
-      <pre class="chamado__body-text">{{ tk.body }}</pre>
-    </section>
-
-    <section class="chamado__block" aria-labelledby="historico">
-      <h2 id="historico" class="chamado__block-title">Mensagens</h2>
-      @if (messages().length === 0) {
-        <p class="muted">Ainda não há respostas da equipa.</p>
-      } @else {
-        <ul class="chamado__thread">
-          @for (m of messages(); track m.id) {
-            <li
-              class="chamado__msg"
-              [class.chamado__msg--team]="m.fromPlatformAdmin"
-              [class.chamado__msg--user]="!m.fromPlatformAdmin"
-            >
-              <div class="chamado__msg-head">
-                <strong>{{
-                  m.fromPlatformAdmin ? 'Equipa de suporte' : 'Eu'
-                }}</strong>
-                <span class="chamado__msg-date">{{ m.createdAt | date: 'short' }}</span>
-              </div>
-              <pre class="chamado__msg-body">{{ m.body }}</pre>
-            </li>
-          }
-        </ul>
-      }
-    </section>
-
-    @if (canReply() && tk.status !== 'closed') {
-      <section class="chamado__block" aria-labelledby="responder">
-        <h2 id="responder" class="chamado__block-title">A sua resposta</h2>
-        @if (replyError()) {
-          <div class="flash flash--error" role="alert">{{ replyError() }}</div>
-        }
-        @if (replySuccess()) {
-          <div class="flash flash--ok" role="status">{{ replySuccess() }}</div>
-        }
-        <form [formGroup]="replyForm" (ngSubmit)="submitReply()" class="chamado__reply-form">
-          <label class="field">
-            <span class="field__label">Mensagem</span>
-            <textarea formControlName="body" rows="5" spellcheck="true"></textarea>
-            @for (msg of fieldErrorsPt(replyForm.controls.body); track msg) {
-              <small class="field-error">{{ msg }}</small>
-            }
-          </label>
-          <div class="chamado__reply-actions">
-            <button type="submit" class="btn primary" [disabled]="replyBusy()">
-              {{ replyBusy() ? 'A enviar…' : 'Enviar mensagem' }}
-            </button>
+      <header class="chamado__hero">
+        <div class="chamado__hero-top">
+          <span class="chamado__badge" [attr.data-status]="tk.status">{{
+            statusLabelPt(tk.status)
+          }}</span>
+          <span class="chamado__hero-sub">{{ targetLabel(tk.target) }}</span>
+        </div>
+        <h1 class="chamado__title">{{ tk.title }}</h1>
+        <dl class="chamado__facts">
+          <div class="chamado__fact">
+            <dt>Categoria</dt>
+            <dd>{{ categoryLabel(tk.category) }}</dd>
           </div>
-        </form>
+          <div class="chamado__fact">
+            <dt>Condomínio</dt>
+            <dd>{{ tk.condominiumName ?? '—' }}</dd>
+          </div>
+          <div class="chamado__fact">
+            <dt>Aberto em</dt>
+            <dd>{{ tk.createdAt | date: 'medium' }}</dd>
+          </div>
+          @if (tk.updatedAt) {
+            <div class="chamado__fact">
+              <dt>Atualizado</dt>
+              <dd>{{ tk.updatedAt | date: 'medium' }}</dd>
+            </div>
+          }
+        </dl>
+      </header>
+
+      <section class="chamado__card chamado__card--initial" aria-labelledby="pedido-inicial">
+        <h2 id="pedido-inicial" class="chamado__card-title">Solicitação inicial</h2>
+        <div class="chamado__body-rich">{{ tk.body }}</div>
       </section>
-    } @else if (canReply() && tk.status === 'closed') {
-      <p class="chamado__hint muted">Este chamado está encerrado. Não é possível enviar novas mensagens.</p>
-    } @else if (!painelContext()) {
-      <p class="chamado__hint muted">
-        Para enviar uma mensagem à equipa, inicie sessão na sua conta e abra este chamado
-        em <strong>Suporte</strong> no painel (o histórico mantém-se associado à sua conta).
-      </p>
-    }
+
+      <section class="chamado__card" aria-labelledby="historico">
+        <div class="chamado__card-head">
+          <h2 id="historico" class="chamado__card-title">Conversa</h2>
+          @if (messages().length > 0) {
+            <span class="chamado__count">{{ messages().length }} mensagem(ns)</span>
+          }
+        </div>
+        @if (threadError()) {
+          <div class="flash flash--error" role="alert">{{ threadError() }}</div>
+        }
+        @if (messages().length === 0) {
+          <p class="chamado__empty muted">
+            Ainda não há respostas. Quando a equipe responder, aparecerá aqui.
+          </p>
+        } @else {
+          <ol class="chamado__timeline">
+            @for (m of messages(); track m.id) {
+              <li
+                class="chamado__bubble"
+                [class.chamado__bubble--team]="m.fromPlatformAdmin"
+                [class.chamado__bubble--user]="!m.fromPlatformAdmin"
+              >
+                <div class="chamado__bubble-inner">
+                  <div class="chamado__bubble-meta">
+                    <span class="chamado__bubble-author">{{
+                      m.fromPlatformAdmin ? 'Equipe de suporte' : 'Você'
+                    }}</span>
+                    <time class="chamado__bubble-time" [attr.datetime]="m.createdAt">{{
+                      m.createdAt | date: 'short'
+                    }}</time>
+                  </div>
+                  @if (m.body && m.body.trim().length > 0) {
+                    <div class="chamado__bubble-body">{{ m.body }}</div>
+                  }
+                  @if (m.attachments?.length) {
+                    <ul class="chamado__attach-list" aria-label="Anexos">
+                      @for (a of m.attachments; track a.storageKey) {
+                        <li>
+                          <button
+                            type="button"
+                            class="chamado__attach-chip"
+                            [disabled]="downloadBusyKey() === a.storageKey"
+                            (click)="downloadMeta(a)"
+                          >
+                            <span
+                              class="chamado__attach-icon"
+                              [attr.data-kind]="mimeKind(a.mimeType)"
+                              aria-hidden="true"
+                            ></span>
+                            <span class="chamado__attach-name">{{ a.originalFilename }}</span>
+                            <span class="chamado__attach-size">{{
+                              formatBytes(a.sizeBytes)
+                            }}</span>
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+
+      @if (canReply() && tk.status !== 'closed') {
+        <section class="chamado__card chamado__card--reply" aria-labelledby="responder">
+          <h2 id="responder" class="chamado__card-title">Enviar mensagem</h2>
+          <p class="chamado__reply-lead muted">
+            Texto opcional se enviar arquivos. Até {{ maxAttachments }} arquivos, até
+            {{ formatBytes(maxFileBytes) }} cada (documentos, imagens, áudio ou vídeo).
+          </p>
+          @if (replyError()) {
+            <div class="flash flash--error" role="alert">{{ replyError() }}</div>
+          }
+          @if (replySuccess()) {
+            <div class="flash flash--ok" role="status">{{ replySuccess() }}</div>
+          }
+          <form [formGroup]="replyForm" (ngSubmit)="submitReply()" class="chamado__reply-form">
+            <label class="field">
+              <span class="field__label">Mensagem</span>
+              <textarea
+                formControlName="body"
+                rows="5"
+                spellcheck="true"
+                placeholder="Descreva sua dúvida ou resposta…"
+              ></textarea>
+              @for (msg of fieldErrorsPt(replyForm.controls.body); track msg) {
+                <small class="field-error">{{ msg }}</small>
+              }
+            </label>
+
+            <div
+              class="chamado__dropzone"
+              (dragover)="onDragOver($event)"
+              (drop)="onDropFiles($event)"
+            >
+              <input
+                id="chamado-files"
+                class="chamado__file-input"
+                type="file"
+                multiple
+                (change)="onFilesSelected($event)"
+              />
+              <label for="chamado-files" class="chamado__dropzone-label">
+                <span class="chamado__dropzone-title">Anexar arquivos</span>
+                <span class="chamado__dropzone-hint"
+                  >Clique para escolher ou arraste arquivos para esta área</span
+                >
+              </label>
+            </div>
+
+            @if (pendingFiles().length > 0) {
+              <ul class="chamado__pending" aria-label="Arquivos a enviar">
+                @for (f of pendingFiles(); track $index) {
+                  <li class="chamado__pending-row">
+                    <span class="chamado__pending-name">{{ f.name }}</span>
+                    <span class="chamado__pending-meta">{{ formatBytes(f.size) }}</span>
+                    <button
+                      type="button"
+                      class="chamado__pending-remove"
+                      (click)="removePendingFile($index)"
+                      aria-label="Remover arquivo"
+                    >
+                      ×
+                    </button>
+                  </li>
+                }
+              </ul>
+              <button type="button" class="btn btn--text" (click)="clearPendingFiles()">
+                Limpar anexos
+              </button>
+            }
+
+            <div class="chamado__reply-actions">
+              <button type="submit" class="btn primary" [disabled]="replyBusy()">
+                {{ replyBusy() ? 'Enviando…' : 'Enviar' }}
+              </button>
+            </div>
+          </form>
+        </section>
+      } @else if (canReply() && tk.status === 'closed') {
+        <p class="chamado__hint muted chamado__card">
+          Este chamado está encerrado. Não é possível enviar novas mensagens.
+        </p>
+      } @else if (!painelContext()) {
+        <p class="chamado__hint muted chamado__card">
+          Para enviar mensagem ou anexos à equipe, entre na sua conta e abra este chamado em
+          <strong>Solicitações</strong> no painel.
+        </p>
+      }
     }
   }
 </div>
