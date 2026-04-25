@@ -94,6 +94,8 @@ export interface CondominiumFeeCharge {
   incomeTransactionId: string | null;
   /** `true` quando houver um comprovante (imagem/PDF) anexado à quitação. */
   hasPaymentReceipt?: boolean;
+  /** Nome único para referência financeira (quando a API envia). */
+  financialResponsibleName?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -361,6 +363,21 @@ export class FinancialApiService {
     }
     return this.http.post<CondominiumFeeCharge>(
       `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
+      body,
+    );
+  }
+
+  /**
+   * Substitui (ou define) o ficheiro anexado à cobrança já paga.
+   * O ficheiro deve ser enviado antes com `uploadTransactionReceipt`.
+   */
+  replaceCondominiumFeePaymentReceipt(
+    condoId: string,
+    chargeId: string,
+    body: { paymentReceiptStorageKey: string },
+  ): Observable<CondominiumFeeCharge> {
+    return this.http.post<CondominiumFeeCharge>(
+      `${this.base(condoId)}/condominium-fees/${chargeId}/replace-payment-receipt`,
       body,
     );
   }

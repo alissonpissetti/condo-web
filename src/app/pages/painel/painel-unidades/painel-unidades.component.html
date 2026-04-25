@@ -7,7 +7,9 @@
         a montagem física do seu condomínio. Cada unidade pode ter
         <strong>várias pessoas responsáveis</strong> (convites na página de convites).
         O <strong>síndico</strong> ou o <strong>titular</strong> podem completar ou corrigir o
-        <strong>telefone</strong> de proprietários e responsáveis com ficha.
+        <strong>telefone</strong> de proprietários e responsáveis com ficha. Com
+        <strong>vários responsáveis</strong> na mesma unidade, escolha abaixo qual é o
+        <strong>responsável principal em taxas condominiais</strong> (nome nas listagens e PDFs).
       </p>
     } @else {
       <p class="page__intro">
@@ -536,6 +538,47 @@
                             </div>
                           } @else {
                             <span class="person-cell__empty">—</span>
+                          }
+                          @if (needsFinancialPrincipalPicker(u)) {
+                            <div class="financial-principal">
+                              <span class="financial-principal__label">
+                                Responsável principal (taxas condominiais)
+                              </span>
+                              @if (canManageCondominium()) {
+                                <select
+                                  class="input input--compact financial-principal__select"
+                                  (change)="
+                                    onFinancialPrincipalChange(g.id, u, $event)
+                                  "
+                                  [disabled]="busy()"
+                                >
+                                  <option
+                                    value=""
+                                    [selected]="!u.financialResponsiblePersonId"
+                                  >
+                                    — Escolher quem aparece nas listagens —
+                                  </option>
+                                  @for (p of u.responsiblePeople!; track p.id) {
+                                    <option
+                                      [value]="p.id"
+                                      [selected]="
+                                        u.financialResponsiblePersonId === p.id
+                                      "
+                                    >
+                                      {{ p.fullName }}
+                                    </option>
+                                  }
+                                </select>
+                              } @else if (u.financialResponsibleName?.trim()) {
+                                <span class="financial-principal__value">{{
+                                  u.financialResponsibleName!.trim()
+                                }}</span>
+                              } @else {
+                                <span class="financial-principal__warn muted">
+                                  Ainda não definido na gestão de unidades.
+                                </span>
+                              }
+                            </div>
                           }
                           @if (
                             canManageCondominium() &&

@@ -229,6 +229,39 @@
   padding: 0.1rem 0;
 }
 
+.financial-principal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+}
+
+.financial-principal__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.financial-principal__select {
+  width: 100%;
+  max-width: 22rem;
+  font-size: 0.85rem;
+}
+
+.financial-principal__value {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.financial-principal__warn {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .person-list {
   margin: 0;
   padding: 0;

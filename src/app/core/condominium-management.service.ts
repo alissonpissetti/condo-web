@@ -32,6 +32,13 @@ export interface UnitRow {
   /** Todas as pessoas responsáveis pela unidade. */
   responsiblePeople?: UnitPersonRef[];
   responsibleDisplayName?: string | null;
+  /**
+   * Responsável principal para referência financeira (taxas, PDFs).
+   * Deve ser o `id` de alguém em `responsiblePeople` quando há vários.
+   */
+  financialResponsiblePersonId?: string | null;
+  /** Nome resolvido na API (designado, único responsável ou rótulo livre). */
+  financialResponsibleName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -131,6 +138,7 @@ export class CondominiumManagementService {
       identifier?: string;
       floor?: string | null;
       notes?: string | null;
+      financialResponsiblePersonId?: string | null;
     },
   ): Observable<UnitRow> {
     return this.http.patch<UnitRow>(

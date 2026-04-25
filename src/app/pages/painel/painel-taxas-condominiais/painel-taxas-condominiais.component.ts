@@ -47,6 +47,14 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly settleError = signal<string | null>(null);
   protected readonly settleBusy = signal(false);
 
+  /** Cobrança paga: substituir o anexo enviado pelo cliente (novo upload). */
+  protected readonly replaceReceiptTarget = signal<CondominiumFeeCharge | null>(
+    null,
+  );
+  protected readonly replaceReceiptFile = signal<File | null>(null);
+  protected readonly replaceReceiptError = signal<string | null>(null);
+  protected readonly replaceReceiptBusy = signal(false);
+
   /** Edição de vencimento (uma ou mais cobranças): alvos, valor e estado. */
   protected readonly dueEditTargets = signal<CondominiumFeeCharge[]>([]);
   protected readonly dueEditValue = signal<string>('');
@@ -121,6 +129,9 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected onEscape(): void {
     if (this.settleTarget()) {
       this.closeSettle();
+    }
+    if (this.replaceReceiptTarget()) {
+      this.closeReplaceReceipt();
     }
     if (this.dueEditTargets().length > 0) {
       this.closeDueEdit();
@@ -387,6 +398,96 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
 
   clearSettleFile(): void {
     this.settleReceiptFile.set(null);
+  }
+
+  openReplaceReceipt(c: CondominiumFeeCharge): void {
+    this.replaceReceiptError.set(null);
+    this.replaceReceiptFile.set(null);
+    this.replaceReceiptTarget.set(c);
+  }
+
+  closeReplaceReceipt(): void {
+    if (this.replaceReceiptBusy()) {
+      return;
+    }
+    this.replaceReceiptTarget.set(null);
+    this.replaceReceiptFile.set(null);
+    this.replaceReceiptError.set(null);
+  }
+
+  onReplaceReceiptFileChange(evt: Event): void {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      this.replaceReceiptFile.set(null);
+      return;
+    }
+    const allowed = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'application/pdf',
+    ];
+    if (!allowed.includes(file.type)) {
+      this.replaceReceiptError.set(
+        'Formato não suportado. Envie uma imagem (PNG, JPG, WEBP) ou PDF.',
+      );
+      input.value = '';
+      this.replaceReceiptFile.set(null);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      this.replaceReceiptError.set('O arquivo ultrapassa o limite de 8 MB.');
+      input.value = '';
+      this.replaceReceiptFile.set(null);
+      return;
+    }
+    this.replaceReceiptError.set(null);
+    this.replaceReceiptFile.set(file);
+  }
+
+  clearReplaceReceiptFile(): void {
+    this.replaceReceiptFile.set(null);
+  }
+
+  confirmReplaceReceipt(): void {
+    const target = this.replaceReceiptTarget();
+    const file = this.replaceReceiptFile();
+    if (!target || !file) {
+      if (target && !file) {
+        this.replaceReceiptError.set('Selecione o novo comprovante (imagem ou PDF).');
+      }
+      return;
+    }
+    this.replaceReceiptError.set(null);
+    this.replaceReceiptBusy.set(true);
+    this.api.uploadTransactionReceipt(this.condoId, file).subscribe({
+      next: ({ receiptStorageKey }) => {
+        this.api
+          .replaceCondominiumFeePaymentReceipt(this.condoId, target.id, {
+            paymentReceiptStorageKey: receiptStorageKey,
+          })
+          .subscribe({
+            next: (updated) => {
+              this.charges.update((list) =>
+                list.map((x) => (x.id === updated.id ? updated : x)),
+              );
+              this.replaceReceiptBusy.set(false);
+              this.replaceReceiptTarget.set(null);
+              this.replaceReceiptFile.set(null);
+            },
+            error: (err: HttpErrorResponse) => {
+              this.replaceReceiptBusy.set(false);
+              this.replaceReceiptError.set(this.msg(err));
+            },
+          });
+      },
+      error: (err: HttpErrorResponse) => {
+        this.replaceReceiptBusy.set(false);
+        this.replaceReceiptError.set(this.msg(err));
+      },
+    });
   }
 
   confirmSettle(): void {
