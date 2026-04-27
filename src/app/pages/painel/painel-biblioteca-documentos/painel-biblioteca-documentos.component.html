@@ -1,0 +1,122 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Biblioteca de documentos</h1>
+    <p class="page__intro">
+      Arquivos gerais do condomínio (regulamentos, contratos e outros). O
+      sistema guarda quem enviou e a data/hora do upload.
+    </p>
+  </header>
+
+  @if (actionError(); as ae) {
+    <p class="error" role="alert">{{ ae }}</p>
+  }
+
+  <section class="card upload-card">
+    <h2 class="card__title">Adicionar documento</h2>
+    <label class="field">
+      <span class="field__label">Nome do documento (amigável)</span>
+      <input
+        type="text"
+        class="input"
+        maxlength="255"
+        [value]="uploadDisplayName()"
+        (input)="setUploadDisplayName($any($event.target).value)"
+        [disabled]="busy()"
+        placeholder="Ex.: Convenção do condomínio"
+      />
+    </label>
+    <label class="btn primary upload-btn" [class.is-disabled]="busy()">
+      <input
+        type="file"
+        class="sr-only"
+        [disabled]="busy()"
+        (change)="onFileSelected($event)"
+      />
+      {{ busy() ? 'Enviando…' : 'Selecionar arquivo' }}
+    </label>
+    <p class="muted small">
+      Formatos suportados: PDF, imagem, Word, TXT e CSV. Máx. 20 MB.
+    </p>
+  </section>
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <section class="card list-card">
+      <h2 class="card__title">Documentos disponíveis</h2>
+      @if (docs().length === 0) {
+        <p class="muted">Nenhum documento enviado.</p>
+      } @else {
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Enviado por</th>
+                <th>Data/hora</th>
+                <th class="th-actions">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of docs(); track d.id) {
+                <tr>
+                  <td>{{ d.originalFilename }}</td>
+                  <td>{{ d.uploadedByDisplayName }}</td>
+                  <td>{{ formatDateTime(d.createdAt) }}</td>
+                  <td class="td-actions">
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      [disabled]="busy()"
+                      (click)="download(d)"
+                      title="Download"
+                      [attr.aria-label]="'Download de ' + d.originalFilename"
+                    >
+                      <svg
+                        class="icon-btn__svg"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M5 20h14v-2H5m14-9h-4V3H9v6H5l7 7 7-7z"
+                        />
+                      </svg>
+                    </button>
+                    @if (canDelete()) {
+                      <button
+                        type="button"
+                        class="icon-btn icon-btn--danger"
+                        [disabled]="removingId() === d.id"
+                        (click)="remove(d)"
+                        title="Remover"
+                        [attr.aria-label]="'Remover ' + d.originalFilename"
+                      >
+                        @if (removingId() === d.id) {
+                          <span class="icon-btn__loading">…</span>
+                        } @else {
+                          <svg
+                            class="icon-btn__svg"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                            />
+                          </svg>
+                        }
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

@@ -85,6 +85,20 @@ export class PainelExtratoComponent implements OnInit {
     this.fundFilter.set(v);
   }
 
+  protected totalByUnitCents(): string {
+    const rows = this.statement()?.byUnit ?? [];
+    return rows
+      .reduce((acc, r) => acc + BigInt(r.balanceCents), 0n)
+      .toString();
+  }
+
+  protected totalTransactionsCents(): string {
+    const rows = this.statement()?.transactions ?? [];
+    return rows
+      .reduce((acc, t) => acc + BigInt(t.amountCents), 0n)
+      .toString();
+  }
+
   private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:

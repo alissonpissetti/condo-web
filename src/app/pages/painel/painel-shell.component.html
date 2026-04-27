@@ -491,6 +491,15 @@
                   >Comunicação</a
                 >
               }
+
+              @if (condoAccess.canManage()) {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'biblioteca']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Documentos</a
+                >
+              }
             </div>
           }
         </div>

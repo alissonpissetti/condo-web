@@ -49,6 +49,10 @@ export interface FinancialTransaction {
   recurringSeriesId?: string | null;
   /** Chave relativa no armazenamento do condomínio (comprovante). */
   receiptStorageKey?: string | null;
+  /** Chave relativa no armazenamento do condomínio (documento base). */
+  documentStorageKey?: string | null;
+  /** Lista de documentos anexados à transação. */
+  documentStorageKeys?: string[] | null;
   fund?: FinancialFund | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
@@ -174,10 +178,20 @@ export class FinancialApiService {
   listTransactions(
     condoId: string,
     fundId?: string | null,
+    occurredFromYmd?: string | null,
+    occurredToYmd?: string | null,
   ): Observable<FinancialTransaction[]> {
     let params = new HttpParams();
     if (fundId) {
       params = params.set('fundId', fundId);
+    }
+    const from = occurredFromYmd?.trim();
+    const to = occurredToYmd?.trim();
+    if (from) {
+      params = params.set('from', from);
+    }
+    if (to) {
+      params = params.set('to', to);
     }
     return this.http.get<FinancialTransaction[]>(
       `${this.base(condoId)}/transactions`,
@@ -215,6 +229,8 @@ export class FinancialApiService {
       description?: string | null;
       fundId?: string | null;
       allocationRule: AllocationRule;
+      documentStorageKey?: string;
+      documentStorageKeys?: string[];
       receiptStorageKey?: string;
       recurringSeriesId?: string;
     },
@@ -236,6 +252,8 @@ export class FinancialApiService {
       description: string | null;
       fundId: string | null;
       allocationRule: AllocationRule;
+      documentStorageKey: string | null;
+      documentStorageKeys: string[] | null;
       receiptStorageKey: string | null;
     }>,
   ): Observable<FinancialTransaction> {
@@ -261,6 +279,8 @@ export class FinancialApiService {
       fundId?: string | null;
       allocationRule?: AllocationRule;
       amountCents?: number;
+      documentStorageKey?: string | null;
+      documentStorageKeys?: string[] | null;
       receiptStorageKey?: string | null;
     },
   ): Observable<FinancialTransaction[]> {

@@ -5,8 +5,8 @@
 
 .dados {
   width: 100%;
-  max-width: 40rem;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: 0 0 2.5rem;
 }
 
@@ -91,6 +91,111 @@
   border-radius: 0.4rem;
   background: color-mix(in srgb, var(--surface) 70%, var(--surface-2));
   border: 1px solid var(--border);
+}
+
+.meta-ids {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 0.65rem 1rem 0.85rem;
+}
+
+.meta-ids__summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 0.35em;
+    height: 0.35em;
+    margin-right: 0.45em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    vertical-align: 0.15em;
+    transition: transform 0.15s ease;
+  }
+}
+
+.meta-ids[open] .meta-ids__summary::before {
+  transform: rotate(45deg);
+  vertical-align: 0.05em;
+}
+
+.meta-ids__hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.meta-ids__rows {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.meta-ids__row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) 1fr auto;
+  align-items: start;
+  gap: 0.5rem 0.65rem;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.meta-ids__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding-top: 0.35rem;
+}
+
+.meta-ids__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  word-break: break-all;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--surface) 70%, var(--surface-2));
+  border: 1px solid var(--border);
+}
+
+.meta-ids__empty {
+  font-size: 0.9rem;
+  color: var(--muted);
+  padding: 0.35rem 0;
+}
+
+.meta-ids__copy {
+  align-self: start;
+  margin-top: 0.15rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--surface) 85%, var(--text));
+  }
 }
 
 /* —— Flash —— */

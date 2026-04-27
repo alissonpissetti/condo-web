@@ -9,6 +9,23 @@ export function todayLocalIsoDate(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Primeiro dia do mês civil local (AAAA-MM-DD). */
+export function firstDayOfMonthLocalIsoDate(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
+}
+
+/** Último dia do mês civil local (AAAA-MM-DD). */
+export function lastDayOfMonthLocalIsoDate(d = new Date()): string {
+  const y = d.getFullYear();
+  const monthIndex = d.getMonth();
+  const last = new Date(y, monthIndex + 1, 0);
+  const mm = String(monthIndex + 1).padStart(2, '0');
+  const day = String(last.getDate()).padStart(2, '0');
+  return `${y}-${mm}-${day}`;
+}
+
 /** Data civil local há `daysAgo` dias (AAAA-MM-DD), à meia-noite local. */
 export function localIsoDateDaysAgo(daysAgo: number): string {
   const d = new Date();

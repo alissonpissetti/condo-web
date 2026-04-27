@@ -69,6 +69,10 @@
               <td class="num">{{ formatCentsBrl(r.balanceCents) }}</td>
             </tr>
           }
+          <tr class="total-row">
+            <td colspan="2">Total</td>
+            <td class="num">{{ formatCentsBrl(totalByUnitCents()) }}</td>
+          </tr>
         </tbody>
       </table>
       @if (statement()!.byUnit.length === 0) {
@@ -98,6 +102,10 @@
               <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
             </tr>
           }
+          <tr class="total-row">
+            <td colspan="4">Total</td>
+            <td class="num">{{ formatCentsBrl(totalTransactionsCents()) }}</td>
+          </tr>
         </tbody>
       </table>
       @if (statement()!.transactions.length === 0) {

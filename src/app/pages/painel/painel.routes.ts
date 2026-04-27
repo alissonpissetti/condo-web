@@ -88,6 +88,14 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/biblioteca',
+        canActivate: [selectedCondominiumGuard, condominiumManagementGuard],
+        loadComponent: () =>
+          import(
+            './painel-biblioteca-documentos/painel-biblioteca-documentos.component'
+          ).then((m) => m.PainelBibliotecaDocumentosComponent),
+      },
+      {
         path: 'condominio/:condominiumId/transacoes',
         canActivate: [
           selectedCondominiumGuard,

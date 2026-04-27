@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
-import { Observable, of, from } from 'rxjs';
+import { Observable, of, from, forkJoin } from 'rxjs';
 import { switchMap, concatMap, last } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
@@ -24,7 +24,12 @@ import {
   type FinancialFund,
   type FinancialTransaction,
 } from '../../../core/financial-api.service';
-import { formatDateDdMmYyyy, todayLocalIsoDate } from '../../../core/date-display';
+import {
+  firstDayOfMonthLocalIsoDate,
+  formatDateDdMmYyyy,
+  lastDayOfMonthLocalIsoDate,
+  todayLocalIsoDate,
+} from '../../../core/date-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 
@@ -59,6 +64,10 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly fundFilter = signal<string>('');
+  /** Período da lista (AAAA-MM-DD), inclusive; por defeito o mês civil corrente. */
+  protected readonly periodFrom = signal('');
+  protected readonly periodTo = signal('');
+  protected readonly searchTerm = signal('');
 
   protected readonly txKind = signal<TxKind>('expense');
   /** Única transação ou série mensal (apenas criação). */
@@ -83,10 +92,14 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly editingSeriesId = signal<string | null>(null);
   /** Se &gt; 0, aplica o mesmo valor (R$) a todas as parcelas ao salvar a série. */
   protected readonly seriesUniformAmountReais = signal(0);
+  protected readonly pendingDocumentFiles = signal<File[]>([]);
+  protected readonly editingDocumentKeys = signal<string[]>([]);
   protected readonly pendingReceiptFile = signal<File | null>(null);
   protected readonly receiptRemoved = signal(false);
   protected readonly editingReceiptKey = signal<string | null>(null);
 
+  private readonly documentInputEl =
+    viewChild<ElementRef<HTMLInputElement>>('documentInput');
   private readonly receiptInputEl =
     viewChild<ElementRef<HTMLInputElement>>('receiptInput');
 
@@ -94,10 +107,10 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly rowActionMenuForId = signal<string | null>(null);
 
   /**
-   * Formulário de criação/edição expandido. No mobile começa fechado para dar
-   * foco à lista; ao editar (edição simples ou de série) abre automaticamente.
+   * Formulário de criação/edição colapsado por padrão; ao editar abre
+   * automaticamente para focar no item selecionado.
    */
-  protected readonly formExpanded = signal(true);
+  protected readonly formExpanded = signal(false);
 
   private condoId = '';
 
@@ -175,6 +188,29 @@ export class PainelTransacoesComponent implements OnInit {
     return out;
   });
 
+  protected readonly filteredTransactions = computed(() => {
+    const term = this.searchTerm().trim().toLowerCase();
+    if (!term) {
+      return this.transactions();
+    }
+    return this.transactions().filter((t) => {
+      const occurred = t.occurredOn?.slice(0, 10) ?? '';
+      const dateLabel = formatDateDdMmYyyy(occurred).toLowerCase();
+      const kindLabel = transactionKindLabelPt(t.kind).toLowerCase();
+      const title = (t.title ?? '').toLowerCase();
+      const description = (t.description ?? '').toLowerCase();
+      const fund = (t.fund?.name ?? '').toLowerCase();
+      return (
+        title.includes(term) ||
+        description.includes(term) ||
+        fund.includes(term) ||
+        kindLabel.includes(term) ||
+        dateLabel.includes(term) ||
+        occurred.includes(term)
+      );
+    });
+  });
+
   /** Resumo do lançamento recorrente (apenas UI). */
   protected readonly recurringPreviewText = computed(() => {
     if (this.entryMode() !== 'recurring') {
@@ -225,9 +261,8 @@ export class PainelTransacoesComponent implements OnInit {
     }
     this.condoId = id;
     this.occurredOn.set(todayLocalIsoDate());
-    if (typeof window !== 'undefined' && window.innerWidth < 900) {
-      this.formExpanded.set(false);
-    }
+    this.periodFrom.set(firstDayOfMonthLocalIsoDate());
+    this.periodTo.set(lastDayOfMonthLocalIsoDate());
     this.reloadAll();
   }
 
@@ -257,7 +292,9 @@ export class PainelTransacoesComponent implements OnInit {
 
   refreshList(): void {
     const fid = this.fundFilter() || undefined;
-    this.api.listTransactions(this.condoId, fid).subscribe({
+    const from = this.periodFrom().trim().slice(0, 10);
+    const to = this.periodTo().trim().slice(0, 10);
+    this.api.listTransactions(this.condoId, fid, from, to).subscribe({
       next: (rows) => {
         this.transactions.set(rows);
         this.loading.set(false);
@@ -272,6 +309,36 @@ export class PainelTransacoesComponent implements OnInit {
   setFundFilter(v: string): void {
     this.fundFilter.set(v);
     this.refreshList();
+  }
+
+  setPeriodFrom(v: string): void {
+    const head = v.trim().slice(0, 10);
+    this.periodFrom.set(head);
+    const to = this.periodTo().trim().slice(0, 10);
+    if (head && to && head > to) {
+      this.periodTo.set(head);
+    }
+    this.refreshList();
+  }
+
+  setPeriodTo(v: string): void {
+    const head = v.trim().slice(0, 10);
+    this.periodTo.set(head);
+    const from = this.periodFrom().trim().slice(0, 10);
+    if (from && head && head < from) {
+      this.periodFrom.set(head);
+    }
+    this.refreshList();
+  }
+
+  resetPeriodToCurrentMonth(): void {
+    this.periodFrom.set(firstDayOfMonthLocalIsoDate());
+    this.periodTo.set(lastDayOfMonthLocalIsoDate());
+    this.refreshList();
+  }
+
+  setSearchTerm(v: string): void {
+    this.searchTerm.set(v);
   }
 
   setAmountFromInput(v: string): void {
@@ -416,9 +483,12 @@ export class PainelTransacoesComponent implements OnInit {
     this.selectedUnitIds.set([]);
     this.selectedGroupingIds.set([]);
     this.excludeUnitIds.set([]);
+    this.pendingDocumentFiles.set([]);
+    this.editingDocumentKeys.set([]);
     this.pendingReceiptFile.set(null);
     this.receiptRemoved.set(false);
     this.editingReceiptKey.set(null);
+    this.clearDocumentFileInput();
     this.clearReceiptFileInput();
     this.formError.set(null);
   }
@@ -449,9 +519,12 @@ export class PainelTransacoesComponent implements OnInit {
       this.allocKind.set('all_units_except');
       this.excludeUnitIds.set([...r.excludeUnitIds].sort());
     }
+    this.pendingDocumentFiles.set([]);
+    this.editingDocumentKeys.set(this.documentKeysFromTx(t));
     this.pendingReceiptFile.set(null);
     this.receiptRemoved.set(false);
     this.editingReceiptKey.set(t.receiptStorageKey ?? null);
+    this.clearDocumentFileInput();
     this.clearReceiptFileInput();
     this.formError.set(null);
   }
@@ -496,10 +569,19 @@ export class PainelTransacoesComponent implements OnInit {
       this.allocKind.set('all_units_except');
       this.excludeUnitIds.set([...r.excludeUnitIds].sort());
     }
+    this.pendingDocumentFiles.set([]);
+    const allDocKeys = new Set<string>();
+    for (const m of members) {
+      for (const k of this.documentKeysFromTx(m)) {
+        allDocKeys.add(k);
+      }
+    }
+    this.editingDocumentKeys.set([...allDocKeys]);
     this.pendingReceiptFile.set(null);
     this.receiptRemoved.set(false);
     const withReceipt = members.find((m) => m.receiptStorageKey);
     this.editingReceiptKey.set(withReceipt?.receiptStorageKey ?? null);
+    this.clearDocumentFileInput();
     this.clearReceiptFileInput();
     this.formError.set(null);
   }
@@ -508,6 +590,40 @@ export class PainelTransacoesComponent implements OnInit {
   private titleBaseFromTransactionTitle(title: string): string {
     const m = /^(.+?)\s+\(\d+\/\d+\)\s*$/.exec(title.trim());
     return m ? m[1].trim() : title.trim();
+  }
+
+  onDocumentFileChange(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    if (files.length > 0) {
+      this.appendPendingDocuments(files);
+    }
+    this.clearDocumentFileInput();
+  }
+
+  private appendPendingDocuments(files: File[]): void {
+    this.pendingDocumentFiles.update((cur) => [...cur, ...files]);
+  }
+
+  removePendingDocument(idx: number): void {
+    this.pendingDocumentFiles.update((cur) => cur.filter((_, i) => i !== idx));
+  }
+
+  removeExistingDocument(key: string): void {
+    this.editingDocumentKeys.update((cur) => cur.filter((k) => k !== key));
+  }
+
+  @HostListener('document:paste', ['$event'])
+  onDocumentPaste(ev: ClipboardEvent): void {
+    if (!this.formExpanded()) return;
+    const items = Array.from(ev.clipboardData?.items ?? []);
+    const files = items
+      .filter((i) => i.kind === 'file')
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => !!f);
+    if (files.length === 0) return;
+    ev.preventDefault();
+    this.appendPendingDocuments(files);
   }
 
   onReceiptFileChange(ev: Event): void {
@@ -525,11 +641,23 @@ export class PainelTransacoesComponent implements OnInit {
     this.clearReceiptFileInput();
   }
 
+  private clearDocumentFileInput(): void {
+    const el = this.documentInputEl()?.nativeElement;
+    if (el) {
+      el.value = '';
+    }
+  }
+
   private clearReceiptFileInput(): void {
     const el = this.receiptInputEl()?.nativeElement;
     if (el) {
       el.value = '';
     }
+  }
+
+  downloadEditingDocument(key: string): void {
+    const id = this.editingId() ?? this.editingSeriesId() ?? 'documento';
+    this.downloadFileByKey(key, id, 'documento');
   }
 
   downloadEditingReceipt(): void {
@@ -545,13 +673,28 @@ export class PainelTransacoesComponent implements OnInit {
     this.downloadReceiptByKey(key, t.id);
   }
 
+  downloadRowDocument(t: FinancialTransaction): void {
+    const keys = this.documentKeysFromTx(t);
+    for (const key of keys) {
+      this.downloadFileByKey(key, t.id, 'documento');
+    }
+  }
+
   private downloadReceiptByKey(key: string, txId: string): void {
+    this.downloadFileByKey(key, txId, 'comprovante');
+  }
+
+  private downloadFileByKey(
+    key: string,
+    txId: string,
+    prefix: 'documento' | 'comprovante',
+  ): void {
     this.api.downloadTransactionReceipt(this.condoId, key).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `comprovante-${txId.slice(0, 8)}`;
+        a.download = `${prefix}-${txId.slice(0, 8)}`;
         a.click();
         URL.revokeObjectURL(url);
       },
@@ -559,6 +702,13 @@ export class PainelTransacoesComponent implements OnInit {
         this.formError.set(this.msg(err));
       },
     });
+  }
+
+  protected documentKeysFromTx(t: FinancialTransaction): string[] {
+    if (Array.isArray(t.documentStorageKeys) && t.documentStorageKeys.length) {
+      return t.documentStorageKeys;
+    }
+    return t.documentStorageKey ? [t.documentStorageKey] : [];
   }
 
   submit(): void {
@@ -629,16 +779,41 @@ export class PainelTransacoesComponent implements OnInit {
       }
     }
 
-    const pending = this.pendingReceiptFile();
+    const pendingDocuments = this.pendingDocumentFiles();
+    const pendingReceipt = this.pendingReceiptFile();
 
     this.saving.set(true);
-    const upload$: Observable<{ receiptStorageKey: string } | null> = pending
-      ? this.api.uploadTransactionReceipt(this.condoId, pending)
-      : of(null as { receiptStorageKey: string } | null);
+    const uploads$ = forkJoin({
+      documentUploads:
+        pendingDocuments.length > 0
+          ? forkJoin(
+              pendingDocuments.map((f) =>
+                this.api.uploadTransactionReceipt(this.condoId, f),
+              ),
+            )
+          : of([] as { receiptStorageKey: string }[]),
+      receiptUpload: pendingReceipt
+        ? this.api.uploadTransactionReceipt(this.condoId, pendingReceipt)
+        : of(null as { receiptStorageKey: string } | null),
+    });
 
-    upload$
+    uploads$
       .pipe(
-        switchMap((uploadRes: { receiptStorageKey: string } | null) => {
+        switchMap(
+          (uploads: {
+            documentUploads: { receiptStorageKey: string }[];
+            receiptUpload: { receiptStorageKey: string } | null;
+          }) => {
+            const uploadedDocumentKeys = uploads.documentUploads
+              .map((d) => d.receiptStorageKey)
+              .filter((k): k is string => !!k);
+            const baseDocumentKeys =
+              editId || editSeriesId ? this.editingDocumentKeys() : [];
+            const finalDocumentKeys = [
+              ...baseDocumentKeys,
+              ...uploadedDocumentKeys,
+            ];
+            const receiptKey = uploads.receiptUpload?.receiptStorageKey;
           if (editSeriesId) {
             const patch: Parameters<
               FinancialApiService['updateRecurringSeries']
@@ -653,8 +828,9 @@ export class PainelTransacoesComponent implements OnInit {
             if (Number.isFinite(uniform) && uniform > 0) {
               patch.amountCents = reaisToCents(uniform);
             }
-            if (uploadRes?.receiptStorageKey) {
-              patch.receiptStorageKey = uploadRes.receiptStorageKey;
+            patch.documentStorageKeys = finalDocumentKeys;
+            if (receiptKey) {
+              patch.receiptStorageKey = receiptKey;
             } else if (this.receiptRemoved()) {
               patch.receiptStorageKey = null;
             }
@@ -678,8 +854,9 @@ export class PainelTransacoesComponent implements OnInit {
             const patch: Parameters<
               FinancialApiService['updateTransaction']
             >[2] = { ...baseBody };
-            if (uploadRes?.receiptStorageKey) {
-              patch.receiptStorageKey = uploadRes.receiptStorageKey;
+            patch.documentStorageKeys = finalDocumentKeys;
+            if (receiptKey) {
+              patch.receiptStorageKey = receiptKey;
             } else if (this.receiptRemoved()) {
               patch.receiptStorageKey = null;
             }
@@ -690,7 +867,8 @@ export class PainelTransacoesComponent implements OnInit {
             const payloads = this.buildRecurringCreatePayloads(
               title,
               rule,
-              uploadRes?.receiptStorageKey,
+              finalDocumentKeys,
+              receiptKey,
               recurringSeriesId,
             );
             return from(payloads).pipe(
@@ -712,11 +890,15 @@ export class PainelTransacoesComponent implements OnInit {
             fundId: this.fundIdForm() || null,
             allocationRule: rule,
           };
-          if (uploadRes?.receiptStorageKey) {
-            createBody.receiptStorageKey = uploadRes.receiptStorageKey;
+          if (finalDocumentKeys.length > 0) {
+            createBody.documentStorageKeys = finalDocumentKeys;
+          }
+          if (receiptKey) {
+            createBody.receiptStorageKey = receiptKey;
           }
           return this.api.createTransaction(this.condoId, createBody);
-        }),
+        },
+        ),
       )
       .subscribe({
         next: () => {
@@ -753,6 +935,7 @@ export class PainelTransacoesComponent implements OnInit {
   private buildRecurringCreatePayloads(
     title: string,
     rule: AllocationRule,
+    documentKeys: string[],
     receiptKey: string | undefined,
     recurringSeriesId: string,
   ): Parameters<FinancialApiService['createTransaction']>[1][] {
@@ -784,6 +967,9 @@ export class PainelTransacoesComponent implements OnInit {
         allocationRule: rule,
         recurringSeriesId,
       };
+      if (i === 0 && documentKeys.length > 0) {
+        body.documentStorageKeys = documentKeys;
+      }
       if (i === 0 && receiptKey) {
         body.receiptStorageKey = receiptKey;
       }

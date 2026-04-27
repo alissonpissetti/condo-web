@@ -127,6 +127,11 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+
+  .total-row td {
+    font-weight: 700;
+    background: var(--surface-2);
+  }
 }
 
 .empty {

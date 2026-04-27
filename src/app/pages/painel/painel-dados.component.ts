@@ -109,6 +109,10 @@ export class PainelDadosComponent implements OnInit {
   /** Id da entidade `people` quando existir. */
   protected readonly personRecordId = signal<string | null>(null);
 
+  /** Feedback após copiar identificadores (clipboard). */
+  protected readonly copyIdsHint = signal<string | null>(null);
+  private copyIdsHintTimer: ReturnType<typeof setTimeout> | null = null;
+
   protected readonly hasSavedSignature = signal(false);
   protected readonly signatureRecordedLabel = signal<string | null>(null);
   protected readonly sigBusy = signal(false);
@@ -196,6 +200,29 @@ export class PainelDadosComponent implements OnInit {
         );
       },
     });
+  }
+
+  /** Copia um identificador técnico (conta ou pessoa) para a área de transferência. */
+  protected async copyIdToClipboard(
+    label: string,
+    value: string | null | undefined,
+  ): Promise<void> {
+    const v = String(value ?? '').trim();
+    if (!v.length) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(v);
+      this.copyIdsHint.set(`${label} copiado.`);
+      if (this.copyIdsHintTimer) {
+        clearTimeout(this.copyIdsHintTimer);
+      }
+      this.copyIdsHintTimer = setTimeout(() => this.copyIdsHint.set(null), 2500);
+    } catch {
+      this.copyIdsHint.set(
+        'Não foi possível copiar automaticamente. Abra a secção e copie o texto manualmente.',
+      );
+    }
   }
 
   /** Repõe no canvas a imagem gravada no servidor (após reload). */

@@ -3,8 +3,8 @@
     <h1>Transações</h1>
     <p class="page__intro">
       Despesas, receitas e investimentos (capital aplicado) com rateio entre unidades,
-      quando aplicável. Receitas podem ser sem repartição. Opcionalmente anexe um
-      comprovante (PDF ou imagem). Com
+      quando aplicável. Receitas podem ser sem repartição. Opcionalmente anexe
+      documento e comprovante (PDF ou imagem). Com
       <strong>filtro por fundo</strong>, a coluna «Saldo após» é o saldo do fundo após
       cada lançamento, em ordem cronológica (só os movimentos listados), exibido em
       valor absoluto (sempre positivo).
@@ -16,22 +16,6 @@
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else {
-    <div class="filters-toolbar">
-      <label class="field field--block">
-        <span class="field__label">Filtrar por fundo</span>
-        <select
-          class="input input--lg"
-          [value]="fundFilter()"
-          (change)="setFundFilter($any($event.target).value)"
-        >
-          <option value="">Todos</option>
-          @for (f of funds(); track f.id) {
-            <option [value]="f.id">{{ f.name }}</option>
-          }
-        </select>
-      </label>
-    </div>
-
     <section
       id="tx-form-card"
       class="form-card form-card--collapsible"
@@ -77,10 +61,10 @@
               individuais permanecem, salvo se indicar um valor único para todas.
             } @else if (editingId()) {
               Altere os blocos abaixo e salve. Envie um novo arquivo para substituir o
-              comprovante, ou remova-o com o botão correspondente.
+              documento/comprovante, ou remova com o botão correspondente.
             } @else {
               Preencha por blocos: identificação, tipo, rateio, valores e, se quiser,
-              comprovante.
+              anexos.
             }
           </p>
         </div>
@@ -502,10 +486,79 @@
           <div class="form-section__head">
             <span class="form-section__step" aria-hidden="true">5</span>
             <div>
-              <h3 class="form-section__title">Comprovante</h3>
+              <h3 class="form-section__title">Documento</h3>
               <p class="form-section__hint">
-                PDF, JPG, PNG ou WEBP, até 8 MB. O arquivo fica no armazenamento do
-                servidor (pasta configurável; futuro: S3 compatível).
+                PDF, JPG, PNG ou WEBP, até 8 MB.
+              </p>
+            </div>
+          </div>
+          <div class="receipt-field">
+            <input
+              #documentInput
+              type="file"
+              multiple
+              class="receipt-field__input"
+              accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+              (change)="onDocumentFileChange($event)"
+            />
+            <div class="receipt-field__box">
+              <button
+                type="button"
+                class="btn btn--ghost sm"
+                (click)="documentInput.click()"
+              >
+                Escolher arquivo…
+              </button>
+              <span class="receipt-field__name">Pode colar com Ctrl+V nesta tela.</span>
+            </div>
+            @if (editingDocumentKeys().length > 0) {
+              <div class="doc-list">
+                @for (k of editingDocumentKeys(); track k) {
+                  <div class="doc-list__row">
+                    <span class="doc-list__name">Documento já anexado</span>
+                    <button type="button" class="btn btn--ghost sm" (click)="downloadEditingDocument(k)">
+                      Baixar
+                    </button>
+                    <button type="button" class="btn btn--ghost sm" (click)="removeExistingDocument(k)">
+                      Remover
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+            @if (pendingDocumentFiles().length > 0) {
+              <div class="doc-list">
+                @for (f of pendingDocumentFiles(); track $index) {
+                  <div class="doc-list__row">
+                    <span class="doc-list__name">{{ f.name }}</span>
+                    <button
+                      type="button"
+                      class="btn btn--ghost sm"
+                      (click)="removePendingDocument($index)"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+            <p class="receipt-field__hint">
+              @if (editingSeriesId()) {
+                Ao salvar, a lista final de documentos será aplicada em todas as parcelas da série.
+              } @else {
+                Ao salvar, todos os documentos da lista são enviados e vinculados à transação.
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">6</span>
+            <div>
+              <h3 class="form-section__title">Comprovante de pagamento</h3>
+              <p class="form-section__hint">
+                Anexe após o pagamento para manter histórico de quitação.
               </p>
             </div>
           </div>
@@ -517,7 +570,7 @@
               !pendingReceiptFile()
             ) {
               <p class="form-section__inline-hint">
-                Comprovante atual anexo.
+                Comprovante atual anexado.
                 <button
                   type="button"
                   class="btn btn--ghost sm"
@@ -601,36 +654,96 @@
       </div>
     </section>
 
+    <div class="filters-toolbar">
+      <div class="filters-toolbar__period">
+        <label class="field field--block">
+          <span class="field__label">Período (data da transação)</span>
+          <div class="period-row">
+            <input
+              type="date"
+              class="input input--lg"
+              [value]="periodFrom()"
+              (change)="setPeriodFrom($any($event.target).value)"
+            />
+            <span class="period-row__sep muted" aria-hidden="true">até</span>
+            <input
+              type="date"
+              class="input input--lg"
+              [value]="periodTo()"
+              (change)="setPeriodTo($any($event.target).value)"
+            />
+          </div>
+        </label>
+        <button
+          type="button"
+          class="btn btn--ghost sm period-reset"
+          (click)="resetPeriodToCurrentMonth()"
+        >
+          Mês atual
+        </button>
+      </div>
+      <label class="field field--block filters-toolbar__fund">
+        <span class="field__label">Filtrar por fundo</span>
+        <select
+          class="input input--lg"
+          [value]="fundFilter()"
+          (change)="setFundFilter($any($event.target).value)"
+        >
+          <option value="">Todos</option>
+          @for (f of funds(); track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field field--block filters-toolbar__search">
+        <span class="field__label">Buscar na lista</span>
+        <input
+          type="text"
+          class="input input--lg"
+          [value]="searchTerm()"
+          (input)="setSearchTerm($any($event.target).value)"
+          placeholder="Título, descrição, tipo, fundo ou data"
+          autocomplete="off"
+        />
+      </label>
+    </div>
+
     <div class="table-wrap">
       <table class="table table--cards">
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Tipo</th>
-            <th>Título</th>
+            <th>Transação</th>
             <th>Fundo</th>
             <th class="num">Valor</th>
             @if (fundFilter()) {
               <th class="num">Saldo após</th>
             }
+            <th>Documento</th>
             <th>Comprovante</th>
             <th class="td-actions"></th>
           </tr>
         </thead>
         <tbody>
-          @for (t of transactions(); track t.id) {
+          @for (t of filteredTransactions(); track t.id) {
             <tr
               [class.row--editing]="
                 editingId() === t.id ||
                 (!!t.recurringSeriesId && editingSeriesId() === t.recurringSeriesId)
               "
             >
-              <td data-label="Data" class="cell-date">{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
-              <td data-label="Tipo" class="cell-kind"
-                [attr.data-kind]="t.kind">{{ transactionKindLabelPt(t.kind) }}</td>
-              <td data-label="Título" class="cell-title">{{ t.title }}</td>
+              <td data-label="Transação" class="tx-main-cell">
+                <small class="tx-main-cell__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
+                <br />
+                <span class="tx-main-cell__title">{{ t.title }}</span>
+                <br />
+                <span class="tx-main-cell__badge" [attr.data-kind]="t.kind">{{
+                  transactionKindLabelPt(t.kind)
+                }}</span>
+              </td>
               <td data-label="Fundo">{{ t.fund?.name || '—' }}</td>
-              <td data-label="Valor" class="num cell-amount">{{ formatCentsBrl(t.amountCents) }}</td>
+              <td data-label="Valor" class="num cell-amount">
+                <small class="cell-amount__value">{{ formatCentsBrl(t.amountCents) }}</small>
+              </td>
               @if (fundFilter()) {
                 <td data-label="Saldo após" class="num">
                   {{
@@ -642,6 +755,19 @@
                   }}
                 </td>
               }
+              <td data-label="Documento" class="cell-receipt">
+                @if (documentKeysFromTx(t).length > 0) {
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="downloadRowDocument(t)"
+                  >
+                    Baixar ({{ documentKeysFromTx(t).length }})
+                  </button>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
               <td data-label="Comprovante" class="cell-receipt">
                 @if (t.receiptStorageKey) {
                   <button
@@ -727,6 +853,8 @@
       </table>
       @if (transactions().length === 0) {
         <p class="empty">Nenhuma transação.</p>
+      } @else if (filteredTransactions().length === 0) {
+        <p class="empty">Nenhum registro encontrado para esta busca.</p>
       }
     </div>
   }

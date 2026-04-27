@@ -18,17 +18,44 @@
             <span class="meta-card__label">Conta desde</span>
             <span class="meta-card__value">{{ sum.createdAtLabel }}</span>
           </article>
-          <article class="meta-card">
-            <span class="meta-card__label">ID da conta</span>
-            <code class="meta-card__code">{{ sum.id }}</code>
-          </article>
-          @if (personRecordId(); as pid) {
-            <article class="meta-card">
-              <span class="meta-card__label">ID da pessoa</span>
-              <code class="meta-card__code">{{ pid }}</code>
-            </article>
-          }
         </div>
+
+        <details class="meta-ids">
+          <summary class="meta-ids__summary">
+            Identificadores para suporte (copiar)
+          </summary>
+          @if (copyIdsHint(); as hint) {
+            <p class="meta-ids__hint" role="status">{{ hint }}</p>
+          }
+          <div class="meta-ids__rows">
+            <div class="meta-ids__row">
+              <span class="meta-ids__label">ID da conta</span>
+              <code class="meta-ids__code">{{ sum.id }}</code>
+              <button
+                type="button"
+                class="meta-ids__copy"
+                (click)="copyIdToClipboard('ID da conta', sum.id)"
+              >
+                Copiar
+              </button>
+            </div>
+            <div class="meta-ids__row">
+              <span class="meta-ids__label">ID da pessoa</span>
+              @if (personRecordId(); as pid) {
+                <code class="meta-ids__code">{{ pid }}</code>
+                <button
+                  type="button"
+                  class="meta-ids__copy"
+                  (click)="copyIdToClipboard('ID da pessoa', pid)"
+                >
+                  Copiar
+                </button>
+              } @else {
+                <span class="meta-ids__empty">—</span>
+              }
+            </div>
+          </div>
+        </details>
       }
 
       @if (saveError()) {

@@ -1,0 +1,210 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.page {
+  max-width: 62rem;
+  padding: 0 0 2.5rem;
+}
+
+.page__header {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.35rem, 2.5vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.page__intro {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.card {
+  padding: 1rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+
+.card__title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.82rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.field__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, #c0392b 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, #c0392b 28%, var(--border));
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.btn {
+  padding: 0.48rem 0.82rem;
+  border-radius: 0.55rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &.primary {
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+    border-color: color-mix(in srgb, var(--accent) 85%, #000);
+  }
+
+  &.ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  &.danger {
+    background: color-mix(in srgb, #c0392b 14%, var(--surface));
+    color: var(--text);
+    border-color: color-mix(in srgb, #c0392b 35%, var(--border));
+  }
+
+  &.sm {
+    padding: 0.32rem 0.6rem;
+    font-size: 0.8rem;
+  }
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.upload-btn.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.th-actions,
+.td-actions {
+  text-align: right;
+}
+
+.td-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &--danger {
+    border-color: color-mix(in srgb, var(--border) 90%, #a02820);
+    color: #a02820;
+  }
+}
+
+.icon-btn__svg {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.icon-btn__loading {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
