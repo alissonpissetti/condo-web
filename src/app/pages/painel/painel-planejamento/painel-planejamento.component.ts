@@ -27,11 +27,24 @@ import {
   type CondominiumDocumentRow,
   type PlanningPoll,
   type PlanningPollAttachment,
+  type PollMyUnitVotes,
   type PollResults,
   type PollUnitVoteRow,
 } from '../../../core/planning-api.service';
-import { PainelPlanejamentoAtasSectionComponent } from '../painel-planejamento-atas-section/painel-planejamento-atas-section.component';
 import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.component';
+import { debounceTime, distinctUntilChanged } from 'rxjs';
+
+/** Rascunho local da descrição da pauta (modo reunião). */
+type LocalBodyDraftV1 = {
+  v: 1;
+  html: string;
+  /** `poll.updatedAt` na abertura da sessão (deteção de conflito). */
+  serverBaseUpdatedAt: string;
+  lastLocalAt: string;
+};
+
+const LIVE_BODY_DEBOUNCE_MS = 400;
+const BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
 
 @Component({
   selector: 'app-painel-planejamento',
@@ -41,7 +54,6 @@ import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.co
     RouterLink,
     NgClass,
     PollBodyEditorComponent,
-    PainelPlanejamentoAtasSectionComponent,
   ],
   templateUrl: './painel-planejamento.component.html',
   styleUrl: './painel-planejamento.component.scss',
@@ -56,6 +68,8 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected readonly polls = signal<PlanningPoll[]>([]);
   protected readonly selected = signal<PlanningPoll | null>(null);
   protected readonly results = signal<PollResults | null>(null);
+  /** Votos em vigor das unidades do utilizador na pauta aberta (detalhe). */
+  protected readonly myUnitVotesDetail = signal<PollMyUnitVotes | null>(null);
   protected readonly myUnits = signal<{ id: string; identifier: string }[]>(
     [],
   );
@@ -133,6 +147,14 @@ export class PainelPlanejamentoComponent implements OnInit {
   });
 
   protected readonly editingBody = signal(false);
+  /** Síndico/secretário: grava o HTML no localStorage com debounce (navegador). */
+  protected readonly liveMode = signal(false);
+  protected readonly lastLocalBodySaveAt = signal<number | null>(null);
+  /** A pauta no servidor mudou depois do rascunho local ainda baseado noutra versão. */
+  protected readonly bodyDraftConflict = signal(false);
+  private conflictDraftSnapshot: LocalBodyDraftV1 | null = null;
+  private liveSessionServerBaseAt = '';
+  private liveBodySaveUnsub: (() => void) | undefined;
   protected readonly editingTitle = signal(false);
   protected readonly editingCompetence = signal(false);
   /** Último carregamento da lista foi por busca no título (ignora período). */
@@ -163,8 +185,10 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     this.condominiumId = id;
     this.api.access(id).subscribe({
-      next: (a) =>
-        this.access.set(a.access as { kind: string; role?: string }),
+      next: (a) => {
+        this.access.set(a.access as { kind: string; role?: string });
+        this.tryLoadResultsForCurrentDetail();
+      },
       error: () => this.access.set(null),
     });
     this.createForm.controls.assemblyType.valueChanges
@@ -213,6 +237,33 @@ export class PainelPlanejamentoComponent implements OnInit {
 
     this.destroyRef.onDestroy(() => this.revokeAllAttachmentPreviewUrls());
 
+    if (typeof window !== 'undefined') {
+      const flushLiveDraft = () => {
+        if (!this.liveMode() || !this.editingBody()) {
+          return;
+        }
+        const p = this.selected();
+        if (!p) {
+          return;
+        }
+        this.writeBodyDraftToStorage(
+          p,
+          this.bodyEditForm.getRawValue().body ?? '',
+        );
+      };
+      window.addEventListener('pagehide', flushLiveDraft);
+      const onVis = () => {
+        if (document.visibilityState === 'hidden') {
+          flushLiveDraft();
+        }
+      };
+      document.addEventListener('visibilitychange', onVis);
+      this.destroyRef.onDestroy(() => {
+        window.removeEventListener('pagehide', flushLiveDraft);
+        document.removeEventListener('visibilitychange', onVis);
+      });
+    }
+
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((pm) => {
@@ -226,6 +277,8 @@ export class PainelPlanejamentoComponent implements OnInit {
           this.revokeAllAttachmentPreviewUrls();
           this.selected.set(null);
           this.results.set(null);
+          this.myUnitVotesDetail.set(null);
+          this.resetLiveEditingState();
           this.editingBody.set(false);
           this.voteOptionIds.set([]);
           this.voteForm.reset({ unitId: '' });
@@ -324,13 +377,181 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected startEditBody(): void {
     const p = this.selected();
     if (!p) return;
+    this.resetLiveEditingState();
     this.bodyEditForm.patchValue({ body: p.body ?? '' });
     this.editingBody.set(true);
   }
 
-  protected cancelEditBody(): void {
+  protected startLiveMode(): void {
     const p = this.selected();
+    if (!p) return;
+    this.detachLiveBodyAutosave();
+    this.bodyDraftConflict.set(false);
+    this.conflictDraftSnapshot = null;
+
+    const draft = this.readBodyDraft(p);
+    let body = p.body ?? '';
+    if (draft) {
+      if (draft.serverBaseUpdatedAt === p.updatedAt) {
+        body = draft.html;
+      } else {
+        this.bodyDraftConflict.set(true);
+        this.conflictDraftSnapshot = draft;
+        body = p.body ?? '';
+      }
+    }
+
+    this.liveSessionServerBaseAt = p.updatedAt;
+    this.bodyEditForm.patchValue({ body }, { emitEvent: false });
+    this.editingBody.set(true);
+    this.liveMode.set(true);
+    this.lastLocalBodySaveAt.set(
+      draft?.lastLocalAt
+        ? new Date(draft.lastLocalAt).getTime()
+        : null,
+    );
+    this.attachLiveBodyAutosave();
+  }
+
+  /**
+   * Já em «Editar descrição» — ativa gravação local sem perder o texto actual.
+   */
+  protected enableLiveWhileEditing(): void {
+    const p = this.selected();
+    if (!p || !this.editingBody()) return;
+    this.liveSessionServerBaseAt = p.updatedAt;
+    this.bodyDraftConflict.set(false);
+    this.conflictDraftSnapshot = null;
+    this.liveMode.set(true);
+    this.attachLiveBodyAutosave();
+    this.writeBodyDraftToStorage(
+      p,
+      this.bodyEditForm.getRawValue().body ?? '',
+    );
+  }
+
+  protected stopLiveWhileEditing(): void {
+    this.liveMode.set(false);
+    this.detachLiveBodyAutosave();
+  }
+
+  protected restoreConflictDraft(): void {
+    const p = this.selected();
+    const d = this.conflictDraftSnapshot;
+    if (!p || !d) return;
+    this.bodyEditForm.patchValue({ body: d.html }, { emitEvent: false });
+    this.bodyDraftConflict.set(false);
+    this.conflictDraftSnapshot = null;
+    this.liveSessionServerBaseAt = p.updatedAt;
+    if (this.liveMode()) {
+      this.writeBodyDraftToStorage(p, d.html);
+    }
+  }
+
+  protected liveBodySaveTimeLabel(): string {
+    const t = this.lastLocalBodySaveAt();
+    if (t == null) {
+      return '';
+    }
+    return new Date(t).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  private localDraftStorageKey(p: PlanningPoll): string {
+    return `${BODY_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`;
+  }
+
+  private readBodyDraft(p: PlanningPoll): LocalBodyDraftV1 | null {
+    try {
+      const raw = localStorage.getItem(this.localDraftStorageKey(p));
+      if (!raw) {
+        return null;
+      }
+      const o = JSON.parse(raw) as LocalBodyDraftV1;
+      if (o?.v !== 1 || typeof o.html !== 'string') {
+        return null;
+      }
+      return o;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeBodyDraftToStorage(p: PlanningPoll, html: string): void {
+    if (!this.liveMode()) {
+      return;
+    }
+    const data: LocalBodyDraftV1 = {
+      v: 1,
+      html,
+      serverBaseUpdatedAt: this.liveSessionServerBaseAt,
+      lastLocalAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(
+        this.localDraftStorageKey(p),
+        JSON.stringify(data),
+      );
+      this.lastLocalBodySaveAt.set(Date.now());
+    } catch {
+      this.actionError.set(
+        'Não foi possível guardar o rascunho no navegador (armazenamento cheio ou indisponível).',
+      );
+    }
+  }
+
+  private clearBodyDraft(p: PlanningPoll): void {
+    try {
+      localStorage.removeItem(this.localDraftStorageKey(p));
+    } catch {
+      /* ignore */
+    }
+    this.lastLocalBodySaveAt.set(null);
+  }
+
+  private attachLiveBodyAutosave(): void {
+    this.detachLiveBodyAutosave();
+    const sub = this.bodyEditForm.controls.body.valueChanges
+      .pipe(
+        debounceTime(LIVE_BODY_DEBOUNCE_MS),
+        distinctUntilChanged(),
+      )
+      .subscribe((html) => {
+        if (!this.liveMode()) {
+          return;
+        }
+        const poll = this.selected();
+        if (!poll) {
+          return;
+        }
+        this.writeBodyDraftToStorage(poll, html ?? '');
+      });
+    this.liveBodySaveUnsub = () => {
+      sub.unsubscribe();
+      this.liveBodySaveUnsub = undefined;
+    };
+  }
+
+  private detachLiveBodyAutosave(): void {
+    this.liveBodySaveUnsub?.();
+  }
+
+  private resetLiveEditingState(): void {
+    this.liveMode.set(false);
+    this.bodyDraftConflict.set(false);
+    this.conflictDraftSnapshot = null;
+    this.liveSessionServerBaseAt = '';
+    this.lastLocalBodySaveAt.set(null);
+    this.detachLiveBodyAutosave();
+  }
+
+  protected cancelEditBody(): void {
+    this.resetLiveEditingState();
     this.editingBody.set(false);
+    const p = this.selected();
     if (p) {
       this.bodyEditForm.patchValue({ body: p.body ?? '' });
     }
@@ -348,6 +569,8 @@ export class PainelPlanejamentoComponent implements OnInit {
           this.busy.set(false);
           this.upsertPollInList(x);
           this.selected.set(x);
+          this.clearBodyDraft(x);
+          this.resetLiveEditingState();
           this.editingBody.set(false);
         },
         error: (err: HttpErrorResponse) => {
@@ -428,42 +651,12 @@ export class PainelPlanejamentoComponent implements OnInit {
       });
   }
 
-  /** Id do último rascunho de ata (PDF) associado à pauta, se existir. */
+  /**
+   * Melhor documento de ata (assembleia) por pauta para download: `assembly_minutes_final`
+   * (definitivo) ou `assembly_minutes_draft` (a lista da API aplica a visibilidade a moradores).
+   */
   protected minutesDraftDocumentIdFor(p: PlanningPoll): string | undefined {
     return this.minutesDraftDocumentIdByPollId()[p.id];
-  }
-
-  /**
-   * O botão de download sempre gera um PDF novo no servidor (mesmo fluxo do botão «Gerar»),
-   * para não ficar preso ao ficheiro antigo quando o índice ou a cache falham.
-   */
-  protected downloadMinutesDraft(p: PlanningPoll): void {
-    this.busy.set(true);
-    this.actionError.set(null);
-    this.api.generateMinutesDraft(this.condominiumId, p.id).subscribe({
-      next: (doc) => {
-        this.busy.set(false);
-        this.minutesDraftDocumentIdByPollId.update((m) => ({
-          ...m,
-          [p.id]: doc.id,
-        }));
-        this.refreshMinutesDraftIndex();
-        this.api.downloadDocumentBlob(this.condominiumId, doc.id).subscribe({
-          next: (blob) =>
-            this.triggerBlobDownload(
-              blob,
-              this.minutesDraftDownloadFilename(p.title, doc.title),
-            ),
-          error: (err: HttpErrorResponse) => {
-            this.actionError.set(this.msg(err));
-          },
-        });
-      },
-      error: (err: HttpErrorResponse) => {
-        this.busy.set(false);
-        this.actionError.set(this.msg(err));
-      },
-    });
   }
 
   protected formatBytes(n: number): string {
@@ -682,6 +875,16 @@ export class PainelPlanejamentoComponent implements OnInit {
     return p.assemblyType === 'ata';
   }
 
+  /** Texto da opção após «Registrar decisão» (pauta com `status === 'decided'`). */
+  protected decidedOptionLabel(p: PlanningPoll): string | null {
+    if (p.status !== 'decided' || !p.decidedOptionId) {
+      return null;
+    }
+    const o = p.options?.find((x) => x.id === p.decidedOptionId);
+    const label = o?.label?.trim();
+    return label || null;
+  }
+
   protected canEditTitle(p: PlanningPoll): boolean {
     if (!this.isSyndicOrOwner()) return false;
     return (
@@ -870,14 +1073,49 @@ export class PainelPlanejamentoComponent implements OnInit {
     return labels.join('; ');
   }
 
+  /** Texto compacto para a lista de pautas (um trecho por unidade). */
+  protected myVoteSummaryForList(p: PlanningPoll): string | null {
+    const v = p.myVote;
+    if (!v?.byUnit?.length) {
+      return null;
+    }
+    return v.byUnit
+      .map((u) => {
+        const row: PollUnitVoteRow = {
+          unitId: u.unitId,
+          identifier: u.identifier,
+          choices: u.choices,
+        };
+        return `${u.identifier}: ${this.formatUnitVoteChoices(row)}`;
+      })
+      .join(' · ');
+  }
+
+  protected formatMyUnitVoteLine(u: {
+    unitId: string;
+    identifier: string;
+    choices: { id: string; label: string }[];
+  }): string {
+    return this.formatUnitVoteChoices({
+      unitId: u.unitId,
+      identifier: u.identifier,
+      choices: u.choices,
+    });
+  }
+
   private getListPollParams():
-    | { q: string; limit: number }
-    | { registeredFrom: string; registeredTo: string; limit: number } {
+    | { q: string; limit: number; includeMyVotes: true }
+    | {
+        registeredFrom: string;
+        registeredTo: string;
+        limit: number;
+        includeMyVotes: true;
+      } {
     const lim = 100;
     const raw = this.listFilterForm.getRawValue();
     const tq = raw.titleQuery?.trim() ?? '';
     if (tq) {
-      return { q: tq, limit: lim };
+      return { q: tq, limit: lim, includeMyVotes: true };
     }
     const rf = raw.registeredFrom.trim().slice(0, 10);
     const rt = raw.registeredTo.trim().slice(0, 10);
@@ -886,12 +1124,14 @@ export class PainelPlanejamentoComponent implements OnInit {
         registeredFrom: localIsoDateDaysAgo(29),
         registeredTo: todayLocalIsoDate(),
         limit: lim,
+        includeMyVotes: true,
       };
     }
     return {
       registeredFrom: rf,
       registeredTo: rt,
       limit: lim,
+      includeMyVotes: true,
     };
   }
 
@@ -971,6 +1211,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         this.detailError.set(this.msg(err));
         this.selected.set(null);
         this.results.set(null);
+        this.myUnitVotesDetail.set(null);
       },
     });
   }
@@ -979,6 +1220,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.selected.set(p);
     this.results.set(null);
     this.actionError.set(null);
+    this.resetLiveEditingState();
     this.editingBody.set(false);
     this.editingTitle.set(false);
     this.editingCompetence.set(false);
@@ -990,14 +1232,43 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.patchTypeSettingsForm(p);
     this.voteOptionIds.set([]);
     this.voteForm.reset({ unitId: '' });
-    if (this.isMgmt() && !this.pollIsAta(p)) {
-      this.api.pollResults(this.condominiumId, p.id).subscribe({
-        next: (r) => this.results.set(r),
-        error: () => this.results.set(null),
-      });
-    }
     this.decideForm.patchValue({ optionId: p.decidedOptionId ?? '' });
     this.syncAndPrefetchAttachmentPreviews(p);
+    this.tryLoadResultsForCurrentDetail();
+    this.refreshMinutesDraftIndex();
+    this.tryLoadMyUnitVotesForCurrentDetail();
+  }
+
+  /**
+   * Totais e gráfico de votação: gestão vê em qualquer fase; moradores só após
+   * encerrar (ou decidir), sem detalhe por unidade (vem vazio do backend).
+   */
+  private tryLoadResultsForCurrentDetail(): void {
+    const p = this.selected();
+    if (!p || this.pollIsAta(p)) {
+      this.results.set(null);
+      return;
+    }
+    if (!this.isMgmt() && p.status !== 'closed' && p.status !== 'decided') {
+      this.results.set(null);
+      return;
+    }
+    this.api.pollResults(this.condominiumId, p.id).subscribe({
+      next: (r) => this.results.set(r),
+      error: () => this.results.set(null),
+    });
+  }
+
+  private tryLoadMyUnitVotesForCurrentDetail(): void {
+    const p = this.selected();
+    this.myUnitVotesDetail.set(null);
+    if (!p || this.pollIsAta(p)) {
+      return;
+    }
+    this.api.pollMyUnitVotes(this.condominiumId, p.id).subscribe({
+      next: (v) => this.myUnitVotesDetail.set(v),
+      error: () => this.myUnitVotesDetail.set(null),
+    });
   }
 
   createPoll(): void {
@@ -1185,7 +1456,15 @@ export class PainelPlanejamentoComponent implements OnInit {
         next: () => {
           this.busy.set(false);
           this.actionError.set(null);
-          this.applySelectedPoll(p);
+          this.api.getPoll(this.condominiumId, p.id).subscribe({
+            next: (fresh) => {
+              this.upsertPollInList(fresh);
+              this.applySelectedPoll(fresh);
+            },
+            error: () => {
+              this.applySelectedPoll(p);
+            },
+          });
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
@@ -1264,32 +1543,60 @@ export class PainelPlanejamentoComponent implements OnInit {
   private buildMinutesDraftIndexFromDocs(
     docs: CondominiumDocumentRow[],
   ): Record<string, string> {
-    const drafts = docs.filter(
-      (d) => d.kind === 'assembly_minutes_draft' && d.pollId,
+    const forPolls = docs.filter(
+      (d) =>
+        !!d.pollId &&
+        (d.kind === 'assembly_minutes_draft' ||
+          d.kind === 'assembly_minutes_final'),
     );
-    drafts.sort((a, b) => {
+    forPolls.sort((a, b) => {
+      const rank = (k: string) =>
+        k === 'assembly_minutes_final' ? 0 : 1;
+      const ra = rank(a.kind);
+      const rb = rank(b.kind);
+      if (ra !== rb) {
+        return ra - rb;
+      }
       const ta = Date.parse(a.createdAt);
       const tb = Date.parse(b.createdAt);
-      const na = Number.isNaN(ta);
-      const nb = Number.isNaN(tb);
-      if (na && nb) {
-        return b.id.localeCompare(a.id);
+      if (!Number.isNaN(ta) && !Number.isNaN(tb) && tb !== ta) {
+        return tb - ta;
       }
-      if (na) {
-        return 1;
-      }
-      if (nb) {
-        return -1;
-      }
-      return tb - ta;
+      return b.id.localeCompare(a.id);
     });
     const out: Record<string, string> = {};
-    for (const d of drafts) {
+    for (const d of forPolls) {
       if (d.pollId && out[d.pollId] === undefined) {
         out[d.pollId] = d.id;
       }
     }
     return out;
+  }
+
+  /**
+   * Morador (ou gestão): só descarrega o PDF já existente, sem gerar no servidor.
+   * Usa o melhor documento por pauta (definitiva publicada, senão rascunho).
+   */
+  protected downloadAssemblyMinutesReadOnly(p: PlanningPoll): void {
+    const docId = this.minutesDraftDocumentIdFor(p);
+    if (!docId) {
+      return;
+    }
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.api.downloadDocumentBlob(this.condominiumId, docId).subscribe({
+      next: (blob) => {
+        this.busy.set(false);
+        this.triggerBlobDownload(
+          blob,
+          this.minutesDraftDownloadFilename(p.title, undefined),
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.actionError.set(this.msg(err));
+      },
+    });
   }
 
   private minutesDraftDownloadFilename(

@@ -24,7 +24,10 @@
             Você está concluindo o convite para o condomínio
             <strong>{{ pr.condominiumName }}</strong>, unidade
             <strong>{{ pr.unitIdentifier }}</strong
-            >. Email: {{ pr.emailMasked }}
+            >. @if (pr.emailMasked) { E-mail: {{ pr.emailMasked }} }
+            @if (pr.phoneMasked) {
+              <span> · Celular: {{ pr.phoneMasked }}</span>
+            }
           } @else {
             Você está concluindo o convite como <strong>responsável</strong>
             @if (pr.unitIdentifier) {
@@ -33,7 +36,16 @@
               do condomínio
             }
             <strong>{{ pr.condominiumName }}</strong
-            >. Email: {{ pr.emailMasked }}
+            >.
+            @if (pr.emailMasked) {
+              <span> E-mail: {{ pr.emailMasked }}</span>
+            }
+            @if (pr.phoneMasked) {
+              <span> · Celular: {{ pr.phoneMasked }}</span>
+            }
+            @if (!pr.emailMasked && !pr.phoneMasked) {
+              <span class="muted"> (dados de contato mascarados indisponíveis) </span>
+            }
             @if (!pr.pendingRegistration) {
               <span class="sub__note">
                 Sua conta já existe: confirme abaixo para vincular esta unidade

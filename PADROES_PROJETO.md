@@ -53,4 +53,4 @@ Quando o verbo for “persistir escolha” em frases (não só no botão), usar 
 ## Áreas do painel (condomínio)
 
 - **Comunicação** (`…/comunicacao`): informativos com anexos e envio por e-mail/SMS; no SaaS a feature continua com a chave `documents`.
-- **Pautas/Atas** (`…/planejamento`): pautas eletrônicas e o bloco **Atas em PDF** (modelos, rascunho a partir da pauta, publicação).
+- **Pautas/Atas** (`…/planejamento`): pautas eletrônicas, votação e PDF de ata por pauta.

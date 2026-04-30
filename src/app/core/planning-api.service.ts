@@ -76,6 +76,17 @@ export interface PlanningPoll {
   attachments?: PlanningPollAttachment[];
   createdAt: string;
   updatedAt: string;
+  /** Só com `includeMyVotes`: voto(s) nas unidades em que a conta é titular/responsável (não o alargamento de síndico). */
+  myVote?: PollMyUnitVotes;
+}
+
+/** Votos nas unidades pessoais (titular/responsável), não em todas as unidades de um síndico. */
+export interface PollMyUnitVotes {
+  byUnit: {
+    unitId: string;
+    identifier: string;
+    choices: { id: string; label: string }[];
+  }[];
 }
 
 export interface PollUnitVoteRow {
@@ -188,6 +199,8 @@ export class PlanningApiService {
       registeredFrom?: string;
       registeredTo?: string;
       limit?: number;
+      /** Inclui `myVote` em cada pauta (voto das unidades do utilizador). */
+      includeMyVotes?: boolean;
     },
   ): Observable<PlanningPoll[]> {
     let httpParams = new HttpParams();
@@ -206,9 +219,22 @@ export class PlanningApiService {
     if (p.limit != null) {
       httpParams = httpParams.set('limit', String(p.limit));
     }
+    if (p.includeMyVotes) {
+      httpParams = httpParams.set('includeMyVotes', 'true');
+    }
     return this.http.get<PlanningPoll[]>(
       `${this.base}/condominiums/${condominiumId}/planning/polls`,
       { params: httpParams },
+    );
+  }
+
+  /** Votos em vigor para as unidades do utilizador nesta pauta. */
+  pollMyUnitVotes(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<PollMyUnitVotes> {
+    return this.http.get<PollMyUnitVotes>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/my-votes`,
     );
   }
 

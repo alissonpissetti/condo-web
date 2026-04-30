@@ -3,6 +3,15 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface CondominiumLibraryDownloadLogRow {
+  id: string;
+  documentId: string;
+  documentName: string;
+  userId: string;
+  userLabel: string;
+  downloadedAt: string;
+}
+
 export interface CondominiumLibraryDocumentRow {
   id: string;
   condominiumId: string;
@@ -22,6 +31,14 @@ export class CondominiumLibraryApiService {
   list(condominiumId: string): Observable<CondominiumLibraryDocumentRow[]> {
     return this.http.get<CondominiumLibraryDocumentRow[]>(
       `${this.base}/condominiums/${condominiumId}/library-documents`,
+    );
+  }
+
+  listDownloadLog(
+    condominiumId: string,
+  ): Observable<CondominiumLibraryDownloadLogRow[]> {
+    return this.http.get<CondominiumLibraryDownloadLogRow[]>(
+      `${this.base}/condominiums/${condominiumId}/library-documents/download-log`,
     );
   }
 

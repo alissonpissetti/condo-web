@@ -17,6 +17,12 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import {
+  formatBrPhoneDisplay,
+  optionalBrMobilePhoneValidator,
+  toNationalPhoneDigits,
+} from '../../../core/br-phone-mask';
+import { BrPhoneMaskDirective } from '../../../core/br-phone-mask.directive';
 import { formatDateTimeDdMmYyyyHhMm } from '../../../core/date-display';
 import {
   CondominiumManagementService,
@@ -25,9 +31,19 @@ import {
 } from '../../../core/condominium-management.service';
 import { CondominiumNavDataService } from '../../../core/condominium-nav-data.service';
 
+function optionalEmail(
+  c: import('@angular/forms').AbstractControl,
+): import('@angular/forms').ValidationErrors | null {
+  const v = String(c.value ?? '').trim();
+  if (v.length === 0) {
+    return null;
+  }
+  return Validators.email(c);
+}
+
 @Component({
   selector: 'app-painel-convites',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, BrPhoneMaskDirective],
   templateUrl: './painel-convites.component.html',
   styleUrl: './painel-convites.component.scss',
 })
@@ -51,7 +67,8 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly history = signal<
     {
       id: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
       createdAt: string;
       acceptedAt: string;
       expiresAt: string;
@@ -66,7 +83,8 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly pending = signal<
     {
       id: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
       expiresAt: string;
       createdAt: string;
       personFullName: string;
@@ -77,7 +95,27 @@ export class PainelConvitesComponent implements OnInit {
     }[]
   >([]);
 
-  /** Feedback após copiar o link (id do convite). */
+  /** Exibe e-mail e/ou celular formatado na listagem. */
+  protected contactLabel(row: {
+    email: string | null;
+    phone: string | null;
+  }): string {
+    const parts: string[] = [];
+    if (row.email) {
+      parts.push(row.email);
+    }
+    if (row.phone) {
+      const national = toNationalPhoneDigits(
+        row.phone.startsWith('55') ? row.phone : `55${row.phone}`,
+      );
+      if (national.length === 11) {
+        parts.push(formatBrPhoneDisplay(national));
+      } else {
+        parts.push(row.phone);
+      }
+    }
+    return parts.length > 0 ? parts.join(' · ') : '—';
+  }
   protected readonly copiedInviteId = signal<string | null>(null);
 
   protected readonly removingInviteId = signal<string | null>(null);
@@ -107,7 +145,8 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly form = this.fb.nonNullable.group({
     groupingId: ['', [Validators.required]],
     unitId: ['', [Validators.required]],
-    email: ['', [Validators.required, Validators.email]],
+    email: ['', [optionalEmail]],
+    phone: ['', [optionalBrMobilePhoneValidator]],
     fullName: ['', [Validators.maxLength(255)]],
   });
 
@@ -268,32 +307,54 @@ export class PainelConvitesComponent implements OnInit {
     this.actionError.set(null);
     this.lookup.set(null);
     const email = this.form.controls.email.value.trim();
-    if (!email || this.form.controls.email.invalid) {
+    const phone = this.form.controls.phone.value.trim();
+    if (email && phone) {
+      this.actionError.set(
+        'Preencha só o e-mail ou só o celular para “Identificar”, não os dois ao mesmo tempo.',
+      );
+      return;
+    }
+    if (!email && !phone) {
+      this.form.controls.email.markAsTouched();
+      this.form.controls.phone.markAsTouched();
+      this.actionError.set('Informe o e-mail ou o celular (com DDD) para identificar.');
+      return;
+    }
+    if (email && this.form.controls.email.invalid) {
       this.form.controls.email.markAsTouched();
       return;
     }
+    if (phone && this.form.controls.phone.invalid) {
+      this.form.controls.phone.markAsTouched();
+      return;
+    }
     this.lookupBusy.set(true);
-    this.api.lookupCondominiumInviteEmail(this.condominiumId, email).subscribe({
-      next: (r) => {
-        this.lookupBusy.set(false);
-        this.lookup.set(r);
-        if (r.found && r.fullName) {
-          this.form.patchValue({ fullName: r.fullName });
-        } else if (!r.found) {
-          this.form.patchValue({ fullName: '' });
-        }
-      },
-      error: (err: HttpErrorResponse) => {
-        this.lookupBusy.set(false);
-        this.actionError.set(this.msg(err));
-      },
-    });
+    this.api
+      .lookupCondominiumInviteContact(
+        this.condominiumId,
+        email ? { email } : { phone },
+      )
+      .subscribe({
+        next: (r) => {
+          this.lookupBusy.set(false);
+          this.lookup.set(r);
+          if (r.found && r.fullName) {
+            this.form.patchValue({ fullName: r.fullName });
+          } else if (!r.found) {
+            this.form.patchValue({ fullName: '' });
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.lookupBusy.set(false);
+          this.actionError.set(this.msg(err));
+        },
+      });
   }
 
   sendInvite(): void {
     this.actionOk.set(null);
     this.actionError.set(null);
-    const { groupingId, unitId, email } = this.form.getRawValue();
+    const { groupingId, unitId, email, phone } = this.form.getRawValue();
     if (!groupingId || !unitId) {
       this.form.controls.groupingId.markAsTouched();
       this.form.controls.unitId.markAsTouched();
@@ -301,14 +362,25 @@ export class PainelConvitesComponent implements OnInit {
       return;
     }
     const emailTrim = email.trim();
-    if (!emailTrim || this.form.controls.email.invalid) {
+    const phoneTrim = phone.trim();
+    if (!emailTrim && !phoneTrim) {
       this.form.controls.email.markAsTouched();
+      this.form.controls.phone.markAsTouched();
+      this.actionError.set('Informe o e-mail e/ou o celular (com DDD) de quem vai receber o convite.');
+      return;
+    }
+    if (emailTrim && this.form.controls.email.invalid) {
+      this.form.controls.email.markAsTouched();
+      return;
+    }
+    if (phoneTrim && this.form.controls.phone.invalid) {
+      this.form.controls.phone.markAsTouched();
       return;
     }
     const lu = this.lookup();
     if (!lu || !lu.canInvite) {
       this.actionError.set(
-        'Verifique o e-mail com “Identificar” antes de enviar, e confirme que o convite é permitido.',
+        'Use “Identificar” com o e-mail ou o celular usados acima e confirme que o convite é permitido.',
       );
       return;
     }
@@ -316,7 +388,7 @@ export class PainelConvitesComponent implements OnInit {
     if (!lu.found && fullName.length < 2) {
       this.form.controls.fullName.markAsTouched();
       this.actionError.set(
-        'Indique o nome completo de quem vai receber o convite (e-mail ainda não registrado).',
+        'Indique o nome completo de quem vai receber o convite (contato ainda não cadastrado).',
       );
       return;
     }
@@ -325,17 +397,30 @@ export class PainelConvitesComponent implements OnInit {
       .createCondominiumInvite(this.condominiumId, {
         groupingId,
         unitId,
-        email: emailTrim,
+        ...(emailTrim ? { email: emailTrim } : {}),
+        ...(phoneTrim ? { phone: phoneTrim } : {}),
         ...(fullName.length >= 2 ? { fullName } : {}),
       })
       .subscribe({
-        next: () => {
+        next: (res) => {
           this.busy.set(false);
           this.actionOk.set(
-            'Convite enviado por e-mail. A pessoa confirma pelo link (conta nova ou existente) e fica como responsável pela unidade.',
+            res.sentEmail || res.sentSms
+              ? `Convite enviado${res.sentEmail ? ' por e-mail' : ''}${
+                  res.sentEmail && res.sentSms ? ' e' : ''
+                }${
+                  res.sentSms
+                    ? ' por WhatsApp' +
+                      (res.sentEmail
+                        ? ''
+                        : ' (se Twilio não estiver configurado com template, veja o texto nos logs do servidor).')
+                    : ''
+                }. A pessoa abre o mesmo link, confirma a conta (se for o caso) e fica como responsável pela unidade.`
+              : 'Convite guardado, mas nenhum canal (SMTP / Twilio WhatsApp) entregou a mensagem. Copie o link em “Pendentes”.',
           );
           this.form.patchValue({
             email: '',
+            phone: '',
             fullName: '',
           });
           this.lookup.set(null);

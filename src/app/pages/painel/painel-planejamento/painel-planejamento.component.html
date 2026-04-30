@@ -38,7 +38,7 @@
               <div id="plan-create-panel" class="plan-create-panel">
                 <p class="form-card__lede plan-create-panel__lede">
                   @if (createForm.value.assemblyType === 'ata') {
-                    Pauta só para registo de ata: sem opções de voto. Indique assunto, período e
+                    Pauta só para registro de ata: sem opções de voto. Indique assunto, período e
                     descrição; depois pode abrir a pauta e anexar documentos.
                   } @else {
                     Indique assunto, período e descrição; depois as opções de voto (mínimo 2). Em
@@ -353,9 +353,14 @@
                           <span class="plan-pill plan-pill--multi">Múltipla</span>
                         }
                       </span>
+                      @if (p.myVote?.byUnit?.length) {
+                        <span
+                          class="plan-poll-tile__myvote muted sm"
+                          role="note"
+                        >O seu voto: {{ myVoteSummaryForList(p) }}</span>
+                      }
                     </a>
                     @if (
-                      isSyndicOrOwner() &&
                       (p.status === 'closed' || p.status === 'decided') &&
                       minutesDraftDocumentIdFor(p)
                     ) {
@@ -363,9 +368,9 @@
                         type="button"
                         class="btn ghost sm plan-poll-list__minutes-dl"
                         [disabled]="busy()"
-                        (click)="downloadMinutesDraft(p)"
+                        (click)="downloadAssemblyMinutesReadOnly(p)"
                       >
-                        PDF ata
+                        Download
                       </button>
                     }
                   </li>
@@ -375,8 +380,6 @@
           </div>
           }
         </section>
-
-        <app-painel-planejamento-atas-section />
       </div>
     }
   } @else {
@@ -629,6 +632,15 @@
                   <div class="plan-body-actions">
                     <button
                       type="button"
+                      class="btn primary sm"
+                      [disabled]="busy()"
+                      (click)="startLiveMode()"
+                      title="Grava o texto automaticamente no navegador. Use durante a reunião."
+                    >
+                      Modo reunião
+                    </button>
+                    <button
+                      type="button"
                       class="btn ghost sm"
                       [disabled]="busy()"
                       (click)="startEditBody()"
@@ -642,6 +654,48 @@
                     [formGroup]="bodyEditForm"
                     (ngSubmit)="saveBody(p)"
                   >
+                    @if (bodyDraftConflict()) {
+                      <p class="plan-live-conflict" role="status">
+                        A pauta foi atualizada no servidor depois deste rascunho local. Você está vendo a
+                        versão do servidor.
+                        <button
+                          type="button"
+                          class="btn ghost sm plan-live-conflict__btn"
+                          (click)="restoreConflictDraft()"
+                        >
+                          Usar rascunho local
+                        </button>
+                      </p>
+                    }
+                    @if (liveMode()) {
+                      <div class="plan-live-banner" role="status" aria-live="polite">
+                        <span class="plan-live-banner__dot" aria-hidden="true"></span>
+                        <span class="plan-live-banner__text">
+                          <strong>Modo reunião</strong> — rascunho guardado neste navegador
+                          @if (lastLocalBodySaveAt() !== null) {
+                            (última gravação local: {{ liveBodySaveTimeLabel() }})
+                          }
+                        </span>
+                        <button
+                          type="button"
+                          class="btn ghost sm plan-live-banner__off"
+                          (click)="stopLiveWhileEditing()"
+                        >
+                          Só desativar gravação automática
+                        </button>
+                      </div>
+                    } @else {
+                      <p class="plan-live-hint muted">
+                        <button
+                          type="button"
+                          class="btn ghost sm plan-live-hint__btn"
+                          (click)="enableLiveWhileEditing()"
+                        >
+                          Ativar gravação local (modo reunião)
+                        </button>
+                        <span> — evita perder o texto se a página fechar ou atualizar.</span>
+                      </p>
+                    }
                     <app-poll-body-editor formControlName="body"></app-poll-body-editor>
                     <p class="plan-body-format-hint muted">
                       <strong>Enter</strong> inicia um novo parágrafo.
@@ -650,7 +704,7 @@
                     </p>
                     <div class="plan-body-edit__actions">
                       <button type="submit" class="btn primary sm" [disabled]="busy()">
-                        Salvar descrição
+                        Salvar no servidor
                       </button>
                       <button
                         type="button"
@@ -666,30 +720,55 @@
               }
             </section>
 
+            @if (isSyndicOrOwner() || (p.attachments?.length ?? 0) > 0) {
             <section class="plan-detail__section" aria-labelledby="plan-detail-attach-heading">
             <div class="plan-attachments">
               <h3 class="plan-subtitle" id="plan-detail-attach-heading">Anexos</h3>
               @if ((p.attachments?.length ?? 0) === 0) {
                 <p class="muted plan-attachments__empty">Nenhum anexo.</p>
               } @else {
-                <ul class="plan-attachments__list">
+                <ul
+                  class="plan-attachments__list"
+                  [class.plan-attachments__list--grid]="(p.attachments?.length ?? 0) > 1"
+                >
                   @for (a of p.attachments ?? []; track a.id) {
                     <li
-                      class="plan-attachments__row"
-                      [class.plan-attachments__row--editable]="canEditPollContent(p)"
+                      class="plan-attachments__card"
+                      [class.plan-attachments__card--editable]="canEditPollContent(p)"
                     >
-                      <span
-                        class="plan-attachments__badge"
-                        [attr.title]="a.mimeType"
-                        >{{ attachmentKindLabel(a) }}</span
-                      >
-                      <div class="plan-attachments__body">
-                        <div class="plan-attachments__title-row">
-                          <span class="plan-attachments__filename">{{
-                            a.originalFilename
-                          }}</span>
-                        </div>
-                        @if (attachmentShowsMediaPreview(a)) {
+                      <div class="plan-attachments__head">
+                        <span
+                          class="plan-attachments__badge"
+                          [attr.title]="a.mimeType"
+                          >{{ attachmentKindLabel(a) }}</span
+                        >
+                        <span class="plan-attachments__filename" [title]="a.originalFilename">{{
+                          a.originalFilename
+                        }}</span>
+                        @if (canEditPollContent(p)) {
+                          <button
+                            type="button"
+                            class="plan-attachments__remove-icon"
+                            [disabled]="busy()"
+                            [attr.aria-label]="'Remover arquivo ' + a.originalFilename"
+                            (click)="requestRemoveAttachment(p, a)"
+                          >
+                            <svg
+                              class="plan-attachments__remove-svg"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fill="currentColor"
+                                d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                              />
+                            </svg>
+                          </button>
+                        }
+                      </div>
+
+                      @if (attachmentShowsMediaPreview(a)) {
+                        <div class="plan-attachments__media">
                           @if (previewSrc(p, a); as src) {
                             @if (isAudioAttachment(a)) {
                               <audio
@@ -699,56 +778,38 @@
                                 [src]="src"
                               ></audio>
                             } @else if (isImageAttachment(a)) {
-                              <img
-                                class="plan-attachments__thumb"
-                                [src]="src"
-                                [attr.alt]="
-                                  'Pré-visualização: ' +
-                                  (a.originalFilename || 'anexo')
-                                "
-                                loading="lazy"
-                              />
+                              <div class="plan-attachments__preview-frame">
+                                <img
+                                  class="plan-attachments__thumb"
+                                  [src]="src"
+                                  [attr.alt]="
+                                    'Pré-visualização: ' + (a.originalFilename || 'anexo')
+                                  "
+                                  loading="lazy"
+                                />
+                              </div>
                             }
                           } @else {
                             <p class="plan-attachments__preview-hint muted">
-                              A carregar pré-visualização…
+                              Carregando pré-visualização…
                             </p>
                           }
-                        }
-                        <div class="plan-attachments__actions">
-                          <button
-                            type="button"
-                            class="btn ghost sm plan-attachments__dl"
-                            (click)="downloadAttachment(p, a)"
-                          >
-                            Download
-                          </button>
                         </div>
+                      }
+
+                      <div class="plan-attachments__foot">
+                        <button
+                          type="button"
+                          class="btn ghost sm plan-attachments__dl"
+                          (click)="downloadAttachment(p, a)"
+                        >
+                          Download
+                        </button>
                         <span class="plan-attachments__meta"
                           >{{ formatBytes(a.sizeBytes) }} ·
                           {{ (a.mimeType || '').trim() || '—' }}</span
                         >
                       </div>
-                      @if (canEditPollContent(p)) {
-                        <button
-                          type="button"
-                          class="plan-attachments__remove-icon"
-                          [disabled]="busy()"
-                          [attr.aria-label]="'Remover arquivo ' + a.originalFilename"
-                          (click)="requestRemoveAttachment(p, a)"
-                        >
-                          <svg
-                            class="plan-attachments__remove-svg"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              fill="currentColor"
-                              d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                            />
-                          </svg>
-                        </button>
-                      }
                     </li>
                   }
                 </ul>
@@ -772,12 +833,13 @@
                 </button>
                 <p class="form-section__hint plan-hint-tight">
                   PDF, Word, texto, imagem ou áudio (incl. ficheiros .opus do WhatsApp).
-                  Pode anexar quantos precisar (máx. 20 MB cada). Disponível em rascunho ou
-                  votação aberta.
+                  Pode anexar quantos precisar (máx. 20 MB cada), em qualquer fase da pauta
+                  (rascunho, votação aberta, após encerrar ou após a decisão).
                 </p>
               }
             </div>
             </section>
+            }
 
             <section class="plan-detail__section" aria-labelledby="plan-detail-options-heading">
             <div class="plan-options-preview">
@@ -795,6 +857,52 @@
               }
             </div>
             </section>
+
+            @if (!pollIsAta(p)) {
+              @if (myUnitVotesDetail(); as myv) {
+                @if (myv.byUnit.length > 0) {
+              <section
+                class="plan-detail__section"
+                aria-labelledby="plan-detail-my-vote-heading"
+              >
+                <h3 class="plan-subtitle" id="plan-detail-my-vote-heading">O seu voto</h3>
+                <p class="form-section__hint muted plan-hint-tight">
+                  Registo atual no sistema para a(s) sua(s) unidade(s) (incl. se a gestão
+                  tiver submetido o voto em seu nome).
+                </p>
+                <ul class="plan-my-vote-list">
+                  @for (row of myv.byUnit; track row.unitId) {
+                    <li class="plan-my-vote-list__row">
+                      <span class="plan-my-vote-list__unit">Unid. {{ row.identifier }}</span>
+                      <span class="plan-my-vote-list__choices">{{
+                        formatMyUnitVoteLine(row)
+                      }}</span>
+                    </li>
+                  }
+                </ul>
+              </section>
+                }
+              }
+            }
+
+            @if (
+              isSyndicOrOwner() &&
+              !pollIsAta(p) &&
+              p.status === 'decided' &&
+              decidedOptionLabel(p);
+              as dlabel
+            ) {
+              <section
+                class="plan-detail__section"
+                aria-labelledby="plan-detail-decision-heading"
+              >
+                <h3 class="plan-subtitle" id="plan-detail-decision-heading">Decisão</h3>
+                <p class="plan-decision-line">
+                  Opção registada na ata:
+                  <strong class="plan-decision-line__choice">{{ dlabel }}</strong>
+                </p>
+              </section>
+            }
 
             @if (canShowVotePanel(p)) {
               <section class="plan-detail__section" aria-labelledby="plan-detail-vote-heading">
@@ -861,7 +969,7 @@
               </section>
             }
 
-            @if (isMgmt() && !pollIsAta(p) && results(); as r) {
+            @if (!pollIsAta(p) && results(); as r) {
               <section class="plan-detail__section" aria-labelledby="plan-detail-results-heading">
               <div class="plan-results">
                 <h3 class="plan-subtitle" id="plan-detail-results-heading">Resultados</h3>
@@ -894,7 +1002,7 @@
                     }
                   </ul>
                 }
-                @if (r.votesByUnit && r.votesByUnit.length > 0) {
+                @if (isMgmt() && r.votesByUnit && r.votesByUnit.length > 0) {
                   <div class="plan-results-by-unit">
                     <h4 class="plan-results-by-unit__title">Voto por unidade</h4>
                     <p class="plan-results-by-unit__hint muted">
@@ -915,6 +1023,31 @@
                   </div>
                 }
               </div>
+              </section>
+            }
+
+            @if (
+              (p.status === 'closed' || p.status === 'decided') &&
+              minutesDraftDocumentIdFor(p) &&
+              !isSyndicOrOwner()
+            ) {
+              <section
+                class="plan-detail__section plan-ata-pdf"
+                aria-labelledby="plan-ata-pdf-heading"
+              >
+                <h3 class="plan-subtitle" id="plan-ata-pdf-heading">Ata (PDF)</h3>
+                <p class="form-section__hint muted plan-hint-tight">
+                  Arquivo desta pauta (versão publicada, se houver) ou a última versão gerada
+                  disponível para o seu acesso.
+                </p>
+                <button
+                  type="button"
+                  class="btn primary plan-ata-pdf__download"
+                  [disabled]="busy()"
+                  (click)="downloadAssemblyMinutesReadOnly(p)"
+                >
+                  Download
+                </button>
               </section>
             }
 
@@ -973,32 +1106,31 @@
                 }
                 @if (p.status === 'closed' || p.status === 'decided') {
                   <div class="plan-minutes-pdf plan-mgmt__minutes">
+                    <h3 class="plan-subtitle plan-minutes-pdf__kicker">Ata (PDF)</h3>
                     <p class="plan-minutes-pdf__hint">
-                      Gere o rascunho em PDF (sempre atualizado ao clicar). O download inicia logo
-                      em seguida; pode fazer o download de novo aqui ou na lista de PDFs em
-                      Planejamento. As
-                      assinaturas digitais no PDF são as de «Meus dados» do síndico e do
-                      subsíndico (se existir na gestão do condomínio).
+                      <strong>Gerar / atualizar</strong> cria um novo PDF no servidor com os dados
+                      atuais da pauta (modelo de ata, lista de presença no fim do documento).
+                      <strong>Download</strong> baixa o arquivo já existente, sem gerar de novo.
                     </p>
                     <div class="plan-minutes-pdf__actions">
+                      @if (minutesDraftDocumentIdFor(p)) {
+                        <button
+                          type="button"
+                          class="btn ghost"
+                          [disabled]="busy()"
+                          (click)="downloadAssemblyMinutesReadOnly(p)"
+                        >
+                          Download
+                        </button>
+                      }
                       <button
                         type="button"
-                        class="btn ghost"
+                        class="btn primary"
                         [disabled]="busy()"
                         (click)="generateMinutes(p)"
                       >
                         Gerar / atualizar PDF da ata
                       </button>
-                      @if (minutesDraftDocumentIdFor(p)) {
-                        <button
-                          type="button"
-                          class="btn primary"
-                          [disabled]="busy()"
-                          (click)="downloadMinutesDraft(p)"
-                        >
-                          Download PDF da ata
-                        </button>
-                      }
                     </div>
                   </div>
                 }

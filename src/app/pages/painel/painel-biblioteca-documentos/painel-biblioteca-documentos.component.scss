@@ -37,6 +37,14 @@
   margin-bottom: 1rem;
 }
 
+.audit-card {
+  margin-top: 0.25rem;
+
+  &__lede {
+    margin: 0 0 0.85rem;
+  }
+}
+
 .card__title {
   margin: 0 0 0.75rem;
   font-size: 1rem;

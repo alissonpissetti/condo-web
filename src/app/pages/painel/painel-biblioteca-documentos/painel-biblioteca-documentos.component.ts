@@ -3,9 +3,11 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumLibraryApiService,
   type CondominiumLibraryDocumentRow,
+  type CondominiumLibraryDownloadLogRow,
 } from '../../../core/condominium-library-api.service';
 import {
   PlanningApiService,
@@ -31,6 +33,9 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly removingId = signal<string | null>(null);
   protected readonly uploadDisplayName = signal('');
+  protected readonly downloadLog = signal<CondominiumLibraryDownloadLogRow[]>([]);
+  protected readonly downloadLogLoading = signal(false);
+  protected readonly downloadLogError = signal<string | null>(null);
 
   private condominiumId = '';
 
@@ -43,6 +48,20 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     }
     this.condominiumId = id;
     this.reload();
+  }
+
+  /** Enviar / remover: titular, síndico, subsíndico ou administrador. */
+  protected canManageUpload(): boolean {
+    const a = this.access();
+    return a !== null && condoAccessAllowsManagement(a);
+  }
+
+  /** Histórico de downloads: só titular do condomínio ou síndico. */
+  protected canViewDownloadAudit(): boolean {
+    const a = this.access();
+    if (!a) return false;
+    if (a.kind === 'owner') return true;
+    return a.kind === 'participant' && a.role === 'syndic';
   }
 
   protected canDelete(): boolean {
@@ -78,16 +97,16 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     this.api
       .upload(this.condominiumId, file, this.uploadDisplayName())
       .subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.uploadDisplayName.set('');
-        input.value = '';
-        this.reloadList();
-      },
-      error: (err: HttpErrorResponse) => {
-        this.busy.set(false);
-        this.actionError.set(this.msg(err));
-      },
+        next: () => {
+          this.busy.set(false);
+          this.uploadDisplayName.set('');
+          input.value = '';
+          this.reloadListAndAudit();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.msg(err));
+        },
       });
   }
 
@@ -103,6 +122,9 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
         a.download = doc.originalFilename || 'documento';
         a.click();
         URL.revokeObjectURL(url);
+        if (this.canViewDownloadAudit()) {
+          this.refreshDownloadLog();
+        }
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
@@ -120,7 +142,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     this.api.remove(this.condominiumId, doc.id).subscribe({
       next: () => {
         this.removingId.set(null);
-        this.reloadList();
+        this.reloadListAndAudit();
       },
       error: (err: HttpErrorResponse) => {
         this.removingId.set(null);
@@ -132,6 +154,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
   private reload(): void {
     this.loading.set(true);
     this.loadError.set(null);
+    this.downloadLogError.set(null);
     forkJoin({
       access: this.planningApi.access(this.condominiumId),
       docs: this.api.list(this.condominiumId),
@@ -140,6 +163,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
         this.access.set(access.access);
         this.docs.set(docs);
         this.loading.set(false);
+        this.loadDownloadLogIfAllowed();
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
@@ -148,13 +172,40 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     });
   }
 
-  private reloadList(): void {
+  private loadDownloadLogIfAllowed(): void {
+    if (!this.canViewDownloadAudit()) {
+      this.downloadLog.set([]);
+      this.downloadLogLoading.set(false);
+      return;
+    }
+    this.refreshDownloadLog();
+  }
+
+  private refreshDownloadLog(): void {
+    this.downloadLogLoading.set(true);
+    this.downloadLogError.set(null);
+    this.api.listDownloadLog(this.condominiumId).subscribe({
+      next: (rows) => {
+        this.downloadLog.set(rows);
+        this.downloadLogLoading.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.downloadLogLoading.set(false);
+        this.downloadLogError.set(this.msg(err));
+      },
+    });
+  }
+
+  private reloadListAndAudit(): void {
     this.api.list(this.condominiumId).subscribe({
       next: (docs) => this.docs.set(docs),
       error: () => {
         /* mantém estado atual */
       },
     });
+    if (this.canViewDownloadAudit()) {
+      this.refreshDownloadLog();
+    }
   }
 
   private msg(err: HttpErrorResponse): string {

@@ -2,10 +2,12 @@
   <header class="page__header">
     <h1>Convites</h1>
     <p class="page__intro">
-      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o e-mail de quem vai ser
-      <strong>responsável</strong> por essa unidade. Use “Identificar” para ver se já existe cadastro: pode
-      convidar tanto quem ainda não tem conta (convite com cadastro) como quem já tem (link para confirmar a
-      ocupação da unidade).
+      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o <strong>e-mail</strong> e/ou o
+      <strong>celular (com DDD)</strong> de quem vai ser <strong>responsável</strong> por essa unidade. O convite
+      traz o nome de quem envia, o condomínio, a unidade e o link (mesmo conteúdo no e-mail e no WhatsApp). Use
+      “Identificar” com <strong>só o e-mail ou só o celular</strong> para checar o cadastro. Pode enviar
+      <strong>só por e-mail</strong>, <strong>só por WhatsApp</strong> (útil se a pessoa não tiver e-mail) ou
+      <strong>os dois</strong> se preencher e-mail e celular.
     </p>
   </header>
 
@@ -60,7 +62,7 @@
         </label>
       </div>
       <label class="field">
-        <span class="field__label">E-mail</span>
+        <span class="field__label">E-mail (opcional)</span>
         <input
           type="email"
           class="input"
@@ -68,6 +70,22 @@
           autocomplete="email"
           [disabled]="busy()"
         />
+      </label>
+      <label class="field">
+        <span class="field__label">Celular / WhatsApp (opcional)</span>
+        <input
+          type="tel"
+          class="input"
+          formControlName="phone"
+          appBrPhoneMask
+          [mobileOnly]="true"
+          autocomplete="tel"
+          placeholder="(61) 99999-8888"
+          [disabled]="busy()"
+        />
+        <span class="field__hint"
+          >Use o número de WhatsApp da pessoa. Pode combinar com o e-mail para enviar nos dois canais (na API: Twilio para WhatsApp, SMTP para e-mail).</span
+        >
       </label>
       <div class="row-actions">
         <button
@@ -112,13 +130,13 @@
         </span>
       </label>
 
-      <button
+        <button
         type="button"
         class="btn primary"
         (click)="sendInvite()"
         [disabled]="busy() || lookupBusy()"
       >
-        {{ busy() ? 'Enviando…' : 'Enviar convite por e-mail' }}
+        {{ busy() ? 'Enviando…' : 'Enviar convite' }}
       </button>
     </form>
   </section>
@@ -143,7 +161,7 @@
                 <span class="pending-item__unit">{{ p.unitIdentifier }}</span>
               </span>
             </div>
-            <div class="pending-item__email">{{ p.email }}</div>
+            <div class="pending-item__email">{{ contactLabel(p) }}</div>
             <div class="pending-item__name">{{ p.personFullName }}</div>
             <div class="pending-item__footer">
               @if (p.pendingRegistration) {
@@ -214,7 +232,7 @@
                 <span class="pending-item__unit">{{ h.unitIdentifier }}</span>
               </span>
             </div>
-            <div class="pending-item__email">{{ h.email }}</div>
+            <div class="pending-item__email">{{ contactLabel(h) }}</div>
             <div class="pending-item__name">{{ h.personFullName }}</div>
             <div class="pending-item__footer history-item__footer">
               <span class="pill pill--accepted">Aceito</span>

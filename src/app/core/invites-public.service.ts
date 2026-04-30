@@ -7,7 +7,8 @@ export interface InvitePreview {
   inviteKind: 'unit' | 'condominium';
   condominiumName: string;
   unitIdentifier?: string;
-  emailMasked: string;
+  emailMasked: string | null;
+  phoneMasked: string | null;
   roles: string[];
   expiresAt: string;
   pendingRegistration: boolean;

@@ -226,6 +226,37 @@ export class CondominiumManagementService {
     );
   }
 
+  lookupCondominiumInviteContact(
+    condominiumId: string,
+    query: { email?: string; phone?: string },
+  ): Observable<{
+    found: boolean;
+    fullName: string | null;
+    hasUserAccount: boolean;
+    canInvite: boolean;
+    message?: string;
+  }> {
+    let params = new HttpParams();
+    const e = query.email?.trim();
+    const p = query.phone?.trim();
+    if (e) {
+      params = params.set('email', e);
+    }
+    if (p) {
+      params = params.set('phone', p);
+    }
+    return this.http.get<{
+      found: boolean;
+      fullName: string | null;
+      hasUserAccount: boolean;
+      canInvite: boolean;
+      message?: string;
+    }>(`${environment.apiUrl}/condominiums/${condominiumId}/invitations/lookup`, {
+      params,
+    });
+  }
+
+  /** @deprecated use lookupCondominiumInviteContact */
   lookupCondominiumInviteEmail(
     condominiumId: string,
     email: string,
@@ -236,23 +267,14 @@ export class CondominiumManagementService {
     canInvite: boolean;
     message?: string;
   }> {
-    const params = new HttpParams().set('email', email.trim());
-    return this.http.get<{
-      found: boolean;
-      fullName: string | null;
-      hasUserAccount: boolean;
-      canInvite: boolean;
-      message?: string;
-    }>(
-      `${environment.apiUrl}/condominiums/${condominiumId}/invitations/lookup`,
-      { params },
-    );
+    return this.lookupCondominiumInviteContact(condominiumId, { email });
   }
 
   listCondominiumInvitationsPending(condominiumId: string): Observable<
     {
       id: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
       expiresAt: string;
       createdAt: string;
       personFullName: string;
@@ -266,7 +288,8 @@ export class CondominiumManagementService {
     return this.http.get<
       {
         id: string;
-        email: string;
+        email: string | null;
+        phone: string | null;
         expiresAt: string;
         createdAt: string;
         personFullName: string;
@@ -283,7 +306,8 @@ export class CondominiumManagementService {
   listCondominiumInvitationsHistory(condominiumId: string): Observable<
     {
       id: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
       createdAt: string;
       acceptedAt: string;
       expiresAt: string;
@@ -295,7 +319,8 @@ export class CondominiumManagementService {
     return this.http.get<
       {
         id: string;
-        email: string;
+        email: string | null;
+        phone: string | null;
         createdAt: string;
         acceptedAt: string;
         expiresAt: string;
@@ -313,20 +338,27 @@ export class CondominiumManagementService {
     body: {
       groupingId: string;
       unitId: string;
-      email: string;
+      email?: string;
+      phone?: string;
       fullName?: string;
     },
   ): Observable<{
     outcome: string;
     personId: string;
-    email: string;
+    email: string | null;
+    phone: string | null;
+    sentEmail: boolean;
+    sentSms: boolean;
     unitId: string;
     inviteUrl: string;
   }> {
     return this.http.post<{
       outcome: string;
       personId: string;
-      email: string;
+      email: string | null;
+      phone: string | null;
+      sentEmail: boolean;
+      sentSms: boolean;
       unitId: string;
       inviteUrl: string;
     }>(`${environment.apiUrl}/condominiums/${condominiumId}/invitations`, body);

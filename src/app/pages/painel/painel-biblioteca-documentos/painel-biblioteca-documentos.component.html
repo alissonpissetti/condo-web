@@ -1,9 +1,14 @@
 <div class="page">
   <header class="page__header">
-    <h1>Biblioteca de documentos</h1>
+    <h1>Documentos do condomínio</h1>
     <p class="page__intro">
-      Arquivos gerais do condomínio (regulamentos, contratos e outros). O
-      sistema guarda quem enviou e a data/hora do upload.
+      @if (canManageUpload()) {
+        Arquivos gerais (regulamentos, contratos e outros). O sistema registra quem enviou e
+        a data/hora do envio. Moradores com acesso podem consultar e fazer o download.
+      } @else {
+        Documentos disponibilizados pela gestão. Você pode consultar a lista e fazer o
+        download dos arquivos.
+      }
     </p>
   </header>
 
@@ -11,33 +16,35 @@
     <p class="error" role="alert">{{ ae }}</p>
   }
 
-  <section class="card upload-card">
-    <h2 class="card__title">Adicionar documento</h2>
-    <label class="field">
-      <span class="field__label">Nome do documento (amigável)</span>
-      <input
-        type="text"
-        class="input"
-        maxlength="255"
-        [value]="uploadDisplayName()"
-        (input)="setUploadDisplayName($any($event.target).value)"
-        [disabled]="busy()"
-        placeholder="Ex.: Convenção do condomínio"
-      />
-    </label>
-    <label class="btn primary upload-btn" [class.is-disabled]="busy()">
-      <input
-        type="file"
-        class="sr-only"
-        [disabled]="busy()"
-        (change)="onFileSelected($event)"
-      />
-      {{ busy() ? 'Enviando…' : 'Selecionar arquivo' }}
-    </label>
-    <p class="muted small">
-      Formatos suportados: PDF, imagem, Word, TXT e CSV. Máx. 20 MB.
-    </p>
-  </section>
+  @if (canManageUpload()) {
+    <section class="card upload-card">
+      <h2 class="card__title">Adicionar documento</h2>
+      <label class="field">
+        <span class="field__label">Nome do documento (amigável)</span>
+        <input
+          type="text"
+          class="input"
+          maxlength="255"
+          [value]="uploadDisplayName()"
+          (input)="setUploadDisplayName($any($event.target).value)"
+          [disabled]="busy()"
+          placeholder="Ex.: Convenção do condomínio"
+        />
+      </label>
+      <label class="btn primary upload-btn" [class.is-disabled]="busy()">
+        <input
+          type="file"
+          class="sr-only"
+          [disabled]="busy()"
+          (change)="onFileSelected($event)"
+        />
+        {{ busy() ? 'Enviando…' : 'Selecionar arquivo' }}
+      </label>
+      <p class="muted small">
+        Formatos suportados: PDF, imagem, Word, TXT e CSV. Máx. 20 MB.
+      </p>
+    </section>
+  }
 
   @if (loading()) {
     <p class="muted">Carregando…</p>
@@ -116,6 +123,46 @@
             </tbody>
           </table>
         </div>
+      }
+    </section>
+  }
+
+  @if (canViewDownloadAudit() && !loading() && !loadError()) {
+    <section class="card audit-card">
+      <h2 class="card__title">Histórico de downloads</h2>
+      <p class="muted small audit-card__lede">
+        Registro de quem baixou cada arquivo (visível apenas para o titular do condomínio ou
+        o síndico).
+      </p>
+      @if (downloadLogLoading()) {
+        <p class="muted">Carregando histórico…</p>
+      } @else {
+        @if (downloadLogError(); as dle) {
+          <p class="error" role="alert">{{ dle }}</p>
+        } @else if (downloadLog().length === 0) {
+          <p class="muted">Ainda não há downloads registrados.</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Data/hora</th>
+                  <th>Documento</th>
+                  <th>Usuário</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of downloadLog(); track row.id) {
+                  <tr>
+                    <td>{{ formatDateTime(row.downloadedAt) }}</td>
+                    <td>{{ row.documentName }}</td>
+                    <td>{{ row.userLabel }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       }
     </section>
   }

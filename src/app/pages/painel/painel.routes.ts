@@ -89,7 +89,7 @@ export const painelRoutes: Routes = [
       },
       {
         path: 'condominio/:condominiumId/biblioteca',
-        canActivate: [selectedCondominiumGuard, condominiumManagementGuard],
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('documents')],
         loadComponent: () =>
           import(
             './painel-biblioteca-documentos/painel-biblioteca-documentos.component'

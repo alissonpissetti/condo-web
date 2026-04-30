@@ -87,16 +87,6 @@ export class PainelComunicacaoComponent implements OnInit {
   /** Nome do condomínio para textos de pré-visualização (SMS / e-mail). */
   protected readonly condoName = signal('Condomínio');
 
-  constructor() {
-    this.route.queryParamMap
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((q) => {
-        if (q.get('leitura') === '1') {
-          this.readConfirmedBanner.set(true);
-        }
-      });
-  }
-
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
@@ -104,6 +94,16 @@ export class PainelComunicacaoComponent implements OnInit {
       this.loadError.set('Condomínio inválido.');
       return;
     }
+    if (this.route.snapshot.queryParamMap.get('leitura') === '1') {
+      this.readConfirmedBanner.set(true);
+    }
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((q) => {
+        if (q.get('leitura') === '1') {
+          this.readConfirmedBanner.set(true);
+        }
+      });
     this.condominiumId = id;
     this.mgmt.getCondominium(id).subscribe({
       next: (co: Condominium) => {
