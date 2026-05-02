@@ -6,7 +6,10 @@
         @if (condoAccess.canManage()) {
           <p class="page__intro">
             Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês,
-            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte.
+            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte. Envio de
+            slips por WhatsApp exige Twilio configurado e
+            <strong>API_PUBLIC_BASE_URL</strong> (URL pública da API) acessível pela
+            Twilio — em localhost use um túnel (ex.: ngrok).
           </p>
         } @else {
           <p class="page__intro">
@@ -46,6 +49,21 @@
             title="Relatório completo da competência para enviar aos proprietários."
           >
             PDF transparência
+          </button>
+          <button
+            type="button"
+            class="btn"
+            (click)="sendSlipsWhatsappAllOpen()"
+            [disabled]="
+              loading() ||
+              actionBusy() ||
+              slipWaBusy() ||
+              !competenceYm() ||
+              summary().openCount === 0
+            "
+            title="Uma mensagem WhatsApp por unidade em aberto, com o PDF anexo (Twilio)."
+          >
+            {{ slipWaBusy() ? 'A enviar…' : 'WhatsApp slips (todas em aberto)' }}
           </button>
         }
       </div>
@@ -121,6 +139,15 @@
     <p class="error" role="alert">{{ formError() }}</p>
   }
 
+  @if (slipWaInfo(); as swi) {
+    <div class="info-banner" role="status">
+      <span>{{ swi }}</span>
+      <button type="button" class="btn ghost sm" (click)="dismissSlipWaInfo()">
+        Fechar
+      </button>
+    </div>
+  }
+
   @if (loading()) {
     <p class="muted">Carregando…</p>
   } @else if (loadError()) {
@@ -144,6 +171,20 @@
           >
             Alterar vencimento
           </button>
+          @if (selectedOpenUnitCount() > 0) {
+            <button
+              type="button"
+              class="btn sm"
+              (click)="sendSlipsWhatsappSelectedOpen()"
+              [disabled]="actionBusy() || slipWaBusy()"
+            >
+              {{
+                slipWaBusy()
+                  ? 'A enviar…'
+                  : 'WhatsApp slips (' + selectedOpenUnitCount() + ' unid.)'
+              }}
+            </button>
+          }
         </div>
       </div>
     }
@@ -250,6 +291,16 @@
                       </button>
 
                       @if (condoAccess.canManage() && c.status === 'open') {
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="kebab__item"
+                          (click)="sendSlipsWhatsappOne(c); closeActionMenu()"
+                          [disabled]="actionBusy() || slipWaBusy()"
+                        >
+                          <span class="kebab__item-title">Enviar slip por WhatsApp</span>
+                          <span class="kebab__item-hint">PDF com capa PIX (Twilio)</span>
+                        </button>
                         <button
                           type="button"
                           role="menuitem"

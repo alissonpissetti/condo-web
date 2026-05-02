@@ -39,6 +39,11 @@ export interface UnitRow {
   financialResponsiblePersonId?: string | null;
   /** Nome resolvido na API (designado, único responsável ou rótulo livre). */
   financialResponsibleName?: string | null;
+  /**
+   * Celular (55…) só de referência quando a unidade ainda não tem proprietário
+   * nem responsável com ficha — preenchido pela gestão.
+   */
+  pendingWhatsappPhone?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -139,6 +144,7 @@ export class CondominiumManagementService {
       floor?: string | null;
       notes?: string | null;
       financialResponsiblePersonId?: string | null;
+      pendingWhatsappPhone?: string | null;
     },
   ): Observable<UnitRow> {
     return this.http.patch<UnitRow>(

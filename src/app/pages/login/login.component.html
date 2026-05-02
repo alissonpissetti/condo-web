@@ -16,7 +16,7 @@
 
   <div class="card">
     <h1>Entrar</h1>
-    <p class="sub">E-mail e senha, ou código enviado por SMS ao seu número cadastrado.</p>
+    <p class="sub">E-mail e senha, ou código enviado pelo WhatsApp ao seu número cadastrado.</p>
 
     <div class="mode-tabs" role="tablist" aria-label="Forma de login">
       <button
@@ -33,11 +33,11 @@
         type="button"
         class="mode-tab"
         role="tab"
-        [attr.aria-selected]="loginMode() === 'sms'"
-        [class.active]="loginMode() === 'sms'"
-        (click)="setMode('sms')"
+        [attr.aria-selected]="loginMode() === 'whatsapp'"
+        [class.active]="loginMode() === 'whatsapp'"
+        (click)="setMode('whatsapp')"
       >
-        SMS
+        WhatsApp
       </button>
     </div>
 
@@ -124,7 +124,7 @@
               [disabled]="smsSending()"
               (click)="requestSmsCode()"
             >
-              {{ smsSending() ? 'Enviando…' : 'Reenviar código' }}
+              {{ smsSending() ? 'Enviando…' : 'Reenviar pelo WhatsApp' }}
             </button>
           </div>
         }
@@ -136,7 +136,7 @@
             [disabled]="smsSending()"
             (click)="requestSmsCode()"
           >
-            {{ smsSending() ? 'Enviando…' : 'Receber código por SMS' }}
+            {{ smsSending() ? 'Enviando…' : 'Receber código pelo WhatsApp' }}
           </button>
         } @else {
           <button type="submit" class="btn primary" [disabled]="smsVerifying()">

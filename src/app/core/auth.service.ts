@@ -135,6 +135,7 @@ export class AuthService {
       );
   }
 
+  /** POST /auth/sms/request — o servidor envia por WhatsApp (Twilio) ou SMS (Comtele), conforme configuração. */
   requestSmsLogin(phone: string): Observable<SmsLoginRequestResponse> {
     return this.http.post<SmsLoginRequestResponse>(
       `${environment.apiUrl}/auth/sms/request`,
@@ -170,7 +171,8 @@ export class AuthService {
   requestPasswordReset(
     body:
       | { channel: 'email'; email: string }
-      | { channel: 'sms'; phone: string },
+      | { channel: 'sms'; phone: string }
+      | { channel: 'whatsapp'; phone: string },
   ): Observable<PasswordResetRequestResponse> {
     return this.http.post<PasswordResetRequestResponse>(
       `${environment.apiUrl}/auth/password-reset/request`,
@@ -181,7 +183,8 @@ export class AuthService {
   verifyPasswordReset(
     body:
       | { channel: 'email'; email: string; code: string }
-      | { channel: 'sms'; phone: string; code: string },
+      | { channel: 'sms'; phone: string; code: string }
+      | { channel: 'whatsapp'; phone: string; code: string },
   ): Observable<PasswordResetVerifyResponse> {
     return this.http.post<PasswordResetVerifyResponse>(
       `${environment.apiUrl}/auth/password-reset/verify`,

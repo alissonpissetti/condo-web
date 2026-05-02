@@ -76,6 +76,11 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     phone: ['', [optionalBrMobilePhoneValidator]],
   });
 
+  protected readonly pendingWaEditUnitId = signal<string | null>(null);
+  protected readonly unitPendingWaForm = this.fb.nonNullable.group({
+    phone: ['', [optionalBrMobilePhoneValidator]],
+  });
+
   private condominiumId = '';
   private fragmentSub?: Subscription;
 
@@ -410,6 +415,82 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         this.actionError.set(this.messageFromHttp(err));
       },
     });
+  }
+
+  /** Proprietário ou responsável com ficha na base. */
+  protected unitHasLinkedPerson(u: UnitRow): boolean {
+    return !!(
+      u.ownerPerson?.id ||
+      (u.responsiblePeople?.length ?? 0) > 0 ||
+      u.responsiblePerson?.id
+    );
+  }
+
+  protected isEditingUnitPendingWa(unitId: string): boolean {
+    return this.pendingWaEditUnitId() === unitId;
+  }
+
+  protected startEditUnitPendingWa(u: UnitRow): void {
+    if (!this.canManageCondominium()) return;
+    this.clearActionError();
+    this.pendingWaEditUnitId.set(u.id);
+    const digits = toNationalPhoneDigits(u.pendingWhatsappPhone ?? '');
+    this.unitPendingWaForm.reset({ phone: digits });
+  }
+
+  protected cancelUnitPendingWa(): void {
+    this.pendingWaEditUnitId.set(null);
+    this.unitPendingWaForm.reset({ phone: '' });
+  }
+
+  protected saveUnitPendingWhatsapp(groupingId: string, unitId: string): void {
+    if (!this.canManageCondominium()) return;
+    this.unitPendingWaForm.markAllAsTouched();
+    if (this.unitPendingWaForm.invalid) return;
+    const raw = (this.unitPendingWaForm.getRawValue().phone ?? '').replace(
+      /\D/g,
+      '',
+    );
+    this.clearActionError();
+    this.busy.set(true);
+    this.api
+      .updateUnit(this.condominiumId, groupingId, unitId, {
+        pendingWhatsappPhone: raw.length ? raw : null,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.cancelUnitPendingWa();
+          this.reload();
+          this.navData.refresh(this.condominiumId, { force: true });
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.messageFromHttp(err));
+        },
+      });
+  }
+
+  protected clearUnitPendingWhatsapp(groupingId: string, u: UnitRow): void {
+    if (!this.canManageCondominium() || !u.pendingWhatsappPhone) return;
+    this.clearActionError();
+    this.busy.set(true);
+    this.api
+      .updateUnit(this.condominiumId, groupingId, u.id, {
+        pendingWhatsappPhone: null,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.cancelUnitPendingWa();
+          this.reload();
+          this.navData.refresh(this.condominiumId, { force: true });
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.actionError.set(this.messageFromHttp(err));
+        },
+      });
   }
 
   protected hasResponsibleEntries(u: UnitRow): boolean {

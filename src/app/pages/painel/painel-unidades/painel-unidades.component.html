@@ -7,7 +7,9 @@
         a montagem física do seu condomínio. Cada unidade pode ter
         <strong>várias pessoas responsáveis</strong> (convites na página de convites).
         O <strong>síndico</strong> ou o <strong>titular</strong> podem completar ou corrigir o
-        <strong>telefone</strong> de proprietários e responsáveis com ficha. Com
+        <strong>telefone</strong> de proprietários e responsáveis com ficha. Sem pessoa
+        cadastrada na unidade, pode guardar só um <strong>WhatsApp de referência</strong>
+        (útil antes do convite). Com
         <strong>vários responsáveis</strong> na mesma unidade, escolha abaixo qual é o
         <strong>responsável principal em taxas condominiais</strong> (nome nas listagens e PDFs).
       </p>
@@ -538,6 +540,99 @@
                             </div>
                           } @else {
                             <span class="person-cell__empty">—</span>
+                          }
+                          @if (!unitHasLinkedPerson(u)) {
+                            @if (canManageCondominium()) {
+                              <div class="unit-pending-wa">
+                                <span class="unit-pending-wa__label"
+                                  >WhatsApp (referência, sem cadastro)</span
+                                >
+                                @if (isEditingUnitPendingWa(u.id)) {
+                                  <div
+                                    class="unit-pending-wa__form"
+                                    [formGroup]="unitPendingWaForm"
+                                  >
+                                    <input
+                                      type="text"
+                                      class="input input--compact"
+                                      formControlName="phone"
+                                      appBrPhoneMask
+                                      [mobileOnly]="true"
+                                      autocomplete="tel-national"
+                                      [disabled]="busy()"
+                                    />
+                                    @if (
+                                      unitPendingWaForm.controls.phone.invalid &&
+                                      unitPendingWaForm.controls.phone.touched
+                                    ) {
+                                      <span class="field-err">{{
+                                        fieldErrorsPt(
+                                          unitPendingWaForm.controls.phone
+                                        )
+                                      }}</span>
+                                    }
+                                    <div class="unit-pending-wa__actions">
+                                      <button
+                                        type="button"
+                                        class="btn sm primary"
+                                        (click)="saveUnitPendingWhatsapp(g.id, u.id)"
+                                        [disabled]="busy()"
+                                      >
+                                        Gravar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="btn sm ghost"
+                                        (click)="cancelUnitPendingWa()"
+                                        [disabled]="busy()"
+                                      >
+                                        Cancelar
+                                      </button>
+                                      @if (u.pendingWhatsappPhone) {
+                                        <button
+                                          type="button"
+                                          class="btn sm ghost"
+                                          (click)="clearUnitPendingWhatsapp(g.id, u)"
+                                          [disabled]="busy()"
+                                        >
+                                          Limpar
+                                        </button>
+                                      }
+                                    </div>
+                                  </div>
+                                } @else {
+                                  <div class="unit-pending-wa__row">
+                                    @if (u.pendingWhatsappPhone) {
+                                      <span class="unit-pending-wa__value">{{
+                                        displayPersonPhone(u.pendingWhatsappPhone)
+                                      }}</span>
+                                      <button
+                                        type="button"
+                                        class="btn sm ghost"
+                                        (click)="startEditUnitPendingWa(u)"
+                                        [disabled]="busy()"
+                                      >
+                                        Alterar
+                                      </button>
+                                    } @else {
+                                      <button
+                                        type="button"
+                                        class="btn sm secondary"
+                                        (click)="startEditUnitPendingWa(u)"
+                                        [disabled]="busy()"
+                                      >
+                                        Definir WhatsApp
+                                      </button>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            } @else if (u.pendingWhatsappPhone) {
+                              <p class="unit-pending-wa unit-pending-wa--readonly muted">
+                                WhatsApp de referência:
+                                {{ displayPersonPhone(u.pendingWhatsappPhone) }}
+                              </p>
+                            }
                           }
                           @if (needsFinancialPrincipalPicker(u)) {
                             <div class="financial-principal">

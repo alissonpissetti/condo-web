@@ -17,6 +17,7 @@ import { CondominiumAccessStore } from '../../../core/condominium-access.store';
 import {
   FinancialApiService,
   type CondominiumFeeCharge,
+  type SendFeeSlipsWhatsappResult,
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
 import { formatCentsBrl } from '../../../core/money-brl';
@@ -40,6 +41,9 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly formError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly actionBusy = signal(false);
+  /** Resumo do último envio de slips por WhatsApp (gestão). */
+  protected readonly slipWaInfo = signal<string | null>(null);
+  protected readonly slipWaBusy = signal(false);
 
   /** Quitação: cobrança alvo do modal, arquivo anexado (opcional) e estado. */
   protected readonly settleTarget = signal<CondominiumFeeCharge | null>(null);
@@ -68,6 +72,17 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly openActionMenuId = signal<string | null>(null);
 
   protected readonly selectedCount = computed(() => this.selectedIds().size);
+
+  protected readonly selectedOpenUnitCount = computed(() => {
+    const ids = this.selectedIds();
+    const u = new Set<string>();
+    for (const c of this.charges()) {
+      if (c.status === 'open' && ids.has(c.id)) {
+        u.add(c.unitId);
+      }
+    }
+    return u.size;
+  });
 
   protected readonly allSelectableSelected = computed(() => {
     const selectable = this.charges();
@@ -137,6 +152,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       this.closeDueEdit();
     }
     this.closeActionMenu();
+    this.slipWaInfo.set(null);
   }
 
   /** Agregados para o resumo visual (total, pago, em aberto, % quitado). */
@@ -208,6 +224,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   load(): void {
     this.loadError.set(null);
     this.formError.set(null);
+    this.slipWaInfo.set(null);
     this.loading.set(true);
     this.api.listCondominiumFees(this.condoId, this.competenceYm()).subscribe({
       next: (rows) => {
@@ -638,6 +655,122 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         }).then((m) => this.formError.set(m));
       },
     });
+  }
+
+  sendSlipsWhatsappAllOpen(): void {
+    if (!this.condoAccess.canManage()) {
+      return;
+    }
+    const open = this.charges().filter((c) => c.status === 'open');
+    const n = new Set(open.map((c) => c.unitId)).size;
+    if (n === 0) {
+      this.formError.set('Não há cobranças em aberto nesta competência.');
+      return;
+    }
+    if (
+      !confirm(
+        `Enviar o PDF slip (PIX + relatório) por WhatsApp para as ${n} unidade(s) em aberto? Usa o celular do responsável financeiro, proprietário, responsáveis ou o WhatsApp de referência na unidade.`,
+      )
+    ) {
+      return;
+    }
+    this.runSendSlipsWhatsapp(undefined);
+  }
+
+  sendSlipsWhatsappSelectedOpen(): void {
+    if (!this.condoAccess.canManage()) {
+      return;
+    }
+    const openSelected = this.charges().filter(
+      (c) => c.status === 'open' && this.selectedIds().has(c.id),
+    );
+    const unitIds = [...new Set(openSelected.map((c) => c.unitId))];
+    if (unitIds.length === 0) {
+      this.formError.set(
+        'Selecione cobranças em aberto ou use «WhatsApp slips (todas em aberto)».',
+      );
+      return;
+    }
+    if (
+      !confirm(
+        `Enviar slip por WhatsApp para ${unitIds.length} unidade(s) das linhas selecionadas?`,
+      )
+    ) {
+      return;
+    }
+    this.runSendSlipsWhatsapp(unitIds);
+  }
+
+  sendSlipsWhatsappOne(c: CondominiumFeeCharge): void {
+    if (!this.condoAccess.canManage()) {
+      return;
+    }
+    if (c.status !== 'open') {
+      this.formError.set(
+        'Só é possível enviar slip por WhatsApp para cobranças em aberto.',
+      );
+      return;
+    }
+    if (
+      !confirm(
+        `Enviar o PDF slip por WhatsApp para a unidade «${c.unitIdentifier}»?`,
+      )
+    ) {
+      return;
+    }
+    this.runSendSlipsWhatsapp([c.unitId]);
+  }
+
+  dismissSlipWaInfo(): void {
+    this.slipWaInfo.set(null);
+  }
+
+  private formatSlipWaResult(r: SendFeeSlipsWhatsappResult): string {
+    const parts: string[] = [`Enviados: ${r.sent}.`];
+    if (r.skipped.length > 0) {
+      parts.push(
+        ` Sem número (${r.skipped.length}): ${r.skipped.map((s) => s.unitIdentifier).join(', ')}.`,
+      );
+    }
+    if (r.failures.length > 0) {
+      parts.push(
+        ` Falha (${r.failures.length}): ${r.failures.map((f) => f.unitIdentifier).join(', ')}.`,
+      );
+    }
+    return parts.join('');
+  }
+
+  private runSendSlipsWhatsapp(unitIds: string[] | undefined): void {
+    const ym = this.competenceYm().trim();
+    if (!ym) {
+      this.formError.set('Indique a competência.');
+      return;
+    }
+    this.formError.set(null);
+    this.slipWaBusy.set(true);
+    this.slipWaInfo.set(null);
+    this.api
+      .sendCondominiumFeeSlipsWhatsapp(this.condoId, {
+        competenceYm: ym,
+        unitIds,
+      })
+      .subscribe({
+        next: (r) => {
+          this.slipWaBusy.set(false);
+          this.slipWaInfo.set(this.formatSlipWaResult(r));
+          if (unitIds?.length) {
+            this.clearSelection();
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.slipWaBusy.set(false);
+          void translateHttpErrorMessageAsync(err, {
+            network:
+              'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+            default: 'Não foi possível enviar os slips por WhatsApp.',
+          }).then((m) => this.formError.set(m));
+        },
+      });
   }
 
   private msg(err: HttpErrorResponse): string {

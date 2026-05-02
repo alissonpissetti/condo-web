@@ -201,6 +201,20 @@
   margin-bottom: 1rem;
 }
 
+.info-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1rem;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 /* ========================================================== */
 /* Inputs / Botões                                              */
 /* ========================================================== */

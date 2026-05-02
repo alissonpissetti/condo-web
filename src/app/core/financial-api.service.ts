@@ -102,6 +102,12 @@ export interface CondominiumFeeCharge {
   financialResponsibleName?: string | null;
 }
 
+export interface SendFeeSlipsWhatsappResult {
+  sent: number;
+  skipped: { unitId: string; unitIdentifier: string; reason: string }[];
+  failures: { unitId: string; unitIdentifier: string; error: string }[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinancialApiService {
   private readonly http = inject(HttpClient);
@@ -436,6 +442,20 @@ export class FinancialApiService {
     return this.http.get(
       `${this.base(condoId)}/condominium-fees/transparency-pdf`,
       { params, responseType: 'blob' },
+    );
+  }
+
+  /**
+   * Envia por WhatsApp (Twilio) o PDF slip/capa PIX + relatório para unidades em aberto.
+   * Sem `unitIds`, todas as unidades com cobrança em aberto na competência.
+   */
+  sendCondominiumFeeSlipsWhatsapp(
+    condoId: string,
+    body: { competenceYm: string; unitIds?: string[] },
+  ): Observable<SendFeeSlipsWhatsappResult> {
+    return this.http.post<SendFeeSlipsWhatsappResult>(
+      `${this.base(condoId)}/condominium-fees/send-slips-whatsapp`,
+      body,
     );
   }
 }

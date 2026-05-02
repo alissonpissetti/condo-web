@@ -13,7 +13,7 @@ import { AuthService } from '../../core/auth.service';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
 
-type ResetChannel = 'email' | 'sms';
+type ResetChannel = 'email' | 'whatsapp';
 type ResetStep = 'request' | 'code' | 'password';
 
 function passwordsMatchGroup(
@@ -31,7 +31,7 @@ function passwordsMatchGroup(
   selector: 'app-forgot-password',
   imports: [ReactiveFormsModule, RouterLink, BrPhoneMaskDirective],
   templateUrl: './forgot-password.component.html',
-  styleUrls: ['../login/login.component.scss'],
+  styleUrls: ['../login/login.component.scss', './forgot-password.component.scss'],
 })
 export class ForgotPasswordComponent {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
@@ -55,7 +55,7 @@ export class ForgotPasswordComponent {
     email: ['', [Validators.required, Validators.email]],
   });
 
-  protected readonly smsRequestForm = this.fb.nonNullable.group({
+  protected readonly whatsappRequestForm = this.fb.nonNullable.group({
     phone: [
       '',
       [Validators.required, Validators.minLength(10), Validators.maxLength(32)],
@@ -93,9 +93,9 @@ export class ForgotPasswordComponent {
         return;
       }
     } else {
-      const c = this.smsRequestForm.controls.phone;
+      const c = this.whatsappRequestForm.controls.phone;
       if (c.invalid) {
-        this.smsRequestForm.markAllAsTouched();
+        this.whatsappRequestForm.markAllAsTouched();
         return;
       }
     }
@@ -108,14 +108,20 @@ export class ForgotPasswordComponent {
             email: this.emailRequestForm.controls.email.value.trim(),
           }
         : {
-            channel: 'sms' as const,
-            phone: this.smsRequestForm.controls.phone.value.trim(),
+            channel: 'whatsapp' as const,
+            phone: this.whatsappRequestForm.controls.phone.value.trim(),
           };
 
     this.auth.requestPasswordReset(body).subscribe({
       next: (res) => {
         this.sending.set(false);
-        this.info.set(res.message);
+        if (ch === 'whatsapp') {
+          this.info.set(
+            'Se existir conta para este número, o código foi pedido ao WhatsApp. Abra o aplicativo e procure a mensagem da empresa; pode levar alguns segundos.',
+          );
+        } else {
+          this.info.set(res.message);
+        }
         this.step.set('code');
         this.codeForm.controls.code.setValue('');
       },
@@ -142,8 +148,8 @@ export class ForgotPasswordComponent {
             code,
           }
         : {
-            channel: 'sms' as const,
-            phone: this.smsRequestForm.controls.phone.value.trim(),
+            channel: 'whatsapp' as const,
+            phone: this.whatsappRequestForm.controls.phone.value.trim(),
             code,
           };
 
@@ -202,6 +208,15 @@ export class ForgotPasswordComponent {
     this.step.set('request');
     this.resetToken = null;
     this.codeForm.controls.code.setValue('');
+  }
+
+  /** Últimos 4 dígitos do celular (só dígitos) para reforçar onde esperar o WhatsApp. */
+  protected phoneSuffixHint(): string {
+    const d = this.whatsappRequestForm.controls.phone.value.replace(/\D/g, '');
+    if (d.length < 4) {
+      return '';
+    }
+    return d.slice(-4);
   }
 
   private messageFromHttp(err: HttpErrorResponse): string {

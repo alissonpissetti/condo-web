@@ -406,16 +406,11 @@ export class PainelConvitesComponent implements OnInit {
           this.busy.set(false);
           this.actionOk.set(
             res.sentEmail || res.sentSms
-              ? `Convite enviado${res.sentEmail ? ' por e-mail' : ''}${
-                  res.sentEmail && res.sentSms ? ' e' : ''
-                }${
-                  res.sentSms
-                    ? ' por WhatsApp' +
-                      (res.sentEmail
-                        ? ''
-                        : ' (se Twilio não estiver configurado com template, veja o texto nos logs do servidor).')
-                    : ''
-                }. A pessoa abre o mesmo link, confirma a conta (se for o caso) e fica como responsável pela unidade.`
+              ? res.sentEmail && res.sentSms
+                ? 'Convite enviado por e-mail e corretamente pelo WhatsApp.'
+                : res.sentEmail
+                  ? 'Convite enviado por e-mail.'
+                  : 'Convite enviado corretamente pelo WhatsApp.'
               : 'Convite guardado, mas nenhum canal (SMTP / Twilio WhatsApp) entregou a mensagem. Copie o link em “Pendentes”.',
           );
           this.form.patchValue({

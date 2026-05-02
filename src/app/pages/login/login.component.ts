@@ -11,7 +11,7 @@ import { AuthService } from '../../core/auth.service';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
 
-type LoginMode = 'email' | 'sms';
+type LoginMode = 'email' | 'whatsapp';
 
 @Component({
   selector: 'app-login',

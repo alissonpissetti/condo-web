@@ -678,6 +678,51 @@
   }
 }
 
+.unit-pending-wa {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  font-size: 0.86rem;
+}
+
+.unit-pending-wa__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.unit-pending-wa__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+
+.unit-pending-wa__value {
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-pending-wa__form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: 16rem;
+}
+
+.unit-pending-wa__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.unit-pending-wa--readonly {
+  margin-top: 0.65rem;
+  margin-bottom: 0;
+  font-size: 0.86rem;
+}
+
 @media (max-width: 420px) {
   .btn.sm {
     padding: 0.5rem 0.65rem;
