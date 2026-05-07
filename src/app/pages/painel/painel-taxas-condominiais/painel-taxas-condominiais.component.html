@@ -6,10 +6,9 @@
         @if (condoAccess.canManage()) {
           <p class="page__intro">
             Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês,
-            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte. Envio de
-            slips por WhatsApp exige Twilio configurado e
-            <strong>API_PUBLIC_BASE_URL</strong> (URL pública da API) acessível pela
-            Twilio — em localhost use um túnel (ex.: ngrok).
+            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte. O envio
+            dos slips por WhatsApp usa o contacto da unidade (responsável financeiro,
+            proprietário ou referência indicada).
           </p>
         } @else {
           <p class="page__intro">
@@ -61,7 +60,7 @@
               !competenceYm() ||
               summary().openCount === 0
             "
-            title="Uma mensagem WhatsApp por unidade em aberto, com o PDF anexo (Twilio)."
+            title="Envia por WhatsApp o PDF da taxa (capa PIX e relatório) para cada unidade em aberto."
           >
             {{ slipWaBusy() ? 'A enviar…' : 'WhatsApp slips (todas em aberto)' }}
           </button>
@@ -299,7 +298,7 @@
                           [disabled]="actionBusy() || slipWaBusy()"
                         >
                           <span class="kebab__item-title">Enviar slip por WhatsApp</span>
-                          <span class="kebab__item-hint">PDF com capa PIX (Twilio)</span>
+                          <span class="kebab__item-hint">PDF com capa PIX e dados de pagamento</span>
                         </button>
                         <button
                           type="button"

@@ -117,6 +117,24 @@ const EXACT: Record<string, string> = {
   'Income amount allocated to this unit does not match charge':
     'O valor da receita rateado para esta unidade não coincide com a cobrança.',
   'Transaction must be income': 'A transação tem de ser uma receita.',
+  'Income transaction is cancelled':
+    'Esta receita está cancelada e não pode ser usada na quitação.',
+  'Transaction is not pending settlement':
+    'Só é possível quitar transações em estado «aguardando».',
+  'Only pending transactions can be cancelled':
+    'Só é possível cancelar transações em estado «aguardando».',
+  'Only paid transactions can be reopened':
+    'Só é possível reabrir transações já quitadas.',
+  'Cancelled transactions cannot be edited':
+    'Transações canceladas não podem ser editadas.',
+  'Paid transactions can only change attachments; reopen settlement to edit':
+    'Transação quitada: reabra a quitação para alterar dados ou limite-se a anexos.',
+  'Recurring series contains non-editable transactions':
+    'A série inclui transações quitadas ou canceladas; não pode ser editada em bloco.',
+  'Cannot delete paid transaction; reopen settlement first':
+    'Não é possível excluir uma transação quitada. Reabra a quitação primeiro.',
+  'Cannot delete series with paid transactions; reopen settlement first':
+    'A série contém transações quitadas. Reabra as quitações antes de excluir.',
   'Charge must be paid to generate a receipt':
     'Só é possível emitir o comprovante para cobranças já quitadas.',
   'No units in condominium for transparency report':

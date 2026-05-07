@@ -35,6 +35,11 @@ export interface TransactionUnitShareRow {
   unit?: { id: string; identifier: string };
 }
 
+export type FinancialTransactionPaymentStatus =
+  | 'pending'
+  | 'paid'
+  | 'cancelled';
+
 export interface FinancialTransaction {
   id: string;
   condominiumId: string;
@@ -45,6 +50,8 @@ export interface FinancialTransaction {
   title: string;
   description: string | null;
   allocationRule: AllocationRule;
+  /** Quitação: apenas `pending` entra no cálculo da taxa condominial. */
+  paymentStatus?: FinancialTransactionPaymentStatus;
   /** Parcelas criadas em lote compartilham o mesmo UUID de série. */
   recurringSeriesId?: string | null;
   /** Chave relativa no armazenamento do condomínio (comprovante). */
@@ -76,6 +83,8 @@ export interface StatementTransactionRow {
   occurredOn: string;
   fundId: string | null;
   fundName: string | null;
+  /** Ausente em APIs antigas; tratar como `pending`. */
+  paymentStatus?: FinancialTransactionPaymentStatus;
 }
 
 export interface FinancialStatement {
@@ -275,6 +284,34 @@ export class FinancialApiService {
     );
   }
 
+  settleTransaction(
+    condoId: string,
+    txId: string,
+    body?: { receiptStorageKey?: string },
+  ): Observable<FinancialTransaction> {
+    return this.http.post<FinancialTransaction>(
+      `${this.base(condoId)}/transactions/${txId}/settle`,
+      body ?? {},
+    );
+  }
+
+  cancelTransaction(condoId: string, txId: string): Observable<FinancialTransaction> {
+    return this.http.post<FinancialTransaction>(
+      `${this.base(condoId)}/transactions/${txId}/cancel`,
+      {},
+    );
+  }
+
+  reopenTransactionSettlement(
+    condoId: string,
+    txId: string,
+  ): Observable<FinancialTransaction> {
+    return this.http.post<FinancialTransaction>(
+      `${this.base(condoId)}/transactions/${txId}/reopen-settlement`,
+      {},
+    );
+  }
+
   updateRecurringSeries(
     condoId: string,
     seriesId: string,
@@ -446,7 +483,7 @@ export class FinancialApiService {
   }
 
   /**
-   * Envia por WhatsApp (Twilio) o PDF slip/capa PIX + relatório para unidades em aberto.
+   * Envia por WhatsApp o PDF slip/capa PIX + relatório para unidades em aberto.
    * Sem `unitIds`, todas as unidades com cobrança em aberto na competência.
    */
   sendCondominiumFeeSlipsWhatsapp(

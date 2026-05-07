@@ -6,6 +6,7 @@ import {
   FinancialApiService,
   type FinancialFund,
   type FinancialStatement,
+  type FinancialTransactionPaymentStatus,
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
 import { formatCentsBrl } from '../../../core/money-brl';
@@ -95,8 +96,24 @@ export class PainelExtratoComponent implements OnInit {
   protected totalTransactionsCents(): string {
     const rows = this.statement()?.transactions ?? [];
     return rows
+      .filter((t) => (t.paymentStatus ?? 'pending') !== 'cancelled')
       .reduce((acc, t) => acc + BigInt(t.amountCents), 0n)
       .toString();
+  }
+
+  protected txPaymentStatusLabelPt(
+    ps: FinancialTransactionPaymentStatus | undefined,
+  ): string {
+    switch (ps ?? 'pending') {
+      case 'pending':
+        return 'Aguardando';
+      case 'paid':
+        return 'Pago';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return 'Aguardando';
+    }
   }
 
   private msg(err: HttpErrorResponse): string {

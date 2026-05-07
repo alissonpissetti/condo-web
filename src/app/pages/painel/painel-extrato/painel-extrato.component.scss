@@ -140,3 +140,8 @@
   color: var(--muted);
   font-size: 0.88rem;
 }
+
+.table tbody tr.row--disabled {
+  opacity: 0.55;
+  filter: grayscale(0.3);
+}

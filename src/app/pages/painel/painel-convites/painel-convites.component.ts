@@ -411,7 +411,7 @@ export class PainelConvitesComponent implements OnInit {
                 : res.sentEmail
                   ? 'Convite enviado por e-mail.'
                   : 'Convite enviado corretamente pelo WhatsApp.'
-              : 'Convite guardado, mas nenhum canal (SMTP / Twilio WhatsApp) entregou a mensagem. Copie o link em “Pendentes”.',
+              : 'Convite guardado, mas nenhum canal (e-mail ou WhatsApp) entregou a mensagem. Copie o link em “Pendentes”.',
           );
           this.form.patchValue({
             email: '',

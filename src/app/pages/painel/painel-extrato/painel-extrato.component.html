@@ -87,6 +87,7 @@
           <tr>
             <th>Data</th>
             <th>Tipo</th>
+            <th>Estado</th>
             <th>Título</th>
             <th>Fundo</th>
             <th class="num">Valor</th>
@@ -94,16 +95,21 @@
         </thead>
         <tbody>
           @for (t of statement()!.transactions; track t.id) {
-            <tr>
+            <tr
+              [class.row--disabled]="
+                (t.paymentStatus ?? 'pending') === 'cancelled'
+              "
+            >
               <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
               <td>{{ transactionKindLabelPt(t.kind) }}</td>
+              <td>{{ txPaymentStatusLabelPt(t.paymentStatus) }}</td>
               <td>{{ t.title }}</td>
               <td>{{ t.fundName || '—' }}</td>
               <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
             </tr>
           }
           <tr class="total-row">
-            <td colspan="4">Total</td>
+            <td colspan="5">Total</td>
             <td class="num">{{ formatCentsBrl(totalTransactionsCents()) }}</td>
           </tr>
         </tbody>

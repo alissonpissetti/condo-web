@@ -12,7 +12,7 @@ import {
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, of, from, forkJoin } from 'rxjs';
-import { switchMap, concatMap, last } from 'rxjs/operators';
+import { switchMap, concatMap, last, finalize } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   CondominiumManagementService,
@@ -23,6 +23,7 @@ import {
   type AllocationRule,
   type FinancialFund,
   type FinancialTransaction,
+  type FinancialTransactionPaymentStatus,
 } from '../../../core/financial-api.service';
 import {
   firstDayOfMonthLocalIsoDate,
@@ -106,6 +107,24 @@ export class PainelTransacoesComponent implements OnInit {
   /** Linha da tabela com menu ⋮ aberto (id da transação). */
   protected readonly rowActionMenuForId = signal<string | null>(null);
 
+  /** Modal quitar transação (como taxas condominiais). */
+  protected readonly settleTarget = signal<FinancialTransaction | null>(null);
+  protected readonly settleReceiptFile = signal<File | null>(null);
+  protected readonly settleError = signal<string | null>(null);
+  protected readonly settleBusy = signal(false);
+
+  /** Selecção múltipla na lista (IDs). */
+  protected readonly bulkSelectedIds = signal<ReadonlySet<string>>(new Set());
+  protected readonly bulkActionBusy = signal(false);
+
+  /** Modal quitar em massa (lista + comprovante opcional partilhado). */
+  protected readonly bulkSettleTargets = signal<FinancialTransaction[] | null>(
+    null,
+  );
+  protected readonly bulkSettleReceiptFile = signal<File | null>(null);
+  protected readonly bulkSettleError = signal<string | null>(null);
+  protected readonly bulkSettleBusy = signal(false);
+
   /**
    * Formulário de criação/edição colapsado por padrão; ao editar abre
    * automaticamente para focar no item selecionado.
@@ -151,6 +170,233 @@ export class PainelTransacoesComponent implements OnInit {
   @HostListener('document:click')
   onDocumentClickCloseRowMenu(): void {
     this.rowActionMenuForId.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeCloseModals(): void {
+    if (this.settleBusy()) {
+      return;
+    }
+    if (this.bulkSettleTargets()) {
+      this.closeBulkSettleModal();
+    }
+    if (this.settleTarget()) {
+      this.closeTxSettle();
+    }
+  }
+
+  protected transactionPaymentStatusLabelPt(
+    ps: FinancialTransactionPaymentStatus | undefined,
+  ): string {
+    switch (ps ?? 'pending') {
+      case 'pending':
+        return 'Aguardando';
+      case 'paid':
+        return 'Pago';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return 'Aguardando';
+    }
+  }
+
+  protected clearBulkSelection(): void {
+    this.bulkSelectedIds.set(new Set());
+  }
+
+  protected toggleBulkSelectAllFiltered(): void {
+    const rows = this.filteredTransactions();
+    const cur = this.bulkSelectedIds();
+    const allOn = rows.length > 0 && rows.every((r) => cur.has(r.id));
+    if (allOn) {
+      this.bulkSelectedIds.set(new Set());
+    } else {
+      this.bulkSelectedIds.set(new Set(rows.map((r) => r.id)));
+    }
+  }
+
+  protected toggleBulkSelected(id: string, evt?: Event): void {
+    evt?.stopPropagation();
+    const next = new Set(this.bulkSelectedIds());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.bulkSelectedIds.set(next);
+  }
+
+  protected isBulkSelected(id: string): boolean {
+    return this.bulkSelectedIds().has(id);
+  }
+
+  protected openBulkSettleModal(): void {
+    this.rowActionMenuForId.set(null);
+    const list = this.bulkPendingSelected();
+    if (list.length === 0) {
+      this.formError.set(
+        'Nas linhas seleccionadas não há transações em «aguardando» para quitar.',
+      );
+      return;
+    }
+    this.formError.set(null);
+    this.bulkSettleError.set(null);
+    this.bulkSettleReceiptFile.set(null);
+    this.bulkSettleTargets.set(list);
+  }
+
+  protected closeBulkSettleModal(): void {
+    if (this.bulkSettleBusy()) {
+      return;
+    }
+    this.bulkSettleTargets.set(null);
+    this.bulkSettleReceiptFile.set(null);
+    this.bulkSettleError.set(null);
+  }
+
+  protected onBulkSettleFileChange(evt: Event): void {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      this.bulkSettleReceiptFile.set(null);
+      return;
+    }
+    const allowed = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'application/pdf',
+    ];
+    if (!allowed.includes(file.type)) {
+      this.bulkSettleError.set(
+        'Formato não suportado. Envie uma imagem (PNG, JPG, WEBP) ou PDF.',
+      );
+      input.value = '';
+      this.bulkSettleReceiptFile.set(null);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      this.bulkSettleError.set('O arquivo ultrapassa o limite de 8 MB.');
+      input.value = '';
+      this.bulkSettleReceiptFile.set(null);
+      return;
+    }
+    this.bulkSettleError.set(null);
+    this.bulkSettleReceiptFile.set(file);
+  }
+
+  protected clearBulkSettleFile(): void {
+    this.bulkSettleReceiptFile.set(null);
+  }
+
+  protected confirmBulkSettle(): void {
+    const targets = this.bulkSettleTargets();
+    if (!targets?.length) {
+      return;
+    }
+    this.bulkSettleError.set(null);
+    this.bulkSettleBusy.set(true);
+    const file = this.bulkSettleReceiptFile();
+    const run = (receiptKey: string | undefined) => {
+      from(targets)
+        .pipe(
+          concatMap((t) =>
+            this.api.settleTransaction(
+              this.condoId,
+              t.id,
+              receiptKey ? { receiptStorageKey: receiptKey } : {},
+            ),
+          ),
+          last(),
+          finalize(() => this.bulkSettleBusy.set(false)),
+        )
+        .subscribe({
+          next: () => {
+            /* finalize() corre depois do next; closeBulkSettleModal ignora se busy ainda está true. */
+            this.bulkSettleBusy.set(false);
+            this.closeBulkSettleModal();
+            this.bulkSelectedIds.set(new Set());
+            this.refreshList();
+          },
+          error: (err: HttpErrorResponse) => {
+            this.bulkSettleError.set(this.msg(err));
+          },
+        });
+    };
+    if (file) {
+      this.api.uploadTransactionReceipt(this.condoId, file).subscribe({
+        next: ({ receiptStorageKey }) => run(receiptStorageKey),
+        error: (err: HttpErrorResponse) => {
+          this.bulkSettleBusy.set(false);
+          this.bulkSettleError.set(this.msg(err));
+        },
+      });
+    } else {
+      run(undefined);
+    }
+  }
+
+  protected confirmBulkCancel(): void {
+    const list = this.bulkPendingSelected();
+    if (list.length === 0) {
+      return;
+    }
+    if (
+      !confirm(
+        `Cancelar ${list.length} lançamento(s) em «aguardando»? Deixam de entrar na taxa condominial e nos saldos.`,
+      )
+    ) {
+      return;
+    }
+    this.formError.set(null);
+    this.bulkActionBusy.set(true);
+    from(list)
+      .pipe(
+        concatMap((t) => this.api.cancelTransaction(this.condoId, t.id)),
+        last(),
+        finalize(() => this.bulkActionBusy.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.bulkSelectedIds.set(new Set());
+          this.refreshList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.formError.set(this.msg(err));
+        },
+      });
+  }
+
+  protected confirmBulkDelete(): void {
+    const list = this.bulkDeletableSelected();
+    if (list.length === 0) {
+      return;
+    }
+    if (
+      !confirm(
+        `Excluir definitivamente ${list.length} transação(ões) que não estão quitadas? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.formError.set(null);
+    this.bulkActionBusy.set(true);
+    from(list)
+      .pipe(
+        concatMap((t) => this.api.deleteTransaction(this.condoId, t.id)),
+        last(),
+        finalize(() => this.bulkActionBusy.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.bulkSelectedIds.set(new Set());
+          this.refreshList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.formError.set(this.msg(err));
+        },
+      });
   }
 
   editRowFromMenu(t: FinancialTransaction): void {
@@ -200,16 +446,55 @@ export class PainelTransacoesComponent implements OnInit {
       const title = (t.title ?? '').toLowerCase();
       const description = (t.description ?? '').toLowerCase();
       const fund = (t.fund?.name ?? '').toLowerCase();
+      const statusLabel = this.transactionPaymentStatusLabelPt(
+        t.paymentStatus,
+      ).toLowerCase();
       return (
         title.includes(term) ||
         description.includes(term) ||
         fund.includes(term) ||
         kindLabel.includes(term) ||
+        statusLabel.includes(term) ||
         dateLabel.includes(term) ||
         occurred.includes(term)
       );
     });
   });
+
+  protected readonly bulkSelectedCount = computed(
+    () => this.bulkSelectedIds().size,
+  );
+
+  protected readonly allFilteredSelected = computed(() => {
+    const rows = this.filteredTransactions();
+    const sel = this.bulkSelectedIds();
+    if (rows.length === 0) {
+      return false;
+    }
+    return rows.every((r) => sel.has(r.id));
+  });
+
+  protected readonly bulkPendingSelected = computed(() => {
+    const ids = this.bulkSelectedIds();
+    return this.filteredTransactions().filter(
+      (t) => ids.has(t.id) && (t.paymentStatus ?? 'pending') === 'pending',
+    );
+  });
+
+  protected readonly bulkPendingSelectedCount = computed(
+    () => this.bulkPendingSelected().length,
+  );
+
+  protected readonly bulkDeletableSelected = computed(() => {
+    const ids = this.bulkSelectedIds();
+    return this.filteredTransactions().filter(
+      (t) => ids.has(t.id) && (t.paymentStatus ?? 'pending') !== 'paid',
+    );
+  });
+
+  protected readonly bulkDeletableSelectedCount = computed(
+    () => this.bulkDeletableSelected().length,
+  );
 
   /** Resumo do lançamento recorrente (apenas UI). */
   protected readonly recurringPreviewText = computed(() => {
@@ -297,6 +582,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.api.listTransactions(this.condoId, fid, from, to).subscribe({
       next: (rows) => {
         this.transactions.set(rows);
+        this.bulkSelectedIds.set(new Set());
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -494,6 +780,19 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   startEdit(t: FinancialTransaction): void {
+    const ps = t.paymentStatus ?? 'pending';
+    if (ps === 'cancelled') {
+      window.alert(
+        'Esta transação está cancelada (desactivada) e não pode ser editada.',
+      );
+      return;
+    }
+    if (ps === 'paid') {
+      window.alert(
+        'Esta transação está quitada. Use «Reabrir quitação» no menu ⋮ para voltar a «aguardando» e poder editar.',
+      );
+      return;
+    }
     this.entryMode.set('single');
     this.editingSeriesId.set(null);
     this.seriesUniformAmountReais.set(0);
@@ -541,7 +840,14 @@ export class PainelTransacoesComponent implements OnInit {
     if (members.length === 0) {
       return;
     }
-    const first = members[0];
+    const bad = members.some((m) => (m.paymentStatus ?? 'pending') !== 'pending');
+    if (bad) {
+      window.alert(
+        'A série contém transações quitadas ou canceladas. Reabra quitações ou edite registos individuais.',
+      );
+      return;
+    }
+    const first = members[0]!;
     this.editingId.set(null);
     this.entryMode.set('single');
     this.editingSeriesId.set(seriesId);
@@ -974,6 +1280,131 @@ export class PainelTransacoesComponent implements OnInit {
         body.receiptStorageKey = receiptKey;
       }
       return body;
+    });
+  }
+
+  protected openSettleFromMenu(t: FinancialTransaction): void {
+    this.rowActionMenuForId.set(null);
+    this.formError.set(null);
+    this.settleError.set(null);
+    this.settleReceiptFile.set(null);
+    this.settleTarget.set(t);
+  }
+
+  protected closeTxSettle(): void {
+    if (this.settleBusy()) {
+      return;
+    }
+    this.settleTarget.set(null);
+    this.settleReceiptFile.set(null);
+    this.settleError.set(null);
+  }
+
+  protected onTxSettleFileChange(evt: Event): void {
+    const input = evt.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    const allowed = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'application/pdf',
+    ];
+    if (!allowed.includes(file.type)) {
+      this.settleError.set(
+        'Formato não suportado. Envie uma imagem (PNG, JPG, WEBP) ou PDF.',
+      );
+      input.value = '';
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      this.settleError.set('O arquivo ultrapassa o limite de 8 MB.');
+      input.value = '';
+      this.settleReceiptFile.set(null);
+      return;
+    }
+    this.settleError.set(null);
+    this.settleReceiptFile.set(file);
+  }
+
+  protected clearTxSettleFile(): void {
+    this.settleReceiptFile.set(null);
+  }
+
+  protected confirmTxSettle(): void {
+    const target = this.settleTarget();
+    if (!target) {
+      return;
+    }
+    this.settleError.set(null);
+    this.settleBusy.set(true);
+    const file = this.settleReceiptFile();
+    const run = (receiptKey: string | null) => {
+      this.api
+        .settleTransaction(this.condoId, target.id, {
+          receiptStorageKey: receiptKey ?? undefined,
+        })
+        .subscribe({
+          next: () => {
+            this.settleBusy.set(false);
+            this.closeTxSettle();
+            this.refreshList();
+          },
+          error: (err: HttpErrorResponse) => {
+            this.settleBusy.set(false);
+            this.settleError.set(this.msg(err));
+          },
+        });
+    };
+    if (file) {
+      this.api.uploadTransactionReceipt(this.condoId, file).subscribe({
+        next: ({ receiptStorageKey }) => run(receiptStorageKey),
+        error: (err: HttpErrorResponse) => {
+          this.settleBusy.set(false);
+          this.settleError.set(this.msg(err));
+        },
+      });
+    } else {
+      run(null);
+    }
+  }
+
+  protected cancelTxFromMenu(t: FinancialTransaction): void {
+    this.rowActionMenuForId.set(null);
+    if (
+      !confirm(
+        `Cancelar o lançamento «${t.title}»? Deixa de entrar na taxa condominial e nos saldos (aparece como desactivado).`,
+      )
+    ) {
+      return;
+    }
+    this.api.cancelTransaction(this.condoId, t.id).subscribe({
+      next: () => this.refreshList(),
+      error: (err: HttpErrorResponse) => {
+        this.formError.set(this.msg(err));
+      },
+    });
+  }
+
+  protected reopenTxFromMenu(t: FinancialTransaction): void {
+    this.rowActionMenuForId.set(null);
+    if (
+      !confirm(
+        `Reabrir quitação de «${t.title}»? Volta a «aguardando» e pode voltar a ser incluída na taxa condominial.`,
+      )
+    ) {
+      return;
+    }
+    this.api.reopenTransactionSettlement(this.condoId, t.id).subscribe({
+      next: () => this.refreshList(),
+      error: (err: HttpErrorResponse) => {
+        this.formError.set(this.msg(err));
+      },
     });
   }
 

@@ -135,7 +135,7 @@ export class AuthService {
       );
   }
 
-  /** POST /auth/sms/request — o servidor envia por WhatsApp (Twilio) ou SMS (Comtele), conforme configuração. */
+  /** POST /auth/sms/request — o servidor envia por WhatsApp ou SMS, conforme configuração. */
   requestSmsLogin(phone: string): Observable<SmsLoginRequestResponse> {
     return this.http.post<SmsLoginRequestResponse>(
       `${environment.apiUrl}/auth/sms/request`,
