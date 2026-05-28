@@ -1,0 +1,797 @@
+<div
+  class="page"
+  [class.page--work-detail]="detailWorkId() !== null"
+>
+  @if (actionError(); as ae) {
+    <p class="plan-banner plan-banner--error" role="alert">{{ ae }}</p>
+  }
+
+  @if (draftSavedLabel(); as dl) {
+    <p class="plan-banner plan-banner--info" role="status">{{ dl }}</p>
+  }
+
+  @if (!detailWorkId()) {
+    <header class="page__header">
+      <h1>Obras</h1>
+      <p class="page__intro">
+        Cadastre reformas e projetos do condomínio. Para cada obra, registre comentários
+        e orçamentos na linha do tempo, com anexos quando precisar. Os formulários são salvos
+        automaticamente no navegador enquanto você preenche.
+      </p>
+    </header>
+
+    @if (loadError()) {
+      <p class="plan-banner plan-banner--error" role="alert">{{ loadError() }}</p>
+    } @else {
+      <div class="plan-stack">
+        @if (canManage()) {
+          <section class="form-card plan-create-card">
+            <button
+              type="button"
+              class="plan-create-toggle"
+              (click)="toggleCreateExpanded()"
+              [attr.aria-expanded]="createExpanded()"
+              aria-controls="obras-create-panel"
+            >
+              <span class="plan-create-toggle__label">Nova obra</span>
+              <span class="plan-create-toggle__hint" aria-hidden="true">{{
+                createExpanded() ? 'Recolher' : 'Expandir'
+              }}</span>
+            </button>
+            @if (createExpanded()) {
+              <div id="obras-create-panel" class="plan-create-panel">
+                <p class="form-card__lede plan-create-panel__lede">
+                  Informe título, status e descrição. Ao criar, você será levado ao
+                  detalhe da obra para registrar a timeline.
+                </p>
+                <form
+                  class="fund-form"
+                  [formGroup]="createForm"
+                  (ngSubmit)="submitCreate()"
+                >
+                  <div class="form-section">
+                    <label class="field field--block">
+                      <span class="field__label">Título</span>
+                      <input
+                        type="text"
+                        class="input"
+                        formControlName="title"
+                        maxlength="512"
+                      />
+                    </label>
+                    <label class="field field--block">
+                      <span class="field__label">Descrição (opcional)</span>
+                      <textarea
+                        class="input"
+                        rows="3"
+                        formControlName="description"
+                      ></textarea>
+                    </label>
+                    <label class="field field--block">
+                      <span class="field__label">Status</span>
+                      <select class="input" formControlName="status">
+                        <option value="planned">Planejada</option>
+                        <option value="in_progress">Em andamento</option>
+                        <option value="completed">Concluída</option>
+                        <option value="cancelled">Cancelada</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="form-section plan-submit-wrap">
+                    <button
+                      type="submit"
+                      class="btn btn--submit"
+                      [disabled]="createForm.invalid || busy()"
+                    >
+                      {{ busy() ? 'Salvando…' : 'Criar obra' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            }
+          </section>
+        }
+
+        <section class="form-card plan-list-card">
+          <div class="form-card__head">
+            <h2 class="form-card__title">Obras cadastradas</h2>
+            <label class="field field--block obras-list-filter">
+              <span class="field__label">Filtrar por status</span>
+              <select
+                class="input"
+                [value]="statusFilter()"
+                (change)="setStatusFilter($any($event.target).value)"
+              >
+                <option value="all">Todas</option>
+                <option value="planned">Planejada</option>
+                <option value="in_progress">Em andamento</option>
+                <option value="completed">Concluída</option>
+                <option value="cancelled">Cancelada</option>
+              </select>
+            </label>
+          </div>
+
+          @if (listLoading()) {
+            <p class="muted plan-list-card__loading">Carregando…</p>
+          } @else if (filteredWorks().length === 0) {
+            <div class="plan-list-body">
+              <div class="plan-list-empty" role="status">
+                <p class="plan-list-empty__title">Nenhuma obra neste filtro</p>
+                <p class="plan-list-empty__hint">
+                  Crie uma nova obra ou altere o filtro de status.
+                </p>
+              </div>
+            </div>
+          } @else {
+            <div class="plan-list-body">
+              <ul class="plan-poll-list">
+                @for (w of filteredWorks(); track w.id) {
+                  <li class="plan-poll-list__row">
+                    <a
+                      class="plan-poll-tile"
+                      [routerLink]="[
+                        '/painel/condominio',
+                        condominiumIdParam(),
+                        'obras',
+                        w.id,
+                      ]"
+                    >
+                      <span class="plan-poll-tile__title">{{ w.title }}</span>
+                      <span class="plan-poll-tile__meta">
+                        <span class="plan-pill" [ngClass]="workStatusPillClass(w.status)">{{
+                          statusLabel(w.status)
+                        }}</span>
+                      </span>
+                      @if (w.lastActivityAt) {
+                        <span class="plan-poll-tile__competence muted"
+                          >Última atividade: {{ formatDateTime(w.lastActivityAt) }}</span
+                        >
+                      }
+                    </a>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </section>
+      </div>
+    }
+  } @else {
+    <div class="plan-detail-page">
+      <nav class="plan-back" aria-label="Navegação da obra">
+        <a
+          class="btn btn--ghost sm plan-back__link"
+          [routerLink]="['/painel/condominio', condominiumIdParam(), 'obras']"
+        >
+          ← Voltar às obras
+        </a>
+      </nav>
+
+      @if (detailLoading() && !selected()) {
+        <p class="muted">Carregando obra…</p>
+      } @else if (detailError()) {
+        <p class="plan-banner plan-banner--error" role="alert">{{ detailError() }}</p>
+      } @else if (selected()) {
+        <section class="form-card plan-detail">
+          <div class="form-card__head plan-detail__head">
+            <div class="plan-detail__head-primary">
+              <h1 class="plan-detail__h1">{{ selected()!.title }}</h1>
+              @if (selected()!.description && !editingWork()) {
+                <p class="form-card__lede plan-detail__lede">
+                  <span class="plan-detail__lede-label">Descrição</span>
+                  {{ selected()!.description }}
+                </p>
+              }
+              @if (canManage()) {
+                <div class="plan-title-actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="toggleEditingWork()"
+                  >
+                    {{ editingWork() ? 'Fechar edição' : 'Editar dados da obra' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn danger sm"
+                    [disabled]="busy()"
+                    (click)="deleteWork()"
+                  >
+                    Remover obra
+                  </button>
+                </div>
+              }
+            </div>
+            <div class="plan-detail__badges" aria-label="Status da obra">
+              <span
+                class="plan-pill"
+                [ngClass]="workStatusPillClass(selected()!.status)"
+                >{{ statusLabel(selected()!.status) }}</span
+              >
+            </div>
+          </div>
+
+          <div class="plan-detail__body">
+            @if (canManage() && editingWork()) {
+              <section
+                class="plan-detail__section plan-type-settings"
+                aria-labelledby="obras-edit-heading"
+              >
+                <h3 class="plan-subtitle" id="obras-edit-heading">Dados da obra</h3>
+                <form
+                  class="plan-type-settings__form fund-form"
+                  [formGroup]="editForm"
+                  (ngSubmit)="saveWorkHeader()"
+                >
+                  <label class="field field--block">
+                    <span class="field__label">Título</span>
+                    <input
+                      type="text"
+                      class="input"
+                      formControlName="title"
+                      maxlength="512"
+                    />
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Descrição</span>
+                    <textarea
+                      class="input"
+                      rows="3"
+                      formControlName="description"
+                    ></textarea>
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Status</span>
+                    <select class="input" formControlName="status">
+                      <option value="planned">Planejada</option>
+                      <option value="in_progress">Em andamento</option>
+                      <option value="completed">Concluída</option>
+                      <option value="cancelled">Cancelada</option>
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    class="btn primary sm plan-type-settings__submit"
+                    [disabled]="editForm.invalid || busy()"
+                  >
+                    {{ busy() ? 'Salvando…' : 'Salvar alterações' }}
+                  </button>
+                </form>
+              </section>
+            }
+
+            @if (canManage()) {
+              <section
+                class="plan-detail__section obras-register"
+                aria-labelledby="obras-register-heading"
+              >
+                <header class="obras-register__head">
+                  <h3 class="obras-register__title" id="obras-register-heading">
+                    Registrar na timeline
+                  </h3>
+                  <p class="obras-register__lede">
+                    Rascunho salvo no navegador até você publicar.
+                  </p>
+                </header>
+
+                <div
+                  class="obras-register__type"
+                  role="tablist"
+                  aria-label="Tipo de registro"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    class="obras-register__type-btn"
+                    [attr.aria-selected]="registerTab() === 'note'"
+                    [class.obras-register__type-btn--active]="registerTab() === 'note'"
+                    (click)="setRegisterTab('note')"
+                  >
+                    Comentário
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="obras-register__type-btn"
+                    [attr.aria-selected]="registerTab() === 'budget'"
+                    [class.obras-register__type-btn--active]="registerTab() === 'budget'"
+                    (click)="setRegisterTab('budget')"
+                  >
+                    Orçamento
+                  </button>
+                </div>
+
+                <div class="obras-register__panel">
+                  @if (registerTab() === 'note') {
+                    <form
+                      class="obras-register__form fund-form"
+                      [formGroup]="noteForm"
+                      (ngSubmit)="submitNote()"
+                    >
+                      <div class="form-section">
+                        <label class="field field--block plan-create-competence">
+                          <span class="field__label">Quando ocorreu</span>
+                          <input
+                            type="datetime-local"
+                            class="input plan-create-competence__input"
+                            [max]="nowForDatetimeLocal()"
+                            [value]="registerRecordedOn()"
+                            (input)="setRegisterRecordedOn($any($event.target).value)"
+                          />
+                          <p class="form-section__hint plan-hint-tight">
+                            Em branco = agora. Arquivos do WhatsApp ou capturas podem
+                            preencher a data automaticamente pelo nome.
+                          </p>
+                          @if (filenameRecordedOnHint()) {
+                            <p class="obras-recorded-on-hint">{{ filenameRecordedOnHint() }}</p>
+                          }
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">1</span>
+                          <div>
+                            <h4 class="form-section__title">Comentário</h4>
+                            <p class="form-section__hint">
+                              Texto livre sobre andamento, decisão ou contato.
+                            </p>
+                          </div>
+                        </div>
+                        <label class="field field--block">
+                          <span class="field__label">Texto</span>
+                          <textarea
+                            class="input"
+                            rows="4"
+                            formControlName="body"
+                            placeholder="Ex.: Reunião com a empreiteira; aguardando nova proposta…"
+                          ></textarea>
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">2</span>
+                          <div>
+                            <h4 class="form-section__title">Anexos</h4>
+                            <p class="form-section__hint">Opcional — propostas, fotos, e-mails…</p>
+                          </div>
+                        </div>
+                        <div class="receipt-field">
+                          <input
+                            #noteFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            [disabled]="busy()"
+                            (change)="onNoteFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="noteFileInput.click()"
+                            >
+                              Escolher arquivos…
+                            </button>
+                            <span class="receipt-field__name"
+                              >Fotos, vídeos, áudio, PDF e qualquer formato — 100 MB
+                              por arquivo.</span
+                            >
+                          </div>
+                          @if (notePendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Arquivos selecionados">
+                              @for (f of notePendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  @if (filenameDateChip(f); as when) {
+                                    <span class="obras-file-chips__when">{{ when }}</span>
+                                  }
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeNotePendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="busy()"
+                        >
+                          {{ busy() ? 'Publicando…' : 'Publicar comentário' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+
+                  @if (registerTab() === 'budget') {
+                    <form
+                      class="obras-register__form fund-form"
+                      [formGroup]="budgetForm"
+                      (ngSubmit)="submitBudget()"
+                    >
+                      <div class="form-section">
+                        <label class="field field--block plan-create-competence">
+                          <span class="field__label">Quando ocorreu</span>
+                          <input
+                            type="datetime-local"
+                            class="input plan-create-competence__input"
+                            [max]="nowForDatetimeLocal()"
+                            [value]="registerRecordedOn()"
+                            (input)="setRegisterRecordedOn($any($event.target).value)"
+                          />
+                          <p class="form-section__hint plan-hint-tight">
+                            Em branco = agora. Arquivos do WhatsApp ou capturas podem
+                            preencher a data automaticamente pelo nome.
+                          </p>
+                          @if (filenameRecordedOnHint()) {
+                            <p class="obras-recorded-on-hint">{{ filenameRecordedOnHint() }}</p>
+                          }
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">1</span>
+                          <div>
+                            <h4 class="form-section__title">Dados do orçamento</h4>
+                            <p class="form-section__hint">Fornecedor, valor e situação.</p>
+                          </div>
+                        </div>
+                        <div class="plan-create-pair">
+                          <label class="field field--block">
+                            <span class="field__label">Fornecedor</span>
+                            <input
+                              type="text"
+                              class="input plan-create-pair__control"
+                              formControlName="supplierName"
+                              placeholder="Nome da empresa"
+                            />
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Valor (R$)</span>
+                            <input
+                              type="text"
+                              class="input plan-create-pair__control"
+                              formControlName="amountReais"
+                              placeholder="0,00"
+                              inputmode="decimal"
+                            />
+                          </label>
+                        </div>
+                        <div class="plan-create-pair obras-register__pair-spaced">
+                          <label class="field field--block">
+                            <span class="field__label">Validade</span>
+                            <input
+                              type="date"
+                              class="input plan-create-pair__control"
+                              formControlName="validUntil"
+                            />
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Status</span>
+                            <select
+                              class="input plan-create-pair__control"
+                              formControlName="status"
+                            >
+                              <option value="received">Recebido</option>
+                              <option value="under_review">Em análise</option>
+                              <option value="approved">Aprovado</option>
+                              <option value="rejected">Rejeitado</option>
+                            </select>
+                          </label>
+                        </div>
+                        <label class="field field--block obras-register__pair-spaced">
+                          <span class="field__label">Observações</span>
+                          <textarea
+                            class="input"
+                            rows="2"
+                            formControlName="notes"
+                            placeholder="Condições, prazo, contato…"
+                          ></textarea>
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">2</span>
+                          <div>
+                            <h4 class="form-section__title">Anexos</h4>
+                            <p class="form-section__hint">
+                              PDF da proposta, planilha, foto do serviço…
+                            </p>
+                          </div>
+                        </div>
+                        <div class="receipt-field">
+                          <input
+                            #budgetFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            [disabled]="busy()"
+                            (change)="onBudgetFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="budgetFileInput.click()"
+                            >
+                              Escolher arquivos…
+                            </button>
+                            <span class="receipt-field__name"
+                              >Fotos, vídeos, áudio, PDF e qualquer formato — 100 MB
+                              por arquivo.</span
+                            >
+                          </div>
+                          @if (budgetPendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Arquivos selecionados">
+                              @for (f of budgetPendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  @if (filenameDateChip(f); as when) {
+                                    <span class="obras-file-chips__when">{{ when }}</span>
+                                  }
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeBudgetPendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="budgetForm.invalid || busy()"
+                        >
+                          {{ busy() ? 'Salvando…' : 'Registrar orçamento' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+                </div>
+              </section>
+            }
+
+            <section
+              class="plan-detail__section obras-timeline-section"
+              aria-labelledby="obras-timeline-heading"
+            >
+              <header class="obras-timeline-section__head">
+                <h3 class="plan-subtitle" id="obras-timeline-heading">Linha do tempo</h3>
+                @if (selected()!.timeline.length > 0) {
+                  <span class="obras-timeline-section__count muted"
+                    >{{ selected()!.timeline.length }} registro{{
+                      selected()!.timeline.length === 1 ? '' : 's'
+                    }}</span
+                  >
+                }
+              </header>
+              @if (selected()!.timeline.length === 0) {
+                <div class="obras-tl-empty">
+                  <p class="obras-tl-empty__title">Nenhum registro ainda</p>
+                  <p class="obras-tl-empty__desc muted">
+                    Comentários, orçamentos e anexos aparecem aqui em ordem cronológica.
+                  </p>
+                </div>
+              } @else {
+                <div class="obras-tl-toolbar">
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="expandAllTimelineDays()"
+                  >
+                    Abrir todos os dias
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="collapseAllTimelineDays()"
+                  >
+                    Recolher todos
+                  </button>
+                </div>
+
+                <div class="obras-tl">
+                  @for (group of timelineDayGroups(); track group.dateKey) {
+                    <section
+                      class="obras-tl__day"
+                      [class.obras-tl__day--open]="isTimelineDayExpanded(group.dateKey)"
+                      [attr.aria-label]="group.label"
+                    >
+                      @if (!isTimelineDayExpanded(group.dateKey)) {
+                        <div class="obras-tl__row obras-tl__row--day">
+                          <div class="obras-tl__badge-col">
+                            <button
+                              type="button"
+                              class="obras-tl__date-badge"
+                              [attr.aria-expanded]="false"
+                              (click)="toggleTimelineDay(group.dateKey)"
+                            >
+                              <span class="obras-tl__date-badge-title">{{
+                                group.label
+                              }}</span>
+                              <span class="obras-tl__date-badge-sub">{{
+                                timelineDayBadgeSub(group)
+                              }}</span>
+                            </button>
+                          </div>
+                          <div class="obras-tl__spine-col" aria-hidden="true">
+                            <span class="obras-tl__node obras-tl__node--day"></span>
+                          </div>
+                          <p class="obras-tl__day-fold">
+                            {{ timelineDaySummary(group.entries) }}
+                          </p>
+                        </div>
+                      } @else {
+                        <div class="obras-tl__day-track">
+                          <div class="obras-tl__track-line" aria-hidden="true"></div>
+
+                          <div class="obras-tl__row obras-tl__row--day">
+                            <div class="obras-tl__badge-col">
+                              <button
+                                type="button"
+                                class="obras-tl__date-badge"
+                                [attr.aria-expanded]="true"
+                                (click)="toggleTimelineDay(group.dateKey)"
+                              >
+                                <span class="obras-tl__date-badge-title">{{
+                                  group.label
+                                }}</span>
+                                <span class="obras-tl__date-badge-sub">{{
+                                  timelineDayBadgeSub(group)
+                                }}</span>
+                              </button>
+                            </div>
+                            <div class="obras-tl__spine-col" aria-hidden="true">
+                              <span class="obras-tl__node obras-tl__node--day"></span>
+                            </div>
+                            <div class="obras-tl__day-fold obras-tl__day-fold--open" aria-hidden="true"></div>
+                          </div>
+
+                          @for (e of group.entries; track e.id) {
+                              <article
+                                class="obras-tl__row obras-tl__row--event"
+                                [attr.data-kind]="e.kind"
+                              >
+                                <div class="obras-tl__badge-col">
+                                  <time
+                                    class="obras-tl__time-badge"
+                                    [attr.datetime]="e.createdAt"
+                                    [title]="formatDateTime(e.createdAt)"
+                                    >{{ formatTimelineTime(e.createdAt) }}</time
+                                  >
+                                </div>
+                                <div class="obras-tl__spine-col" aria-hidden="true">
+                                  <span class="obras-tl__node"></span>
+                                </div>
+                                <div class="obras-tl__card">
+                                  <header class="obras-tl__card-head">
+                                    <span class="obras-tl__kind">{{
+                                      timelineKindLabel(e.kind)
+                                    }}</span>
+                                    <div class="obras-tl__card-intro">
+                                      @if (e.kind === 'budget' && timelineEntryTitle(e); as title) {
+                                        <h4 class="obras-tl__card-title">{{ title }}</h4>
+                                      }
+                                      <p class="obras-tl__card-meta">
+                                        {{ e.authorDisplayName }}
+                                      </p>
+                                    </div>
+                                  </header>
+
+                                  <div class="obras-tl__card-body">
+                                    @if (e.kind === 'budget' && e.budget; as b) {
+                                      <p class="obras-tl__budget-value">
+                                        {{ formatMoney(b.amountCents) }}
+                                      </p>
+                                      <dl class="obras-tl__facts">
+                                        <div>
+                                          <dt>Status</dt>
+                                          <dd>
+                                            <span
+                                              class="plan-pill"
+                                              [ngClass]="budgetStatusPillClass(b.status)"
+                                              >{{ budgetStatusLabel(b.status) }}</span
+                                            >
+                                          </dd>
+                                        </div>
+                                        @if (b.validUntil) {
+                                          <div>
+                                            <dt>Validade</dt>
+                                            <dd>{{ formatDate(b.validUntil) }}</dd>
+                                          </div>
+                                        }
+                                      </dl>
+                                      @if (b.notes) {
+                                        <p class="obras-tl__comment obras-tl__comment--secondary">{{
+                                          b.notes
+                                        }}</p>
+                                      }
+                                    } @else if (e.body) {
+                                      <p class="obras-tl__comment">{{ e.body }}</p>
+                                    }
+
+                                    @if (attachmentCount(e) > 0) {
+                                      <div
+                                        class="obras-tl__media"
+                                        [ngClass]="attachmentMediaClass(attachmentCount(e))"
+                                      >
+                                        @if (attachmentCount(e) > 1) {
+                                          <p class="obras-tl__media-label">
+                                            {{ attachmentCount(e) }} anexos
+                                          </p>
+                                        }
+                                        <ul class="obras-tl__media-list">
+                                          @for (att of e.attachments ?? []; track att.id) {
+                                            <li class="obras-tl__media-item">
+                                              <app-obras-timeline-attachment-preview
+                                                [condominiumId]="condominiumIdParam()"
+                                            [workId]="selected()!.id"
+                                            [entryId]="e.id"
+                                            [attachment]="att"
+                                            [disabled]="busy()"
+                                            (download)="
+                                              downloadAttachment(
+                                                e,
+                                                att.id,
+                                                att.originalFilename
+                                              )
+                                            "
+                                          />
+                                        </li>
+                                      }
+                                        </ul>
+                                      </div>
+                                    }
+                                  </div>
+
+                                  @if (canRemoveTimelineEntry(e)) {
+                                    <footer class="obras-tl__card-foot">
+                                      <button
+                                        type="button"
+                                        class="btn btn--ghost sm"
+                                        [disabled]="busy()"
+                                        (click)="removeTimelineEntry(e)"
+                                      >
+                                        Remover
+                                      </button>
+                                    </footer>
+                                  }
+                                </div>
+                              </article>
+                          }
+                        </div>
+                      }
+                    </section>
+                  }
+                </div>
+              }
+            </section>
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>

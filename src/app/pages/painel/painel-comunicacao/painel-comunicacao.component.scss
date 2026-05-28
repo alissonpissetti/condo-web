@@ -78,6 +78,11 @@
 }
 
 .detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
@@ -324,6 +329,73 @@
   margin: 0 0 0.85rem;
 }
 
+.comm-fieldset--digital {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.comm-fieldset--pdf {
+  background: color-mix(in srgb, #64748b 6%, var(--surface));
+  border-style: dashed;
+}
+
+.comm-pdf-gen-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.comm-pdf-gen-btn--secondary {
+  margin-top: 0.75rem;
+  opacity: 0.92;
+}
+
+.comm-fieldset--mode {
+  background: var(--surface-2);
+}
+
+.comm-seg--delivery {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.comm-table__move {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.comm-subh--minor {
+  margin-top: 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.comm-table__group {
+  text-align: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.comm-table__group--digital {
+  border-bottom: 1px solid var(--border);
+}
+
+.comm-table__group--pdf {
+  background: color-mix(in srgb, #64748b 8%, var(--surface));
+}
+
+.comm-table__sub {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.comm-table__pdf-cell {
+  text-align: center;
+  background: color-mix(in srgb, #64748b 6%, var(--surface));
+}
+
 .comm-legend {
   font-size: 0.78rem;
   font-weight: 700;
@@ -514,6 +586,30 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.comm-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.comm-list__row .comm-list__btn {
+  flex: 1 1 12rem;
+  margin-bottom: 0;
+}
+
+.comm-list__remove {
+  flex: 0 0 auto;
+  align-self: center;
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #b91c1c 35%, var(--border));
+}
+
+.comm-list__remove:hover:not(:disabled) {
+  background: color-mix(in srgb, #b91c1c 8%, var(--surface));
 }
 
 .comm-list__btn {

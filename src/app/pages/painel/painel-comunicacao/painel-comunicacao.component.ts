@@ -27,12 +27,24 @@ import {
   CondominiumManagementService,
   type GroupingWithUnits,
 } from '../../../core/condominium-management.service';
+import {
+  CommunicationPdfService,
+  type CommunicationPdfInput,
+} from '../../../core/communication-pdf.service';
 import { formatDateTimeDdMmYyyyHhMm } from '../../../core/date-display';
 import { PlanningApiService } from '../../../core/planning-api.service';
 import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.component';
 import { switchMap } from 'rxjs';
 
-type DeliveryToggle = { email: boolean; sms: boolean; whatsapp: boolean };
+type DeliveryToggle = {
+  email: boolean;
+  sms: boolean;
+  whatsapp: boolean;
+  pdf: boolean;
+};
+
+/** Forma de entrega ao configurar novos destinatários na pré-visualização. */
+type DeliveryDefaultsMode = 'digital' | 'print';
 
 @Component({
   selector: 'app-painel-comunicacao',
@@ -50,6 +62,7 @@ export class PainelComunicacaoComponent implements OnInit {
   private readonly mgmt = inject(CondominiumManagementService);
   private readonly fb = inject(FormBuilder);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly communicationPdf = inject(CommunicationPdfService);
 
   protected readonly items = signal<Communication[]>([]);
   protected readonly selected = signal<Communication | null>(null);
@@ -57,6 +70,8 @@ export class PainelComunicacaoComponent implements OnInit {
   protected readonly loadError = signal<string | null>(null);
   protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
+  protected readonly pdfBusy = signal(false);
+  protected readonly removeBusyId = signal<string | null>(null);
   protected readonly access = signal<{ kind: string; role?: string } | null>(
     null,
   );
@@ -72,6 +87,9 @@ export class PainelComunicacaoComponent implements OnInit {
   protected readonly channelEmail = signal(true);
   protected readonly channelSms = signal(true);
   protected readonly channelWhatsapp = signal(false);
+  protected readonly channelPdf = signal(false);
+  /** Qual bloco de configuração e lista mostrar (digital vs impressão). */
+  protected readonly deliveryDefaultsMode = signal<DeliveryDefaultsMode>('digital');
 
   protected readonly previewBusy = signal(false);
   protected readonly previewUsers = signal<AudiencePreviewUser[]>([]);
@@ -274,25 +292,107 @@ export class PainelComunicacaoComponent implements OnInit {
     });
   }
 
+  protected isRecipientPrint(userId: string): boolean {
+    return this.prefFor(userId).pdf;
+  }
+
+  protected digitalPreviewUsers(): AudiencePreviewUser[] {
+    return this.previewUsers().filter((u) => !this.isRecipientPrint(u.userId));
+  }
+
+  protected printPreviewUsers(): AudiencePreviewUser[] {
+    return this.previewUsers().filter((u) => this.isRecipientPrint(u.userId));
+  }
+
+  protected sentDigitalRecipients(): CommunicationRecipientRow[] {
+    return (this.selected()?.recipients ?? []).filter(
+      (r) => !this.recipientIsPrintOnly(r),
+    );
+  }
+
+  protected sentPrintRecipients(): CommunicationRecipientRow[] {
+    return (this.selected()?.recipients ?? []).filter((r) =>
+      this.recipientIsPrintOnly(r),
+    );
+  }
+
+  protected recipientIsPrintOnly(r: CommunicationRecipientRow): boolean {
+    return r.pdfStatus === 'sent';
+  }
+
+  protected setDeliveryDefaultsMode(mode: DeliveryDefaultsMode): void {
+    this.deliveryDefaultsMode.set(mode);
+    this.channelPdf.set(mode === 'print');
+    if (mode === 'print') {
+      this.channelEmail.set(false);
+      this.channelSms.set(false);
+      this.channelWhatsapp.set(false);
+    }
+    this.onGlobalChannelChange();
+  }
+
+  protected setDeliveryMode(userId: string, mode: DeliveryDefaultsMode): void {
+    const u = this.previewUsers().find((x) => x.userId === userId);
+    if (!u) {
+      return;
+    }
+    if (mode === 'print') {
+      this.deliveryPrefs.update((m) => ({
+        ...m,
+        [userId]: { email: false, sms: false, whatsapp: false, pdf: true },
+      }));
+      return;
+    }
+    this.deliveryPrefs.update((m) => ({
+      ...m,
+      [userId]: {
+        email: this.channelEmail() && u.hasEmail,
+        sms: this.channelSms() && u.hasPhone,
+        whatsapp: this.channelWhatsapp() && u.hasPhone,
+        pdf: false,
+      },
+    }));
+  }
+
   private syncPrefsWithGlobals(users: AudiencePreviewUser[]): void {
     const cur = { ...this.deliveryPrefs() };
+    const mode = this.deliveryDefaultsMode();
     const g: DeliveryToggle = {
       email: this.channelEmail(),
       sms: this.channelSms(),
       whatsapp: this.channelWhatsapp(),
+      pdf: mode === 'print',
     };
     for (const u of users) {
       if (!cur[u.userId]) {
+        if (mode === 'print') {
+          cur[u.userId] = {
+            email: false,
+            sms: false,
+            whatsapp: false,
+            pdf: true,
+          };
+        } else {
+          cur[u.userId] = {
+            email: g.email && u.hasEmail,
+            sms: g.sms && u.hasPhone,
+            whatsapp: g.whatsapp && u.hasPhone,
+            pdf: false,
+          };
+        }
+      } else if (cur[u.userId]!.pdf) {
         cur[u.userId] = {
-          email: g.email && u.hasEmail,
-          sms: g.sms && u.hasPhone,
-          whatsapp: g.whatsapp && u.hasPhone,
+          email: false,
+          sms: false,
+          whatsapp: false,
+          pdf: true,
         };
       } else {
         cur[u.userId] = {
           email: cur[u.userId]!.email && u.hasEmail,
           sms: cur[u.userId]!.sms && u.hasPhone,
           whatsapp: cur[u.userId]!.whatsapp && u.hasPhone,
+          pdf: false,
         };
       }
     }
@@ -305,6 +405,7 @@ export class PainelComunicacaoComponent implements OnInit {
         email: false,
         sms: false,
         whatsapp: false,
+        pdf: false,
       }
     );
   }
@@ -314,13 +415,34 @@ export class PainelComunicacaoComponent implements OnInit {
     key: keyof DeliveryToggle,
     value: boolean,
   ): void {
-    this.deliveryPrefs.update((m) => ({
-      ...m,
-      [userId]: { ...this.prefFor(userId), [key]: value },
-    }));
+    const u = this.previewUsers().find((x) => x.userId === userId);
+    this.deliveryPrefs.update((m) => {
+      const prev = this.prefFor(userId);
+      if (key === 'pdf' && value) {
+        return {
+          ...m,
+          [userId]: { email: false, sms: false, whatsapp: false, pdf: true },
+        };
+      }
+      const next = { ...prev, [key]: value, pdf: false };
+      if (key !== 'pdf' && value && u) {
+        if (key === 'email' && !u.hasEmail) {
+          next.email = false;
+        }
+        if ((key === 'sms' || key === 'whatsapp') && !u.hasPhone) {
+          next[key] = false;
+        }
+      }
+      return { ...m, [userId]: next };
+    });
   }
 
   protected onGlobalChannelChange(): void {
+    if (this.deliveryDefaultsMode() === 'print') {
+      this.channelPdf.set(true);
+    } else {
+      this.channelPdf.set(false);
+    }
     this.syncPrefsWithGlobals(this.previewUsers());
   }
 
@@ -347,6 +469,9 @@ export class PainelComunicacaoComponent implements OnInit {
     this.channelEmail.set(c.channelEmailEnabled !== false);
     this.channelSms.set(c.channelSmsEnabled !== false);
     this.channelWhatsapp.set(c.channelWhatsappEnabled === true);
+    const pdfDefault = c.channelPdfEnabled === true;
+    this.channelPdf.set(pdfDefault);
+    this.deliveryDefaultsMode.set(pdfDefault ? 'print' : 'digital');
     let prefs: RecipientDeliveryPrefPayload[] = [];
     const raw = c.recipientDeliveryPrefs as unknown;
     if (Array.isArray(raw)) {
@@ -360,11 +485,21 @@ export class PainelComunicacaoComponent implements OnInit {
     }
     const map: Record<string, DeliveryToggle> = {};
     for (const p of prefs) {
-      map[p.userId] = {
-        email: p.email !== false,
-        sms: p.sms !== false,
-        whatsapp: p.whatsapp === true,
-      };
+      if (p.pdf === true) {
+        map[p.userId] = {
+          email: false,
+          sms: false,
+          whatsapp: false,
+          pdf: true,
+        };
+      } else {
+        map[p.userId] = {
+          email: p.email !== false,
+          sms: p.sms !== false,
+          whatsapp: p.whatsapp === true,
+          pdf: false,
+        };
+      }
     }
     this.deliveryPrefs.set(map);
     this.previewUsers.set([]);
@@ -415,7 +550,10 @@ export class PainelComunicacaoComponent implements OnInit {
           });
         } else if (this.isMgmt() && c.status === 'sent') {
           this.hydrateAudienceFromCommunication(c);
-          this.draftForm.reset({ title: '', body: '' });
+          this.draftForm.patchValue({
+            title: c.title,
+            body: c.body ?? '',
+          });
         } else {
           this.draftForm.reset({ title: '', body: '' });
         }
@@ -440,6 +578,38 @@ export class PainelComunicacaoComponent implements OnInit {
       this.condominiumId,
       'comunicacao',
     ]);
+  }
+
+  protected confirmRemoveCommunication(c: Communication, ev: Event): void {
+    ev.stopPropagation();
+    ev.preventDefault();
+    if (!this.isMgmt() || this.removeBusyId()) {
+      return;
+    }
+    const estado = c.status === 'sent' ? 'enviado' : 'rascunho';
+    if (
+      !confirm(
+        `Remover o informativo «${c.title}» (${estado})?\n\nSerá ocultado da lista (exclusão lógica). Links já enviados deixarão de abrir.`,
+      )
+    ) {
+      return;
+    }
+    this.removeBusyId.set(c.id);
+    this.actionError.set(null);
+    this.api.remove(this.condominiumId, c.id).subscribe({
+      next: () => {
+        this.removeBusyId.set(null);
+        this.items.update((list) => list.filter((x) => x.id !== c.id));
+        if (this.selected()?.id === c.id) {
+          this.selected.set(null);
+          this.closeDetail();
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        this.removeBusyId.set(null);
+        this.actionError.set(this.msg(err));
+      },
+    });
   }
 
   protected createDraft(): void {
@@ -475,11 +645,12 @@ export class PainelComunicacaoComponent implements OnInit {
         email: p.email,
         sms: p.sms,
         whatsapp: p.whatsapp,
+        pdf: p.pdf,
       };
     });
   }
 
-  /** Audiência e canais (informativo já enviado — sem título/corpo). */
+  /** Audiência e canais (sem título/corpo). */
   private buildDeliveryPatchOnly(): {
     audienceScope: CommunicationAudienceScope;
     audienceUnitIds?: string[];
@@ -487,6 +658,7 @@ export class PainelComunicacaoComponent implements OnInit {
     channelEmailEnabled: boolean;
     channelSmsEnabled: boolean;
     channelWhatsappEnabled: boolean;
+    channelPdfEnabled: boolean;
     recipientDeliveryPrefs: RecipientDeliveryPrefPayload[];
   } {
     const scope = this.audienceScope();
@@ -499,6 +671,7 @@ export class PainelComunicacaoComponent implements OnInit {
       channelEmailEnabled: this.channelEmail(),
       channelSmsEnabled: this.channelSms(),
       channelWhatsappEnabled: this.channelWhatsapp(),
+      channelPdfEnabled: this.channelPdf(),
       recipientDeliveryPrefs: this.buildPrefsPayloadForSave(),
     };
   }
@@ -512,6 +685,7 @@ export class PainelComunicacaoComponent implements OnInit {
     channelEmailEnabled: boolean;
     channelSmsEnabled: boolean;
     channelWhatsappEnabled: boolean;
+    channelPdfEnabled: boolean;
     recipientDeliveryPrefs: RecipientDeliveryPrefPayload[];
   } {
     const v = this.draftForm.getRawValue();
@@ -571,15 +745,21 @@ export class PainelComunicacaoComponent implements OnInit {
       });
   }
 
+  /** @deprecated Use saveSentChanges — mantido para compatibilidade com template em cache. */
   protected saveDeliverySettings(): void {
+    this.saveSentChanges();
+  }
+
+  protected saveSentChanges(): void {
     const c = this.selected();
-    if (!c || c.status !== 'sent' || !this.isMgmt()) {
+    if (!c || c.status !== 'sent' || !this.isMgmt() || this.draftForm.invalid) {
+      this.draftForm.markAllAsTouched();
       return;
     }
     this.busy.set(true);
     this.actionError.set(null);
     this.api
-      .update(this.condominiumId, c.id, this.buildDeliveryPatchOnly())
+      .update(this.condominiumId, c.id, this.buildDraftPatch())
       .subscribe({
         next: (updated) => {
           this.busy.set(false);
@@ -594,15 +774,16 @@ export class PainelComunicacaoComponent implements OnInit {
       });
   }
 
-  /** Grava audiência/canais e dispara novo e-mail/SMS com novos links. */
+  /** Grava alterações e dispara novo e-mail/SMS com novos links. */
   protected resendSelected(): void {
     const c = this.selected();
-    if (!c || c.status !== 'sent' || !this.isMgmt()) {
+    if (!c || c.status !== 'sent' || !this.isMgmt() || this.draftForm.invalid) {
+      this.draftForm.markAllAsTouched();
       return;
     }
     this.busy.set(true);
     this.actionError.set(null);
-    const patch = this.buildDeliveryPatchOnly();
+    const patch = this.buildDraftPatch();
     this.api
       .update(this.condominiumId, c.id, patch)
       .pipe(switchMap(() => this.api.send(this.condominiumId, c.id)))
@@ -622,7 +803,7 @@ export class PainelComunicacaoComponent implements OnInit {
 
   protected onAttachmentSelected(ev: Event): void {
     const c = this.selected();
-    if (!c || c.status !== 'draft') return;
+    if (!c || (c.status !== 'draft' && c.status !== 'sent')) return;
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -644,7 +825,7 @@ export class PainelComunicacaoComponent implements OnInit {
 
   protected removeAttachment(att: CommunicationAttachmentRow): void {
     const c = this.selected();
-    if (!c || c.status !== 'draft') return;
+    if (!c || (c.status !== 'draft' && c.status !== 'sent')) return;
     this.busy.set(true);
     this.actionError.set(null);
     this.api
@@ -706,6 +887,13 @@ export class PainelComunicacaoComponent implements OnInit {
     }
   }
 
+  protected pdfChannelLabel(st: DeliveryChannelStatus | undefined): string {
+    if (st === 'sent') {
+      return 'Só PDF (impressão)';
+    }
+    return this.channelLabel(st ?? 'skipped');
+  }
+
   protected recipientRead(r: CommunicationRecipientRow): string {
     if (r.readAt) {
       const src = r.readSource ? ` · ${this.readSourceLabel(r.readSource)}` : '';
@@ -764,6 +952,33 @@ export class PainelComunicacaoComponent implements OnInit {
 
   protected fmtSentAt(iso: string | null | undefined): string {
     return formatDateTimeDdMmYyyyHhMm(iso);
+  }
+
+  protected generatePdf(): void {
+    const c = this.selected();
+    if (!c || this.pdfBusy()) {
+      return;
+    }
+    this.pdfBusy.set(true);
+    this.actionError.set(null);
+    const payload: CommunicationPdfInput = {
+      condominiumName: this.condoName(),
+      title: c.title,
+      bodyHtml: c.body,
+      sentAtLabel: c.sentAt ? this.fmtSentAt(c.sentAt) : null,
+      attachments: (c.attachments ?? []).map((a) => ({
+        originalFilename: a.originalFilename,
+        sizeBytes: a.sizeBytes,
+      })),
+    };
+    void this.communicationPdf
+      .download(payload)
+      .catch(() => {
+        this.actionError.set(
+          'Não foi possível gerar o PDF. Tente novamente em instantes.',
+        );
+      })
+      .finally(() => this.pdfBusy.set(false));
   }
 
   private msg(err: HttpErrorResponse): string {

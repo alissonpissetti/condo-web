@@ -126,7 +126,7 @@ export class PainelShellComponent {
           }
         }
         if (
-          /\/painel\/condominio\/[^/]+\/(planejamento|comunicacao|biblioteca)(\/|$|\?|#)/.test(
+          /\/painel\/condominio\/[^/]+\/(planejamento|obras|comunicacao|biblioteca)(\/|$|\?|#)/.test(
             url,
           )
         ) {

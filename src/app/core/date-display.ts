@@ -77,3 +77,73 @@ export function formatDateTimeDdMmYyyyHhMm(
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
+
+/** Chave `yyyy-MM-dd` no fuso local do browser. */
+export function localDateKeyFromIso(
+  value: string | null | undefined,
+): string {
+  if (value == null || value === '') return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value.slice(0, 10);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Hora **HH:MM** (24 h) para marcos na timeline. */
+export function formatTimeHhMm(value: string | null | undefined): string {
+  if (value == null || value === '') return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${min}`;
+}
+
+const WEEKDAY_PT: Record<number, string> = {
+  0: 'domingo',
+  1: 'segunda-feira',
+  2: 'terça-feira',
+  3: 'quarta-feira',
+  4: 'quinta-feira',
+  5: 'sexta-feira',
+  6: 'sábado',
+};
+
+const MONTH_SHORT_PT = [
+  'jan',
+  'fev',
+  'mar',
+  'abr',
+  'mai',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'out',
+  'nov',
+  'dez',
+];
+
+/**
+ * Rótulo de dia na timeline: Hoje, Ontem ou «sexta-feira, 27 mai 2026».
+ * `dateKey` em `yyyy-MM-dd` (fuso local).
+ */
+export function formatTimelineDayHeading(dateKey: string): string {
+  if (!dateKey) return '—';
+  const parts = dateKey.split('-').map((p) => Number(p));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateKey;
+  const [y, m, d] = parts;
+  const date = new Date(y, m - 1, d, 12, 0, 0, 0);
+  const today = new Date();
+  const todayKey = localDateKeyFromIso(today.toISOString());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = localDateKeyFromIso(yesterday.toISOString());
+  if (dateKey === todayKey) return 'Hoje';
+  if (dateKey === yesterdayKey) return 'Ontem';
+  const weekday = WEEKDAY_PT[date.getDay()] ?? '';
+  const month = MONTH_SHORT_PT[date.getMonth()] ?? '';
+  return `${weekday}, ${d} ${month} ${y}`;
+}

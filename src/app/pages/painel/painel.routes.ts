@@ -156,6 +156,22 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/obras/:workId',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
+        loadComponent: () =>
+          import('./painel-obras/painel-obras.component').then(
+            (m) => m.PainelObrasComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/obras',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
+        loadComponent: () =>
+          import('./painel-obras/painel-obras.component').then(
+            (m) => m.PainelObrasComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/documentos',
         pathMatch: 'full',
         redirectTo: 'condominio/:condominiumId/planejamento',

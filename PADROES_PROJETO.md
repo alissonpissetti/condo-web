@@ -54,3 +54,4 @@ Quando o verbo for “persistir escolha” em frases (não só no botão), usar 
 
 - **Comunicação** (`…/comunicacao`): informativos com anexos e envio por e-mail/SMS; no SaaS a feature continua com a chave `documents`.
 - **Pautas/Atas** (`…/planejamento`): pautas eletrônicas, votação e PDF de ata por pauta.
+- **Obras** (`…/obras`): projetos/obras do condomínio com timeline de anotações, documentos e orçamentos (feature SaaS `works`).
