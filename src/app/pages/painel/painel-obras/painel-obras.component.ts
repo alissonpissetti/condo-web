@@ -14,6 +14,7 @@ import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumWorksApiService,
+  type WorkBudget,
   type WorkBudgetStatus,
   type WorkDetail,
   type WorkListItem,
@@ -42,6 +43,7 @@ import {
   obrasBudgetDraftKey,
   obrasCreateDraftKey,
   obrasEditDraftKey,
+  obrasLegalDraftKey,
   obrasNoteDraftKey,
   obrasUiDraftKey,
   readObrasDraft,
@@ -51,6 +53,12 @@ import {
   type ObrasRegisterTab,
   type ObrasUiDraft,
 } from '../../../core/obras-form-draft.util';
+import {
+  clearObrasPendingFilesDraft,
+  obrasPendingFilesDraftKey,
+  readObrasPendingFilesDraft,
+  writeObrasPendingFilesDraft,
+} from '../../../core/obras-pending-files-draft.util';
 import {
   PlanningApiService,
   type CondoAccess,
@@ -128,7 +136,12 @@ export class PainelObrasComponent implements OnInit {
     body: [''],
   });
 
+  protected readonly legalForm = this.fb.nonNullable.group({
+    body: [''],
+  });
+
   protected readonly notePendingFiles = signal<File[]>([]);
+  protected readonly legalPendingFiles = signal<File[]>([]);
   protected readonly budgetPendingFiles = signal<File[]>([]);
   /** YYYY-MM-DDTHH:mm; vazio = agora no envio */
   protected readonly registerRecordedOn = signal('');
@@ -153,6 +166,7 @@ export class PainelObrasComponent implements OnInit {
   private condominiumId = '';
   private detailDraftSubs = new Subscription();
   private editDraftWiredFor: string | null = null;
+  private pendingFilesRestoreGen = 0;
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('condominiumId');
@@ -178,6 +192,9 @@ export class PainelObrasComponent implements OnInit {
           this.loadDetail(workId);
         } else {
           this.selected.set(null);
+          this.notePendingFiles.set([]);
+          this.legalPendingFiles.set([]);
+          this.budgetPendingFiles.set([]);
           this.reloadList();
         }
       });
@@ -290,6 +307,135 @@ export class PainelObrasComponent implements OnInit {
     return formatDateTimeDdMmYyyyHhMm(iso);
   }
 
+  protected workCostsSummary(): WorkDetail['costsSummary'] | null {
+    return this.selected()?.costsSummary ?? null;
+  }
+
+  protected workCostsTotalLabel(): string {
+    const raw = this.workCostsSummary()?.totalCents ?? '0';
+    const cents = Number(raw);
+    return formatCentsBrl(Number.isFinite(cents) ? cents : 0);
+  }
+
+  protected workCostsExpenseCount(): number {
+    return this.workCostsSummary()?.expenseCount ?? 0;
+  }
+
+  protected workApprovedBudgetLabel(): string | null {
+    const s = this.workCostsSummary();
+    if (!s?.approvedBudgetCents) return null;
+    const cents = Number(s.approvedBudgetCents);
+    if (!Number.isFinite(cents)) return null;
+    return formatCentsBrl(cents);
+  }
+
+  protected workBudgetCount(): number {
+    return this.workCostsSummary()?.budgetCount ?? 0;
+  }
+
+  protected workHasProgressChart(): boolean {
+    return this.workApprovedCentsNumber() > 0;
+  }
+
+  protected workApprovedCentsNumber(): number {
+    const raw = this.workCostsSummary()?.approvedBudgetCents;
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  protected workPaidCentsNumber(): number {
+    const raw = this.workCostsSummary()?.totalCents ?? '0';
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  protected workRemainingCents(): number {
+    return Math.max(0, this.workApprovedCentsNumber() - this.workPaidCentsNumber());
+  }
+
+  protected workRemainingLabel(): string {
+    const approved = this.workApprovedCentsNumber();
+    const paid = this.workPaidCentsNumber();
+    if (approved <= 0) return '—';
+    if (paid >= approved) {
+      return paid > approved ? 'Acima do orçamento' : 'Nada a lançar';
+    }
+    return formatCentsBrl(this.workRemainingCents());
+  }
+
+  protected workProgressPercent(): number | null {
+    return this.workCostsSummary()?.progressPercent ?? null;
+  }
+
+  protected workProgressBarPercent(): number {
+    const p = this.workProgressPercent();
+    if (p == null) return 0;
+    return Math.min(100, Math.max(0, p));
+  }
+
+  protected workProgressPercentLabel(): string {
+    const p = this.workProgressPercent();
+    if (p == null) return '—';
+    return `${p}%`;
+  }
+
+  /** Circunferência ≈ 100 para stroke-dasharray direto em %. */
+  protected workDonutDasharray(): string {
+    const filled = this.workProgressBarPercent();
+    return `${filled} ${100 - filled}`;
+  }
+
+  protected workStackedPaidWidth(): number {
+    const approved = this.workApprovedCentsNumber();
+    if (approved <= 0) return 0;
+    return Math.min(100, (this.workPaidCentsNumber() / approved) * 100);
+  }
+
+  protected workStackedRemainingWidth(): number {
+    return Math.max(0, 100 - this.workStackedPaidWidth());
+  }
+
+  protected isApprovedWorkBudget(budgetId: string): boolean {
+    return this.workCostsSummary()?.approvedBudgetId === budgetId;
+  }
+
+  protected canApproveWorkBudget(budget: WorkBudget): boolean {
+    return (
+      this.canManage() &&
+      budget.status !== 'approved' &&
+      budget.status !== 'rejected'
+    );
+  }
+
+  protected approveWorkBudget(entry: WorkTimelineEntry): void {
+    const b = entry.budget;
+    const w = this.selected();
+    if (!b || !w || !this.canApproveWorkBudget(b) || this.busy()) return;
+    const cur = this.workCostsSummary();
+    let msg =
+      'Aprovar este orçamento como valor de referência (realização) da obra?';
+    if (cur?.approvedBudgetId && cur.approvedBudgetId !== b.id) {
+      msg =
+        `Aprovar «${b.supplierName}»? O orçamento «${cur.approvedBudgetSupplier ?? 'anterior'}» deixará de ser o aprovado.`;
+    }
+    if (!confirm(msg)) return;
+    this.busy.set(true);
+    this.api
+      .updateBudget(this.condominiumId, w.id, b.id, { status: 'approved' })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.flash.success('Orçamento aprovado.');
+          this.loadDetail(w.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível aprovar o orçamento.');
+        },
+      });
+  }
+
   protected formatMoney(cents: number): string {
     return (cents / 100).toLocaleString('pt-BR', {
       style: 'currency',
@@ -303,7 +449,8 @@ export class PainelObrasComponent implements OnInit {
   protected timelineKindLabel(kind: WorkTimelineEntry['kind']): string {
     if (kind === 'budget') return 'Orçamento';
     if (kind === 'document') return 'Documento';
-    if (kind === 'transaction') return 'Lançamento financeiro';
+    if (kind === 'transaction') return 'Financeiro';
+    if (kind === 'legal') return 'Jurídico';
     if (kind === 'edit') return 'Alteração';
     return 'Comentário';
   }
@@ -363,6 +510,26 @@ export class PainelObrasComponent implements OnInit {
     return entry.kind === 'edit' || dayExpanded;
   }
 
+  protected hasVisibleTimelineEntries(
+    entries: WorkTimelineEntry[],
+    dayExpanded: boolean,
+  ): boolean {
+    return entries.some((e) => this.shouldShowTimelineEntry(e, dayExpanded));
+  }
+
+  protected isFirstVisibleTimelineEntry(
+    entries: WorkTimelineEntry[],
+    entryId: string,
+    dayExpanded: boolean,
+  ): boolean {
+    for (const e of entries) {
+      if (this.shouldShowTimelineEntry(e, dayExpanded)) {
+        return e.id === entryId;
+      }
+    }
+    return false;
+  }
+
   protected toggleTimelineDay(dateKey: string): void {
     const next = new Set(this.timelineDayExpanded());
     if (next.has(dateKey)) {
@@ -371,22 +538,18 @@ export class PainelObrasComponent implements OnInit {
       next.add(dateKey);
     }
     this.timelineDayExpanded.set(next);
+    this.persistTimelineExpansionDraft();
   }
 
   protected expandAllTimelineDays(): void {
     const keys = this.timelineDayGroups().map((g) => g.dateKey);
     this.timelineDayExpanded.set(new Set(keys));
+    this.persistTimelineExpansionDraft();
   }
 
   protected collapseAllTimelineDays(): void {
     this.timelineDayExpanded.set(new Set());
-  }
-
-  protected timelineDayBadgeSub(group: {
-    entries: WorkTimelineEntry[];
-  }): string {
-    const n = group.entries.length;
-    return `${n} registro${n === 1 ? '' : 's'}`;
+    this.persistTimelineExpansionDraft();
   }
 
   protected timelineEntryTitle(entry: WorkTimelineEntry): string | null {
@@ -418,6 +581,7 @@ export class PainelObrasComponent implements OnInit {
     const comments = entries.filter(
       (e) => e.kind === 'note' || e.kind === 'document',
     ).length;
+    const legal = entries.filter((e) => e.kind === 'legal').length;
     const budgets = entries.filter((e) => e.kind === 'budget').length;
     const txs = entries.filter((e) => e.kind === 'transaction').length;
     const edits = entries.filter((e) => e.kind === 'edit').length;
@@ -427,11 +591,14 @@ export class PainelObrasComponent implements OnInit {
         `${comments} comentário${comments === 1 ? '' : 's'}`,
       );
     }
+    if (legal > 0) {
+      parts.push(`${legal} jurídico${legal === 1 ? '' : 's'}`);
+    }
     if (budgets > 0) {
       parts.push(`${budgets} orçamento${budgets === 1 ? '' : 's'}`);
     }
     if (txs > 0) {
-      parts.push(`${txs} lançamento${txs === 1 ? '' : 's'}`);
+      parts.push(`${txs} financeiro${txs === 1 ? '' : 's'}`);
     }
     if (edits > 0) {
       parts.push(
@@ -449,17 +616,11 @@ export class PainelObrasComponent implements OnInit {
     return 'Aguardando';
   }
 
-  /** Classe do grid de anexos na timeline (1 / 2 / vários). */
-  protected attachmentMediaClass(count: number): string {
-    if (count <= 1) return 'obras-tl__media--one';
-    if (count === 2) return 'obras-tl__media--two';
-    return 'obras-tl__media--many';
-  }
-
   protected canRemoveTimelineEntry(entry: WorkTimelineEntry): boolean {
     return (
       this.canManage() &&
       (entry.kind === 'note' ||
+        entry.kind === 'legal' ||
         entry.kind === 'budget' ||
         entry.kind === 'document')
     );
@@ -553,6 +714,7 @@ export class PainelObrasComponent implements OnInit {
     const next = [...this.notePendingFiles(), ...Array.from(picked)];
     this.notePendingFiles.set(next);
     this.applyRecordedOnFromFilenames(next);
+    this.persistNotePendingFilesDraft();
     input.value = '';
   }
 
@@ -561,6 +723,26 @@ export class PainelObrasComponent implements OnInit {
     list.splice(index, 1);
     this.notePendingFiles.set(list);
     this.applyRecordedOnFromFilenames(list);
+    this.persistNotePendingFilesDraft();
+  }
+
+  protected onLegalFilesSelected(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const picked = input.files;
+    if (!picked?.length) return;
+    const next = [...this.legalPendingFiles(), ...Array.from(picked)];
+    this.legalPendingFiles.set(next);
+    this.applyRecordedOnFromFilenames(next);
+    this.persistLegalPendingFilesDraft();
+    input.value = '';
+  }
+
+  protected removeLegalPendingFile(index: number): void {
+    const list = [...this.legalPendingFiles()];
+    list.splice(index, 1);
+    this.legalPendingFiles.set(list);
+    this.applyRecordedOnFromFilenames(list);
+    this.persistLegalPendingFilesDraft();
   }
 
   protected submitNote(): void {
@@ -585,8 +767,50 @@ export class PainelObrasComponent implements OnInit {
         next: () => {
           this.busy.set(false);
           clearObrasDraft(obrasNoteDraftKey(this.condominiumId, w.id));
+          void clearObrasPendingFilesDraft(
+            obrasPendingFilesDraftKey(this.condominiumId, w.id, 'note'),
+          );
           this.noteForm.reset({ body: '' });
           this.notePendingFiles.set([]);
+          this.resetRecordedOnAfterSubmit();
+          this.persistDetailUiDraft();
+          this.registerExpanded.set(false);
+          this.loadDetail(w.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+        },
+      });
+  }
+
+  protected submitLegal(): void {
+    const w = this.selected();
+    if (!w || this.busy()) return;
+    const body = this.legalForm.getRawValue().body.trim();
+    const files = this.legalPendingFiles();
+    if (files.length === 0) {
+      this.flash.warning('Envie o contrato ou documento assinado (PDF ou outro arquivo).');
+      return;
+    }
+    this.busy.set(true);
+    this.api
+      .addLegal(
+        this.condominiumId,
+        w.id,
+        body,
+        files,
+        this.recordedOnForApi(),
+      )
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          clearObrasDraft(obrasLegalDraftKey(this.condominiumId, w.id));
+          void clearObrasPendingFilesDraft(
+            obrasPendingFilesDraftKey(this.condominiumId, w.id, 'legal'),
+          );
+          this.legalForm.reset({ body: '' });
+          this.legalPendingFiles.set([]);
           this.resetRecordedOnAfterSubmit();
           this.persistDetailUiDraft();
           this.registerExpanded.set(false);
@@ -606,6 +830,7 @@ export class PainelObrasComponent implements OnInit {
     const next = [...this.budgetPendingFiles(), ...Array.from(picked)];
     this.budgetPendingFiles.set(next);
     this.applyRecordedOnFromFilenames(next);
+    this.persistBudgetPendingFilesDraft();
     input.value = '';
   }
 
@@ -614,6 +839,7 @@ export class PainelObrasComponent implements OnInit {
     list.splice(index, 1);
     this.budgetPendingFiles.set(list);
     this.applyRecordedOnFromFilenames(list);
+    this.persistBudgetPendingFilesDraft();
   }
 
   protected submitBudget(): void {
@@ -645,6 +871,9 @@ export class PainelObrasComponent implements OnInit {
         next: () => {
           this.busy.set(false);
           clearObrasDraft(obrasBudgetDraftKey(this.condominiumId, w.id));
+          void clearObrasPendingFilesDraft(
+            obrasPendingFilesDraftKey(this.condominiumId, w.id, 'budget'),
+          );
           this.budgetPendingFiles.set([]);
           this.resetRecordedOnAfterSubmit();
           this.persistDetailUiDraft();
@@ -672,6 +901,12 @@ export class PainelObrasComponent implements OnInit {
   ): void {
     const w = this.selected();
     if (!w) return;
+    const att = entry.attachments.find((a) => a.id === attachmentId);
+    const fileUrl = att?.fileUrl?.trim();
+    if (fileUrl) {
+      window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     this.busy.set(true);
     this.api
       .downloadTimelineAttachmentBlob(
@@ -701,7 +936,11 @@ export class PainelObrasComponent implements OnInit {
     const w = this.selected();
     if (!w || !this.canRemoveTimelineEntry(entry)) return;
     const label =
-      entry.kind === 'budget' ? 'este orçamento' : 'este comentário';
+      entry.kind === 'budget'
+        ? 'este orçamento'
+        : entry.kind === 'legal'
+          ? 'este registro jurídico'
+          : 'este comentário';
     if (!confirm(`Remover ${label} da timeline?`)) return;
     this.busy.set(true);
     this.api
@@ -785,6 +1024,13 @@ export class PainelObrasComponent implements OnInit {
     );
     this.detailDraftSubs.add(note.subscription);
 
+    const legal = bindObrasFormDraft(
+      this.legalForm,
+      obrasLegalDraftKey(this.condominiumId, workId),
+      this.draftOpts(),
+    );
+    this.detailDraftSubs.add(legal.subscription);
+
     const budget = bindObrasFormDraft(
       this.budgetForm,
       obrasBudgetDraftKey(this.condominiumId, workId),
@@ -796,12 +1042,19 @@ export class PainelObrasComponent implements OnInit {
       obrasUiDraftKey(this.condominiumId, workId),
     );
     if (ui?.registerTab) {
-      const tab = ui.registerTab === 'budget' ? 'budget' : 'note';
-      this.registerTab.set(tab);
+      const tab = ui.registerTab;
+      if (tab === 'budget' || tab === 'legal' || tab === 'note') {
+        this.registerTab.set(tab);
+      }
     }
     if (ui?.registerRecordedOn) {
       this.registerRecordedOn.set(ui.registerRecordedOn);
     }
+
+    this.notePendingFiles.set([]);
+    this.legalPendingFiles.set([]);
+    this.budgetPendingFiles.set([]);
+    void this.restoreDetailPendingFiles(workId);
   }
 
   private wireEditDraft(workId: string): void {
@@ -837,18 +1090,46 @@ export class PainelObrasComponent implements OnInit {
   private persistDetailUiDraft(): void {
     const workId = this.detailWorkId();
     if (!workId) return;
+    const prev =
+      readObrasDraft<ObrasUiDraft>(
+        obrasUiDraftKey(this.condominiumId, workId),
+      ) ?? {};
     writeObrasDraft(obrasUiDraftKey(this.condominiumId, workId), {
+      ...prev,
       registerTab: this.registerTab(),
       statusFilter: this.statusFilter(),
       registerRecordedOn: this.registerRecordedOn() || undefined,
+      timelineDaysExpanded: [...this.timelineDayExpanded()],
     });
   }
 
-  /** Só o dia mais recente fica aberto ao carregar a obra. */
-  private initTimelineDayExpansion(): void {
+  private persistTimelineExpansionDraft(): void {
+    const workId = this.detailWorkId();
+    if (!workId) return;
+    const prev =
+      readObrasDraft<ObrasUiDraft>(
+        obrasUiDraftKey(this.condominiumId, workId),
+      ) ?? {};
+    writeObrasDraft(obrasUiDraftKey(this.condominiumId, workId), {
+      ...prev,
+      timelineDaysExpanded: [...this.timelineDayExpanded()],
+    });
+  }
+
+  /** Restaura dias abertos do localStorage; senão só o dia mais recente. */
+  private restoreTimelineDayExpansion(workId: string): void {
     const groups = this.timelineDayGroups();
     if (groups.length === 0) {
       this.timelineDayExpanded.set(new Set());
+      return;
+    }
+    const validKeys = new Set(groups.map((g) => g.dateKey));
+    const ui = readObrasDraft<ObrasUiDraft>(
+      obrasUiDraftKey(this.condominiumId, workId),
+    );
+    if (Array.isArray(ui?.timelineDaysExpanded)) {
+      const restored = ui.timelineDaysExpanded.filter((k) => validKeys.has(k));
+      this.timelineDayExpanded.set(new Set(restored));
       return;
     }
     this.timelineDayExpanded.set(new Set([groups[0].dateKey]));
@@ -893,8 +1174,90 @@ export class PainelObrasComponent implements OnInit {
   private clearAllDraftsForWork(workId: string): void {
     clearObrasDraft(obrasEditDraftKey(this.condominiumId, workId));
     clearObrasDraft(obrasNoteDraftKey(this.condominiumId, workId));
+    clearObrasDraft(obrasLegalDraftKey(this.condominiumId, workId));
     clearObrasDraft(obrasBudgetDraftKey(this.condominiumId, workId));
     clearObrasDraft(obrasUiDraftKey(this.condominiumId, workId));
+    void clearObrasPendingFilesDraft(
+      obrasPendingFilesDraftKey(this.condominiumId, workId, 'note'),
+    );
+    void clearObrasPendingFilesDraft(
+      obrasPendingFilesDraftKey(this.condominiumId, workId, 'legal'),
+    );
+    void clearObrasPendingFilesDraft(
+      obrasPendingFilesDraftKey(this.condominiumId, workId, 'budget'),
+    );
+  }
+
+  private persistNotePendingFilesDraft(): void {
+    const workId = this.detailWorkId();
+    if (!workId) return;
+    const key = obrasPendingFilesDraftKey(this.condominiumId, workId, 'note');
+    void writeObrasPendingFilesDraft(key, this.notePendingFiles()).then((ok) => {
+      if (!ok) {
+        this.draftOpts().onStorageError?.();
+        return;
+      }
+      this.draftSavedAt.set(Date.now());
+    });
+  }
+
+  private persistLegalPendingFilesDraft(): void {
+    const workId = this.detailWorkId();
+    if (!workId) return;
+    const key = obrasPendingFilesDraftKey(this.condominiumId, workId, 'legal');
+    void writeObrasPendingFilesDraft(key, this.legalPendingFiles()).then((ok) => {
+      if (!ok) {
+        this.draftOpts().onStorageError?.();
+        return;
+      }
+      this.draftSavedAt.set(Date.now());
+    });
+  }
+
+  private persistBudgetPendingFilesDraft(): void {
+    const workId = this.detailWorkId();
+    if (!workId) return;
+    const key = obrasPendingFilesDraftKey(this.condominiumId, workId, 'budget');
+    void writeObrasPendingFilesDraft(key, this.budgetPendingFiles()).then((ok) => {
+      if (!ok) {
+        this.draftOpts().onStorageError?.();
+        return;
+      }
+      this.draftSavedAt.set(Date.now());
+    });
+  }
+
+  private async restoreDetailPendingFiles(workId: string): Promise<void> {
+    const gen = ++this.pendingFilesRestoreGen;
+    const noteKey = obrasPendingFilesDraftKey(this.condominiumId, workId, 'note');
+    const legalKey = obrasPendingFilesDraftKey(this.condominiumId, workId, 'legal');
+    const budgetKey = obrasPendingFilesDraftKey(
+      this.condominiumId,
+      workId,
+      'budget',
+    );
+    const [noteFiles, legalFiles, budgetFiles] = await Promise.all([
+      readObrasPendingFilesDraft(noteKey),
+      readObrasPendingFilesDraft(legalKey),
+      readObrasPendingFilesDraft(budgetKey),
+    ]);
+    if (this.detailWorkId() !== workId || gen !== this.pendingFilesRestoreGen) {
+      return;
+    }
+    this.notePendingFiles.set(noteFiles);
+    this.legalPendingFiles.set(legalFiles);
+    this.budgetPendingFiles.set(budgetFiles);
+    const tab = this.registerTab();
+    const active =
+      tab === 'legal'
+        ? legalFiles
+        : tab === 'budget'
+          ? budgetFiles
+          : noteFiles;
+    const all = active.length > 0 ? active : [...noteFiles, ...legalFiles, ...budgetFiles];
+    if (all.length > 0) {
+      this.applyRecordedOnFromFilenames(all);
+    }
   }
 
   private reloadList(): void {
@@ -914,12 +1277,24 @@ export class PainelObrasComponent implements OnInit {
   private applyWorkDetail(detail: WorkDetail): void {
     this.selected.set({
       ...detail,
+      costsSummary: detail.costsSummary ?? {
+        totalCents: '0',
+        expenseCount: 0,
+        approvedBudgetCents: null,
+        approvedBudgetId: null,
+        approvedBudgetSupplier: null,
+        budgetCount: 0,
+        progressPercent: null,
+      },
       timeline: (detail.timeline ?? []).map((e) => ({
         ...e,
         attachments: e.attachments ?? [],
       })),
     });
-    this.initTimelineDayExpansion();
+    const workId = this.detailWorkId();
+    if (workId) {
+      this.restoreTimelineDayExpansion(workId);
+    }
   }
 
   private loadDetail(workId: string): void {

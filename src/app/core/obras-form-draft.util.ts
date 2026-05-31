@@ -4,7 +4,7 @@ import type { WorkBudgetStatus, WorkStatus } from './condominium-works-api.servi
 
 const PREFIX = 'condo.obras.draft.v1';
 
-export type ObrasRegisterTab = 'note' | 'budget';
+export type ObrasRegisterTab = 'note' | 'budget' | 'legal';
 
 export type ObrasCreateDraft = {
   title: string;
@@ -21,6 +21,8 @@ export type ObrasEditDraft = {
 
 export type ObrasNoteDraft = { body: string };
 
+export type ObrasLegalDraft = { body: string };
+
 export type ObrasBudgetDraft = {
   supplierName: string;
   amountReais: string;
@@ -34,6 +36,8 @@ export type ObrasUiDraft = {
   statusFilter: WorkStatus | 'all';
   /** YYYY-MM-DDTHH:mm; vazio = agora no envio */
   registerRecordedOn?: string;
+  /** Dias expandidos na linha do tempo (`yyyy-MM-dd`). */
+  timelineDaysExpanded?: string[];
 };
 
 function storageKey(...parts: string[]): string {
@@ -50,6 +54,10 @@ export function obrasEditDraftKey(condominiumId: string, workId: string): string
 
 export function obrasNoteDraftKey(condominiumId: string, workId: string): string {
   return storageKey(condominiumId, workId, 'note');
+}
+
+export function obrasLegalDraftKey(condominiumId: string, workId: string): string {
+  return storageKey(condominiumId, workId, 'legal');
 }
 
 export function obrasBudgetDraftKey(condominiumId: string, workId: string): string {

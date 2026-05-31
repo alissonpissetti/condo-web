@@ -58,9 +58,18 @@ export class ObrasTimelineAttachmentPreviewComponent
     this.mediaKind.set(kind);
     this.iconKind.set(attachmentFileIconKind(att));
 
-    const needsBlob = kind === 'image' || kind === 'video' || kind === 'audio';
-    if (!needsBlob) {
+    const needsMediaSrc =
+      kind === 'image' || kind === 'video' || kind === 'audio';
+    const publicUrl = att.fileUrl?.trim() || null;
+
+    if (!needsMediaSrc) {
       this.state.set(kind === 'pdf' ? 'pdf' : 'file');
+      return;
+    }
+
+    if (publicUrl) {
+      this.objectUrl.set(publicUrl);
+      this.state.set(kind);
       return;
     }
 
@@ -87,7 +96,10 @@ export class ObrasTimelineAttachmentPreviewComponent
 
   ngOnDestroy(): void {
     this.imageModalOpen.set(false);
-    this.revoke();
+    if (this.blobUrl) {
+      URL.revokeObjectURL(this.blobUrl);
+      this.blobUrl = null;
+    }
   }
 
   @HostListener('document:keydown.escape')
@@ -109,6 +121,15 @@ export class ObrasTimelineAttachmentPreviewComponent
 
   protected onDownload(ev: Event): void {
     ev.stopPropagation();
+    const url = this.attachment().fileUrl?.trim();
+    if (url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = this.attachment().originalFilename || 'anexo';
+      a.rel = 'noopener noreferrer';
+      a.click();
+      return;
+    }
     this.download.emit();
   }
 
@@ -116,8 +137,8 @@ export class ObrasTimelineAttachmentPreviewComponent
     if (this.blobUrl) {
       URL.revokeObjectURL(this.blobUrl);
       this.blobUrl = null;
-      this.objectUrl.set(null);
     }
+    this.objectUrl.set(null);
   }
 
   private createObjectUrl(blob: Blob, mimeType: string | null | undefined): string {

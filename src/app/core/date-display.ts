@@ -1,3 +1,6 @@
+/** Fuso de exibição e agrupamento (produto Brasil). */
+export const APP_DISPLAY_TIMEZONE = 'America/Sao_Paulo';
+
 /**
  * Hoje no fuso local como YYYY-MM-DD (evita `toISOString()`, que usa UTC).
  */
@@ -87,7 +90,7 @@ export function formatDateDdMmYyyy(value: string | null | undefined): string {
 }
 
 /**
- * Data e hora em pt-BR para a UI: **dd/mm/aaaa HH:MM** (24 h, fuso local do browser).
+ * Data e hora em pt-BR: **dd/mm/aaaa HH:MM** (24 h, America/Sao_Paulo).
  * Aceita string ISO da API (ex.: instante com `Z` ou offset).
  */
 export function formatDateTimeDdMmYyyyHhMm(
@@ -96,35 +99,51 @@ export function formatDateTimeDdMmYyyyHhMm(
   if (value == null || value === '') return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = String(d.getFullYear());
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  const date = d.toLocaleDateString('pt-BR', {
+    timeZone: APP_DISPLAY_TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const time = d.toLocaleTimeString('pt-BR', {
+    timeZone: APP_DISPLAY_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${date} ${time}`;
 }
 
-/** Chave `yyyy-MM-dd` no fuso local do browser. */
+/** Chave `yyyy-MM-dd` no fuso America/Sao_Paulo. */
 export function localDateKeyFromIso(
   value: string | null | undefined,
 ): string {
   if (value == null || value === '') return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value.slice(0, 10);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_DISPLAY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === 'year')?.value ?? '';
+  const m = parts.find((p) => p.type === 'month')?.value ?? '';
+  const day = parts.find((p) => p.type === 'day')?.value ?? '';
+  return `${y}-${m}-${day}`;
 }
 
-/** Hora **HH:MM** (24 h) para marcos na timeline. */
+/** Hora **HH:MM** (24 h) para marcos na timeline (America/Sao_Paulo). */
 export function formatTimeHhMm(value: string | null | undefined): string {
   if (value == null || value === '') return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${min}`;
+  return d.toLocaleTimeString('pt-BR', {
+    timeZone: APP_DISPLAY_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 const WEEKDAY_PT: Record<number, string> = {
@@ -162,9 +181,9 @@ export function formatTimelineDayHeading(dateKey: string): string {
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateKey;
   const [y, m, d] = parts;
   const date = new Date(y, m - 1, d, 12, 0, 0, 0);
-  const today = new Date();
-  const todayKey = localDateKeyFromIso(today.toISOString());
-  const yesterday = new Date(today);
+  const todayKey = todayLocalIsoDate();
+  const yesterday = new Date();
+  yesterday.setHours(12, 0, 0, 0);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = localDateKeyFromIso(yesterday.toISOString());
   if (dateKey === todayKey) return 'Hoje';

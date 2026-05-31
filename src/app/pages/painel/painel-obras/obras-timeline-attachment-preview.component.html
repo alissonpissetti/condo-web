@@ -6,6 +6,32 @@
   [class.obras-att--loading]="state() === 'loading'"
   [attr.data-kind]="mediaKind()"
 >
+  @if (state() !== 'loading') {
+    <button
+      type="button"
+      class="obras-att__dl"
+      title="Baixar"
+      [attr.aria-label]="'Baixar ' + attachment().originalFilename"
+      [disabled]="disabled()"
+      (click)="onDownload($event)"
+    >
+      <svg
+        class="obras-att__dl-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 3v11" />
+        <path d="M8 10l4 4 4-4" />
+        <path d="M5 20h14" />
+      </svg>
+    </button>
+  }
+
   @if (state() === 'loading') {
     <div class="obras-att__lead obras-att__lead--icon" aria-busy="true">
       <span class="obras-att__spinner"></span>
@@ -30,22 +56,12 @@
       <p class="obras-att__error muted">Não foi possível reproduzir este vídeo.</p>
     }
     <footer class="obras-att__foot">
-      <div class="obras-att__foot-text">
-        <span class="obras-att__name" [title]="attachment().originalFilename">{{
-          attachment().originalFilename
-        }}</span>
-        @if (sizeLabel) {
-          <span class="obras-att__size">{{ sizeLabel }}</span>
-        }
-      </div>
-      <button
-        type="button"
-        class="obras-att__dl btn btn--ghost sm"
-        [disabled]="disabled()"
-        (click)="onDownload($event)"
-      >
-        Baixar
-      </button>
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
     </footer>
   } @else if (mediaKind() === 'image' && objectUrl()) {
     <button
@@ -73,14 +89,6 @@
         <span class="obras-att__size">{{ sizeLabel }}</span>
       }
     </div>
-    <button
-      type="button"
-      class="obras-att__dl btn btn--ghost sm"
-      [disabled]="disabled()"
-      (click)="onDownload($event)"
-    >
-      Baixar
-    </button>
   } @else {
     <div class="obras-att__lead">
       <div class="obras-att__icon" [attr.data-icon]="iconKind()">
@@ -89,12 +97,14 @@
     </div>
 
     <div class="obras-att__info">
-      <span class="obras-att__name" [title]="attachment().originalFilename">{{
-        attachment().originalFilename
-      }}</span>
-      @if (sizeLabel) {
-        <span class="obras-att__size">{{ sizeLabel }}</span>
-      }
+      <div class="obras-att__meta-line">
+        <span class="obras-att__name" [title]="attachment().originalFilename">{{
+          attachment().originalFilename
+        }}</span>
+        @if (sizeLabel) {
+          <span class="obras-att__size">{{ sizeLabel }}</span>
+        }
+      </div>
       @if (state() === 'audio' && objectUrl()) {
         <audio
           class="obras-att__audio"
@@ -105,15 +115,6 @@
         ></audio>
       }
     </div>
-
-    <button
-      type="button"
-      class="obras-att__dl btn btn--ghost sm"
-      [disabled]="disabled()"
-      (click)="onDownload($event)"
-    >
-      Baixar
-    </button>
   }
 </article>
 
@@ -130,31 +131,48 @@
         <p class="obras-att-modal__title" [title]="attachment().originalFilename">
           {{ attachment().originalFilename }}
         </p>
-        <button
-          type="button"
-          class="obras-att-modal__close"
-          aria-label="Fechar"
-          (click)="closeImageModal()"
-        >
-          ×
-        </button>
+        <div class="obras-att-modal__actions">
+          <button
+            type="button"
+            class="obras-att__dl"
+            title="Baixar"
+            [attr.aria-label]="'Baixar ' + attachment().originalFilename"
+            [disabled]="disabled()"
+            (click)="onDownload($event)"
+          >
+            <svg
+              class="obras-att__dl-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3v11" />
+              <path d="M8 10l4 4 4-4" />
+              <path d="M5 20h14" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="obras-att-modal__close"
+            aria-label="Fechar"
+            (click)="closeImageModal()"
+          >
+            ×
+          </button>
+        </div>
       </header>
       <div class="obras-att-modal__body">
         <img [src]="objectUrl()!" [alt]="attachment().originalFilename" />
       </div>
-      <footer class="obras-att-modal__foot">
-        @if (sizeLabel) {
+      @if (sizeLabel) {
+        <footer class="obras-att-modal__foot">
           <span class="obras-att__size">{{ sizeLabel }}</span>
-        }
-        <button
-          type="button"
-          class="btn btn--ghost sm"
-          [disabled]="disabled()"
-          (click)="onDownload($event)"
-        >
-          Baixar
-        </button>
-      </footer>
+        </footer>
+      }
     </div>
   </div>
 }

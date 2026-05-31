@@ -288,8 +288,8 @@
                 @if (registerExpanded()) {
                   <div id="obras-register-panel" class="plan-create-panel">
                     <p class="form-card__lede plan-create-panel__lede">
-                      Comentário ou orçamento com anexos. O rascunho fica salvo no
-                      navegador até publicar na linha do tempo.
+                      Comentário, jurídico (contrato assinado) ou orçamento. O rascunho
+                      fica salvo no navegador até publicar na linha do tempo.
                     </p>
                     <div class="obras-register">
                 <div
@@ -316,6 +316,16 @@
                     (click)="setRegisterTab('budget')"
                   >
                     Orçamento
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="obras-register__type-btn"
+                    [attr.aria-selected]="registerTab() === 'legal'"
+                    [class.obras-register__type-btn--active]="registerTab() === 'legal'"
+                    (click)="setRegisterTab('legal')"
+                  >
+                    Jurídico
                   </button>
                 </div>
 
@@ -433,6 +443,121 @@
                     </form>
                   }
 
+                  @if (registerTab() === 'legal') {
+                    <form
+                      class="obras-register__form fund-form"
+                      [formGroup]="legalForm"
+                      (ngSubmit)="submitLegal()"
+                    >
+                      <div class="form-section">
+                        <label class="field field--block plan-create-competence">
+                          <span class="field__label">Data do contrato / assinatura</span>
+                          <input
+                            type="datetime-local"
+                            class="input plan-create-competence__input"
+                            [max]="nowForDatetimeLocal()"
+                            [value]="registerRecordedOn()"
+                            (input)="setRegisterRecordedOn($any($event.target).value)"
+                          />
+                          <p class="form-section__hint plan-hint-tight">
+                            Em branco = agora.
+                          </p>
+                          @if (filenameRecordedOnHint()) {
+                            <p class="obras-recorded-on-hint">{{ filenameRecordedOnHint() }}</p>
+                          }
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">1</span>
+                          <div>
+                            <h4 class="form-section__title">Descrição</h4>
+                            <p class="form-section__hint">
+                              Ex.: Contrato de execução assinado com a empreiteira.
+                            </p>
+                          </div>
+                        </div>
+                        <label class="field field--block">
+                          <span class="field__label">Título ou resumo (opcional)</span>
+                          <input
+                            type="text"
+                            class="input"
+                            formControlName="body"
+                            placeholder="Contrato de obra assinado"
+                          />
+                        </label>
+                      </div>
+
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <span class="form-section__step" aria-hidden="true">2</span>
+                          <div>
+                            <h4 class="form-section__title">Contrato / documento assinado</h4>
+                            <p class="form-section__hint">
+                              Obrigatório — PDF do contrato ou documento jurídico.
+                            </p>
+                          </div>
+                        </div>
+                        <div class="receipt-field">
+                          <input
+                            #legalFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            accept=".pdf,application/pdf,image/*"
+                            [disabled]="busy()"
+                            (change)="onLegalFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="legalFileInput.click()"
+                            >
+                              Escolher arquivo…
+                            </button>
+                            <span class="receipt-field__name"
+                              >PDF recomendado; também imagens — até 100 MB por
+                              arquivo.</span
+                            >
+                          </div>
+                          @if (legalPendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Arquivos selecionados">
+                              @for (f of legalPendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  @if (filenameDateChip(f); as when) {
+                                    <span class="obras-file-chips__when">{{ when }}</span>
+                                  }
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeLegalPendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="busy() || legalPendingFiles().length === 0"
+                        >
+                          {{ busy() ? 'Publicando…' : 'Publicar registro jurídico' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+
                   @if (registerTab() === 'budget') {
                     <form
                       class="obras-register__form fund-form"
@@ -505,9 +630,11 @@
                             >
                               <option value="received">Recebido</option>
                               <option value="under_review">Em análise</option>
-                              <option value="approved">Aprovado</option>
                               <option value="rejected">Rejeitado</option>
                             </select>
+                            <span class="field__hint muted"
+                              >Aprovação na linha do tempo (um orçamento por obra)</span
+                            >
                           </label>
                         </div>
                         <label class="field field--block obras-register__pair-spaced">
@@ -599,6 +726,149 @@
               class="plan-detail__section obras-timeline-section"
               aria-labelledby="obras-timeline-heading"
             >
+              <div
+                class="obras-work-progress"
+                role="region"
+                aria-label="Realização financeira da obra"
+              >
+                <div class="obras-work-progress__grid">
+                  <div class="obras-work-progress__cell">
+                    <span class="obras-work-progress__label">Orçamento aprovado</span>
+                    @if (workApprovedBudgetLabel(); as approved) {
+                      <strong class="obras-work-progress__value">{{
+                        approved
+                      }}</strong>
+                      @if (workCostsSummary()?.approvedBudgetSupplier; as sup) {
+                        <span class="obras-work-progress__hint muted">{{ sup }}</span>
+                      }
+                    } @else {
+                      <span class="obras-work-progress__value obras-work-progress__value--muted"
+                        >Nenhum aprovado</span
+                      >
+                      <span class="obras-work-progress__hint muted"
+                        >Aprove um orçamento na linha do tempo</span
+                      >
+                    }
+                  </div>
+                  <div class="obras-work-progress__cell">
+                    <span class="obras-work-progress__label">Já lançado (pago)</span>
+                    <strong class="obras-work-progress__value">{{
+                      workCostsTotalLabel()
+                    }}</strong>
+                    @if (workCostsExpenseCount() > 0) {
+                      <span class="obras-work-progress__hint muted"
+                        >{{ workCostsExpenseCount() }} despesa{{
+                          workCostsExpenseCount() === 1 ? '' : 's'
+                        }}
+                        vinculada{{ workCostsExpenseCount() === 1 ? '' : 's' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="obras-work-progress__cell obras-work-progress__cell--pct">
+                    <span class="obras-work-progress__label">Realização</span>
+                    @if (workHasProgressChart()) {
+                      <div
+                        class="obras-work-progress__donut-wrap"
+                        role="img"
+                        [attr.aria-label]="
+                          'Realização ' +
+                          workProgressPercentLabel() +
+                          '; pago ' +
+                          workCostsTotalLabel() +
+                          '; falta ' +
+                          workRemainingLabel()
+                        "
+                      >
+                        <svg
+                          class="obras-work-progress__donut"
+                          viewBox="0 0 36 36"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            class="obras-work-progress__donut-track"
+                            cx="18"
+                            cy="18"
+                            r="15.915"
+                          />
+                          <circle
+                            class="obras-work-progress__donut-fill"
+                            cx="18"
+                            cy="18"
+                            r="15.915"
+                            [attr.stroke-dasharray]="workDonutDasharray()"
+                          />
+                        </svg>
+                        <span class="obras-work-progress__donut-pct">{{
+                          workProgressPercentLabel()
+                        }}</span>
+                      </div>
+                      <span class="obras-work-progress__hint obras-work-progress__hint--remain">
+                        Falta {{ workRemainingLabel() }}
+                      </span>
+                    } @else {
+                      <strong
+                        class="obras-work-progress__value obras-work-progress__value--muted"
+                        >—</strong
+                      >
+                    }
+                  </div>
+                </div>
+                @if (workHasProgressChart()) {
+                  <div class="obras-work-progress__chart">
+                    <div
+                      class="obras-work-progress__stack"
+                      role="progressbar"
+                      [attr.aria-valuenow]="workProgressBarPercent()"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      [attr.aria-label]="'Progresso de custos ' + workProgressPercentLabel()"
+                    >
+                      <span
+                        class="obras-work-progress__stack-paid"
+                        [style.width.%]="workStackedPaidWidth()"
+                        [attr.title]="'Pago: ' + workCostsTotalLabel()"
+                      ></span>
+                      <span
+                        class="obras-work-progress__stack-remain"
+                        [style.width.%]="workStackedRemainingWidth()"
+                        [attr.title]="'Falta: ' + workRemainingLabel()"
+                      ></span>
+                    </div>
+                    <ul class="obras-work-progress__legend">
+                      <li>
+                        <span
+                          class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--paid"
+                        ></span>
+                        <span class="obras-work-progress__legend-text"
+                          >Pago <strong>{{ workCostsTotalLabel() }}</strong></span
+                        >
+                      </li>
+                      <li>
+                        <span
+                          class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--remain"
+                        ></span>
+                        <span class="obras-work-progress__legend-text"
+                          >Falta <strong>{{ workRemainingLabel() }}</strong></span
+                        >
+                      </li>
+                      <li class="obras-work-progress__legend-total">
+                        Orçamento
+                        <strong>{{ workApprovedBudgetLabel() }}</strong>
+                      </li>
+                    </ul>
+                  </div>
+                }
+                @if (workBudgetCount() > 0) {
+                  <p class="obras-work-progress__foot muted">
+                    {{ workBudgetCount() }} orçamento{{
+                      workBudgetCount() === 1 ? '' : 's'
+                    }}
+                    cadastrado{{ workBudgetCount() === 1 ? '' : 's' }} — apenas um pode
+                    estar aprovado
+                  </p>
+                }
+              </div>
+
               <header class="obras-timeline-section__head">
                 <h3 class="plan-subtitle" id="obras-timeline-heading">Linha do tempo</h3>
                 @if (selected()!.timeline.length > 0) {
@@ -635,6 +905,7 @@
                 </div>
 
                 <div class="obras-tl">
+                  <div class="obras-tl__rail" aria-hidden="true"></div>
                   @for (group of timelineDayGroups(); track group.dateKey) {
                     @let dayExpanded = isTimelineDayExpanded(
                       group.dateKey,
@@ -648,80 +919,114 @@
                       [class.obras-tl__day--open]="dayExpanded"
                       [attr.aria-label]="group.label"
                     >
-                      <div class="obras-tl__day-track">
-                        <div class="obras-tl__track-line" aria-hidden="true"></div>
-
-                        <div class="obras-tl__row obras-tl__row--day">
-                          <div class="obras-tl__badge-col">
-                            @if (dayCollapsible) {
-                              <button
-                                type="button"
-                                class="obras-tl__date-badge"
-                                [attr.aria-expanded]="dayExpanded"
-                                (click)="toggleTimelineDay(group.dateKey)"
+                      @for (e of group.entries; track e.id) {
+                        @if (shouldShowTimelineEntry(e, dayExpanded)) {
+                          <article
+                            class="obras-tl__item obras-tl__item--event"
+                            [class.obras-tl__item--continued]="
+                              !isFirstVisibleTimelineEntry(
+                                group.entries,
+                                e.id,
+                                dayExpanded
+                              )
+                            "
+                            [attr.data-kind]="e.kind"
+                          >
+                            <div class="obras-tl__meta-col">
+                              @if (
+                                isFirstVisibleTimelineEntry(
+                                  group.entries,
+                                  e.id,
+                                  dayExpanded
+                                )
+                              ) {
+                                @if (dayCollapsible) {
+                                  <button
+                                    type="button"
+                                    class="obras-tl__date-chip"
+                                    [attr.aria-expanded]="dayExpanded"
+                                    (click)="toggleTimelineDay(group.dateKey)"
+                                  >
+                                    <span class="obras-tl__date-chip-title">{{
+                                      group.label
+                                    }}</span>
+                                  </button>
+                                } @else {
+                                  <div
+                                    class="obras-tl__date-chip obras-tl__date-chip--static"
+                                  >
+                                    <span class="obras-tl__date-chip-title">{{
+                                      group.label
+                                    }}</span>
+                                  </div>
+                                }
+                              }
+                              <time
+                                class="obras-tl__time"
+                                [attr.datetime]="e.createdAt"
+                                [title]="formatDateTime(e.createdAt)"
+                                >{{ formatTimelineTime(e.createdAt) }}</time
                               >
-                                <span class="obras-tl__date-badge-title">{{
-                                  group.label
-                                }}</span>
-                                <span class="obras-tl__date-badge-sub">{{
-                                  timelineDayBadgeSub(group)
-                                }}</span>
-                              </button>
-                            } @else {
-                              <div class="obras-tl__date-badge obras-tl__date-badge--static">
-                                <span class="obras-tl__date-badge-title">{{
-                                  group.label
-                                }}</span>
-                                <span class="obras-tl__date-badge-sub">{{
-                                  timelineDayBadgeSub(group)
-                                }}</span>
-                              </div>
-                            }
-                          </div>
-                          <div class="obras-tl__spine-col" aria-hidden="true">
-                            <span class="obras-tl__node obras-tl__node--day"></span>
-                          </div>
-                          <div
-                            class="obras-tl__day-fold obras-tl__day-fold--open"
-                            aria-hidden="true"
-                          ></div>
-                        </div>
-
-                        @for (e of group.entries; track e.id) {
-                          @if (shouldShowTimelineEntry(e, dayExpanded)) {
-                            <article
-                              class="obras-tl__row obras-tl__row--event"
-                              [attr.data-kind]="e.kind"
-                            >
-                              <div class="obras-tl__badge-col">
-                                <time
-                                  class="obras-tl__time-badge"
-                                  [attr.datetime]="e.createdAt"
-                                  [title]="formatDateTime(e.createdAt)"
-                                  >{{ formatTimelineTime(e.createdAt) }}</time
-                                >
-                              </div>
-                              <div class="obras-tl__spine-col" aria-hidden="true">
-                                <span class="obras-tl__node"></span>
-                              </div>
+                            </div>
+                            <div class="obras-tl__spine-col" aria-hidden="true">
+                              <span
+                                class="obras-tl__node"
+                                [class.obras-tl__node--day]="
+                                  isFirstVisibleTimelineEntry(
+                                    group.entries,
+                                    e.id,
+                                    dayExpanded
+                                  )
+                                "
+                              ></span>
+                            </div>
+                            <div class="obras-tl__content-col">
                               @if (e.kind === 'edit') {
                                 <div class="obras-tl__card obras-tl__card--edit">
-                                  <header class="obras-tl__card-head obras-tl__card-head--edit">
+                                  <div class="obras-tl__edit-row">
                                     <span class="obras-tl__kind">{{
                                       timelineKindLabel(e.kind)
                                     }}</span>
-                                    <div class="obras-tl__card-intro">
-                                      <p class="obras-tl__card-meta">
-                                        {{ e.authorDisplayName }}
-                                      </p>
-                                      @if (e.body) {
-                                        <p class="obras-tl__edit-body">{{ e.body }}</p>
-                                      }
-                                    </div>
-                                  </header>
+                                    <span class="obras-tl__edit-meta">{{
+                                      e.authorDisplayName
+                                    }}</span>
+                                  </div>
+                                  @if (e.body) {
+                                    <p class="obras-tl__edit-body">{{ e.body }}</p>
+                                  }
                                 </div>
                               } @else {
-                                <div class="obras-tl__card">
+                                <div
+                                  class="obras-tl__card"
+                                  [class.obras-tl__card--budget-approved]="
+                                    e.kind === 'budget' &&
+                                    e.budget &&
+                                    isApprovedWorkBudget(e.budget.id)
+                                  "
+                                >
+                                  @if (canRemoveTimelineEntry(e)) {
+                                    <button
+                                      type="button"
+                                      class="obras-tl__remove"
+                                      [disabled]="busy()"
+                                      title="Remover"
+                                      [attr.aria-label]="
+                                        'Remover ' + timelineKindLabel(e.kind)
+                                      "
+                                      (click)="removeTimelineEntry(e)"
+                                    >
+                                      <svg
+                                        class="obras-tl__remove-icon"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          fill="currentColor"
+                                          d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                        />
+                                      </svg>
+                                    </button>
+                                  }
                                   <header class="obras-tl__card-head">
                                     <span class="obras-tl__kind">{{
                                       timelineKindLabel(e.kind)
@@ -768,20 +1073,29 @@
                                           >{{ b.notes }}</p
                                         >
                                       }
+                                      @if (isApprovedWorkBudget(b.id)) {
+                                        <p class="obras-tl__budget-approved-tag">
+                                          Valor de referência da obra
+                                        </p>
+                                      }
+                                      @if (canApproveWorkBudget(b)) {
+                                        <div class="obras-tl__budget-actions">
+                                          <button
+                                            type="button"
+                                            class="btn primary sm"
+                                            [disabled]="busy()"
+                                            (click)="approveWorkBudget(e)"
+                                          >
+                                            Aprovar orçamento
+                                          </button>
+                                        </div>
+                                      }
                                     } @else if (e.body) {
                                       <p class="obras-tl__comment">{{ e.body }}</p>
                                     }
 
                                     @if (attachmentCount(e) > 0) {
-                                      <div
-                                        class="obras-tl__media"
-                                        [ngClass]="attachmentMediaClass(attachmentCount(e))"
-                                      >
-                                        @if (attachmentCount(e) > 1) {
-                                          <p class="obras-tl__media-label">
-                                            {{ attachmentCount(e) }} anexos
-                                          </p>
-                                        }
+                                      <div class="obras-tl__media">
                                         <ul class="obras-tl__media-list">
                                           @for (att of e.attachments; track att.id) {
                                             <li class="obras-tl__media-item">
@@ -805,29 +1119,35 @@
                                       </div>
                                     }
                                   </div>
-
-                                  @if (canRemoveTimelineEntry(e)) {
-                                    <footer class="obras-tl__card-foot">
-                                      <button
-                                        type="button"
-                                        class="btn btn--ghost sm"
-                                        [disabled]="busy()"
-                                        (click)="removeTimelineEntry(e)"
-                                      >
-                                        Remover
-                                      </button>
-                                    </footer>
-                                  }
                                 </div>
                               }
-                            </article>
-                          }
+                            </div>
+                          </article>
                         }
+                      }
 
-                        @if (!dayExpanded && dayCollapsible) {
-                          <div class="obras-tl__row obras-tl__row--fold">
-                            <div class="obras-tl__badge-col" aria-hidden="true"></div>
-                            <div class="obras-tl__spine-col" aria-hidden="true"></div>
+                      @if (!dayExpanded && dayCollapsible) {
+                        <div class="obras-tl__item obras-tl__item--fold">
+                          <div class="obras-tl__meta-col">
+                            @if (
+                              !hasVisibleTimelineEntries(group.entries, dayExpanded)
+                            ) {
+                              <button
+                                type="button"
+                                class="obras-tl__date-chip"
+                                [attr.aria-expanded]="dayExpanded"
+                                (click)="toggleTimelineDay(group.dateKey)"
+                              >
+                                <span class="obras-tl__date-chip-title">{{
+                                  group.label
+                                }}</span>
+                              </button>
+                            }
+                          </div>
+                          <div class="obras-tl__spine-col" aria-hidden="true">
+                            <span class="obras-tl__node obras-tl__node--muted"></span>
+                          </div>
+                          <div class="obras-tl__content-col">
                             <button
                               type="button"
                               class="obras-tl__day-fold"
@@ -836,8 +1156,8 @@
                               {{ timelineDaySummaryCollapsible(group.entries) }}
                             </button>
                           </div>
-                        }
-                      </div>
+                        </div>
+                      }
                     </section>
                   }
                 </div>

@@ -20,6 +20,7 @@ export type WorkTimelineKind =
   | 'document'
   | 'budget'
   | 'transaction'
+  | 'legal'
   | 'edit';
 
 export interface WorkTimelineTransaction {
@@ -36,6 +37,8 @@ export interface WorkTimelineAttachment {
   originalFilename: string;
   mimeType: string | null;
   sizeBytes: number | null;
+  /** URL no storage (ex. storage.meucondominio.cloud); ausente = download via API. */
+  fileUrl?: string | null;
 }
 
 export interface WorkBudget {
@@ -72,8 +75,19 @@ export interface WorkListItem {
   lastActivityAt: string | null;
 }
 
+export interface WorkCostsSummary {
+  totalCents: string;
+  expenseCount: number;
+  approvedBudgetCents: string | null;
+  approvedBudgetId: string | null;
+  approvedBudgetSupplier: string | null;
+  budgetCount: number;
+  progressPercent: number | null;
+}
+
 export interface WorkDetail extends WorkListItem {
   timeline: WorkTimelineEntry[];
+  costsSummary: WorkCostsSummary;
 }
 
 export interface CreateWorkBody {
@@ -143,6 +157,31 @@ export class CondominiumWorksApiService {
   remove(condominiumId: string, workId: string): Observable<void> {
     return this.http.delete<void>(
       `${this.base}/condominiums/${condominiumId}/works/${workId}`,
+    );
+  }
+
+  addLegal(
+    condominiumId: string,
+    workId: string,
+    body: string,
+    files: File[],
+    recordedOn?: string,
+  ): Observable<WorkTimelineEntry> {
+    const fd = new FormData();
+    const text = body.trim();
+    if (text) {
+      fd.append('body', text);
+    }
+    const on = (recordedOn ?? '').trim();
+    if (on) {
+      fd.append('recordedOn', on);
+    }
+    for (const file of files) {
+      fd.append('files', file, file.name);
+    }
+    return this.http.post<WorkTimelineEntry>(
+      `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/legal`,
+      fd,
     );
   }
 
