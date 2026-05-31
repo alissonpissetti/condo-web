@@ -348,6 +348,10 @@
     outline: 2px solid color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
     outline-offset: 2px;
   }
+
+  &--static {
+    cursor: default;
+  }
 }
 
 .obras-tl__date-badge-title {
@@ -408,14 +412,24 @@
 }
 
 .obras-tl__day-fold {
+  display: block;
+  width: 100%;
   margin: 0.35rem 0 0;
   padding: 0.55rem 0.7rem;
   border-radius: 0.5rem;
+  font: inherit;
   font-size: 0.82rem;
   line-height: 1.45;
+  text-align: left;
   color: var(--muted);
   background: color-mix(in srgb, var(--surface-2) 65%, var(--surface));
   border: 1px dashed color-mix(in srgb, var(--border) 90%, transparent);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
+    outline-offset: 2px;
+  }
 
   &--open {
     visibility: hidden;
@@ -424,7 +438,12 @@
     margin: 0;
     border: none;
     background: transparent;
+    cursor: default;
   }
+}
+
+.obras-tl__row--fold {
+  align-items: stretch;
 }
 
 .obras-tl__card {
@@ -454,6 +473,24 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.5rem 0.65rem 0.45rem 0.75rem;
+
+  &--edit {
+    padding-bottom: 0.55rem;
+  }
+}
+
+.obras-tl__card--edit {
+  .obras-tl__card-meta {
+    margin-top: 0;
+  }
+}
+
+.obras-tl__edit-body {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
 }
 
 .obras-tl__kind {

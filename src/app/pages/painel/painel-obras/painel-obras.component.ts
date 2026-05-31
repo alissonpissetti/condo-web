@@ -339,8 +339,28 @@ export class PainelObrasComponent implements OnInit {
     return entry.attachments?.length ?? 0;
   }
 
-  protected isTimelineDayExpanded(dateKey: string): boolean {
+  /** Dias só com alterações ficam sempre abertos (sem recolher). */
+  protected timelineDayHasCollapsibleContent(
+    entries: WorkTimelineEntry[],
+  ): boolean {
+    return entries.some((e) => e.kind !== 'edit');
+  }
+
+  protected isTimelineDayExpanded(
+    dateKey: string,
+    entries: WorkTimelineEntry[],
+  ): boolean {
+    if (!this.timelineDayHasCollapsibleContent(entries)) {
+      return true;
+    }
     return this.timelineDayExpanded().has(dateKey);
+  }
+
+  protected shouldShowTimelineEntry(
+    entry: WorkTimelineEntry,
+    dayExpanded: boolean,
+  ): boolean {
+    return entry.kind === 'edit' || dayExpanded;
   }
 
   protected toggleTimelineDay(dateKey: string): void {
@@ -385,6 +405,13 @@ export class PainelObrasComponent implements OnInit {
       return null;
     }
     return firstLine.length > 72 ? `${firstLine.slice(0, 69)}…` : firstLine;
+  }
+
+  /** Resumo do que ainda está recolhido (exclui alterações, sempre visíveis). */
+  protected timelineDaySummaryCollapsible(entries: WorkTimelineEntry[]): string {
+    return this.timelineDaySummary(
+      entries.filter((e) => e.kind !== 'edit'),
+    );
   }
 
   protected timelineDaySummary(entries: WorkTimelineEntry[]): string {

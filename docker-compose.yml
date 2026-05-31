@@ -1,0 +1,16 @@
+# Produção na VPS (repo condo-web = raiz do DEPLOY_PATH).
+#   docker compose build
+#   docker compose up -d
+
+name: condo-web
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: condo-web:${IMAGE_TAG:-latest}
+    container_name: condo-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"

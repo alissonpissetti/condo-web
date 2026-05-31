@@ -636,45 +636,28 @@
 
                 <div class="obras-tl">
                   @for (group of timelineDayGroups(); track group.dateKey) {
+                    @let dayExpanded = isTimelineDayExpanded(
+                      group.dateKey,
+                      group.entries
+                    );
+                    @let dayCollapsible = timelineDayHasCollapsibleContent(
+                      group.entries
+                    );
                     <section
                       class="obras-tl__day"
-                      [class.obras-tl__day--open]="isTimelineDayExpanded(group.dateKey)"
+                      [class.obras-tl__day--open]="dayExpanded"
                       [attr.aria-label]="group.label"
                     >
-                      @if (!isTimelineDayExpanded(group.dateKey)) {
+                      <div class="obras-tl__day-track">
+                        <div class="obras-tl__track-line" aria-hidden="true"></div>
+
                         <div class="obras-tl__row obras-tl__row--day">
                           <div class="obras-tl__badge-col">
-                            <button
-                              type="button"
-                              class="obras-tl__date-badge"
-                              [attr.aria-expanded]="false"
-                              (click)="toggleTimelineDay(group.dateKey)"
-                            >
-                              <span class="obras-tl__date-badge-title">{{
-                                group.label
-                              }}</span>
-                              <span class="obras-tl__date-badge-sub">{{
-                                timelineDayBadgeSub(group)
-                              }}</span>
-                            </button>
-                          </div>
-                          <div class="obras-tl__spine-col" aria-hidden="true">
-                            <span class="obras-tl__node obras-tl__node--day"></span>
-                          </div>
-                          <p class="obras-tl__day-fold">
-                            {{ timelineDaySummary(group.entries) }}
-                          </p>
-                        </div>
-                      } @else {
-                        <div class="obras-tl__day-track">
-                          <div class="obras-tl__track-line" aria-hidden="true"></div>
-
-                          <div class="obras-tl__row obras-tl__row--day">
-                            <div class="obras-tl__badge-col">
+                            @if (dayCollapsible) {
                               <button
                                 type="button"
                                 class="obras-tl__date-badge"
-                                [attr.aria-expanded]="true"
+                                [attr.aria-expanded]="dayExpanded"
                                 (click)="toggleTimelineDay(group.dateKey)"
                               >
                                 <span class="obras-tl__date-badge-title">{{
@@ -684,36 +667,70 @@
                                   timelineDayBadgeSub(group)
                                 }}</span>
                               </button>
-                            </div>
-                            <div class="obras-tl__spine-col" aria-hidden="true">
-                              <span class="obras-tl__node obras-tl__node--day"></span>
-                            </div>
-                            <div class="obras-tl__day-fold obras-tl__day-fold--open" aria-hidden="true"></div>
+                            } @else {
+                              <div class="obras-tl__date-badge obras-tl__date-badge--static">
+                                <span class="obras-tl__date-badge-title">{{
+                                  group.label
+                                }}</span>
+                                <span class="obras-tl__date-badge-sub">{{
+                                  timelineDayBadgeSub(group)
+                                }}</span>
+                              </div>
+                            }
                           </div>
+                          <div class="obras-tl__spine-col" aria-hidden="true">
+                            <span class="obras-tl__node obras-tl__node--day"></span>
+                          </div>
+                          <div
+                            class="obras-tl__day-fold obras-tl__day-fold--open"
+                            aria-hidden="true"
+                          ></div>
+                        </div>
 
-                          @for (e of group.entries; track e.id) {
-                              <article
-                                class="obras-tl__row obras-tl__row--event"
-                                [attr.data-kind]="e.kind"
-                              >
-                                <div class="obras-tl__badge-col">
-                                  <time
-                                    class="obras-tl__time-badge"
-                                    [attr.datetime]="e.createdAt"
-                                    [title]="formatDateTime(e.createdAt)"
-                                    >{{ formatTimelineTime(e.createdAt) }}</time
-                                  >
+                        @for (e of group.entries; track e.id) {
+                          @if (shouldShowTimelineEntry(e, dayExpanded)) {
+                            <article
+                              class="obras-tl__row obras-tl__row--event"
+                              [attr.data-kind]="e.kind"
+                            >
+                              <div class="obras-tl__badge-col">
+                                <time
+                                  class="obras-tl__time-badge"
+                                  [attr.datetime]="e.createdAt"
+                                  [title]="formatDateTime(e.createdAt)"
+                                  >{{ formatTimelineTime(e.createdAt) }}</time
+                                >
+                              </div>
+                              <div class="obras-tl__spine-col" aria-hidden="true">
+                                <span class="obras-tl__node"></span>
+                              </div>
+                              @if (e.kind === 'edit') {
+                                <div class="obras-tl__card obras-tl__card--edit">
+                                  <header class="obras-tl__card-head obras-tl__card-head--edit">
+                                    <span class="obras-tl__kind">{{
+                                      timelineKindLabel(e.kind)
+                                    }}</span>
+                                    <div class="obras-tl__card-intro">
+                                      <p class="obras-tl__card-meta">
+                                        {{ e.authorDisplayName }}
+                                      </p>
+                                      @if (e.body) {
+                                        <p class="obras-tl__edit-body">{{ e.body }}</p>
+                                      }
+                                    </div>
+                                  </header>
                                 </div>
-                                <div class="obras-tl__spine-col" aria-hidden="true">
-                                  <span class="obras-tl__node"></span>
-                                </div>
+                              } @else {
                                 <div class="obras-tl__card">
                                   <header class="obras-tl__card-head">
                                     <span class="obras-tl__kind">{{
                                       timelineKindLabel(e.kind)
                                     }}</span>
                                     <div class="obras-tl__card-intro">
-                                      @if (e.kind === 'budget' && timelineEntryTitle(e); as title) {
+                                      @if (
+                                        e.kind === 'budget' && timelineEntryTitle(e);
+                                        as title
+                                      ) {
                                         <h4 class="obras-tl__card-title">{{ title }}</h4>
                                       }
                                       <p class="obras-tl__card-meta">
@@ -746,9 +763,10 @@
                                         }
                                       </dl>
                                       @if (b.notes) {
-                                        <p class="obras-tl__comment obras-tl__comment--secondary">{{
-                                          b.notes
-                                        }}</p>
+                                        <p
+                                          class="obras-tl__comment obras-tl__comment--secondary"
+                                          >{{ b.notes }}</p
+                                        >
                                       }
                                     } @else if (e.body) {
                                       <p class="obras-tl__comment">{{ e.body }}</p>
@@ -769,20 +787,20 @@
                                             <li class="obras-tl__media-item">
                                               <app-obras-timeline-attachment-preview
                                                 [condominiumId]="condominiumIdParam()"
-                                            [workId]="selected()!.id"
-                                            [entryId]="e.id"
-                                            [attachment]="att"
-                                            [disabled]="busy()"
-                                            (download)="
-                                              downloadAttachment(
-                                                e,
-                                                att.id,
-                                                att.originalFilename
-                                              )
-                                            "
-                                          />
-                                        </li>
-                                      }
+                                                [workId]="selected()!.id"
+                                                [entryId]="e.id"
+                                                [attachment]="att"
+                                                [disabled]="busy()"
+                                                (download)="
+                                                  downloadAttachment(
+                                                    e,
+                                                    att.id,
+                                                    att.originalFilename
+                                                  )
+                                                "
+                                              />
+                                            </li>
+                                          }
                                         </ul>
                                       </div>
                                     }
@@ -801,10 +819,25 @@
                                     </footer>
                                   }
                                 </div>
-                              </article>
+                              }
+                            </article>
                           }
-                        </div>
-                      }
+                        }
+
+                        @if (!dayExpanded && dayCollapsible) {
+                          <div class="obras-tl__row obras-tl__row--fold">
+                            <div class="obras-tl__badge-col" aria-hidden="true"></div>
+                            <div class="obras-tl__spine-col" aria-hidden="true"></div>
+                            <button
+                              type="button"
+                              class="obras-tl__day-fold"
+                              (click)="toggleTimelineDay(group.dateKey)"
+                            >
+                              {{ timelineDaySummaryCollapsible(group.entries) }}
+                            </button>
+                          </div>
+                        }
+                      </div>
                     </section>
                   }
                 </div>
