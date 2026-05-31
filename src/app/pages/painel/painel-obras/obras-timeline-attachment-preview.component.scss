@@ -297,3 +297,282 @@
 .obras-att__lead--pdf {
   cursor: pointer;
 }
+
+/* Timeline — fotos e vídeos no mobile */
+@media (max-width: 720px) {
+  .obras-att--image,
+  .obras-att--video {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 0.5rem;
+
+    &:has(.obras-att__dl) {
+      padding-right: 0;
+    }
+  }
+
+  .obras-att--image .obras-att__thumb-btn,
+  .obras-att--video .obras-att__thumb-btn {
+    width: 100%;
+    height: auto;
+    min-height: 7.5rem;
+    aspect-ratio: 16 / 10;
+    max-height: min(52vw, 14rem);
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+
+  .obras-att--video .obras-att__thumb-btn {
+    max-height: min(56vw, 15rem);
+  }
+
+  .obras-att--image .obras-att__info,
+  .obras-att--video .obras-att__info {
+    gap: 0.2rem;
+    padding: 0.45rem 2.15rem 0.5rem 0.55rem;
+  }
+
+  .obras-att--image .obras-att__name,
+  .obras-att--video .obras-att__name {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .obras-att--image .obras-att__expand,
+  .obras-att--video .obras-att__expand {
+    align-self: stretch;
+    margin-top: 0.15rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--surface));
+    color: var(--accent, #2563eb);
+    border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 22%, var(--border));
+  }
+
+  .obras-att--image .obras-att__size,
+  .obras-att--video .obras-att__size {
+    font-size: 0.7rem;
+    margin-top: 0.05rem;
+  }
+
+  .obras-att--image .obras-att__dl,
+  .obras-att--video .obras-att__dl {
+    top: auto;
+    bottom: 0.4rem;
+    right: 0.4rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, #0f172a 12%, transparent);
+  }
+
+  .obras-att--video .obras-att__play-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .obras-att--audio {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 0.5rem;
+
+    &:has(.obras-att__dl) {
+      padding-right: 0;
+    }
+  }
+
+  .obras-att--audio .obras-att__lead {
+    width: 100%;
+    height: auto;
+    min-height: 3rem;
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    background: color-mix(in srgb, #7c3aed 10%, var(--surface));
+
+    .obras-att__icon[data-icon='audio'] {
+      transform: scale(1.2);
+    }
+  }
+
+  .obras-att--audio .obras-att__info {
+    gap: 0.35rem;
+    padding: 0.5rem 0.55rem 0.6rem;
+  }
+
+  .obras-att--audio .obras-att__meta-line {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.2rem;
+    padding-right: 2rem;
+  }
+
+  .obras-att--audio .obras-att__name {
+    font-size: 0.82rem;
+    line-height: 1.4;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .obras-att--audio .obras-att__size {
+    font-size: 0.72rem;
+  }
+
+  .obras-att--audio .obras-att__audio {
+    width: 100%;
+    height: 3rem;
+    min-height: 3rem;
+    margin-top: 0.1rem;
+  }
+
+  .obras-att--audio .obras-att__dl {
+    top: 0.4rem;
+    right: 0.4rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, #0f172a 12%, transparent);
+  }
+
+  .obras-att--pdf {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 0.5rem;
+
+    &:has(.obras-att__dl) {
+      padding-right: 0;
+    }
+  }
+
+  .obras-att--pdf .obras-att__pdf-btn {
+    display: block;
+    width: 100%;
+  }
+
+  .obras-att--pdf .obras-att__lead--pdf {
+    width: 100%;
+    height: auto;
+    min-height: 5.5rem;
+    aspect-ratio: 16 / 9;
+    max-height: min(40vw, 11rem);
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    background: color-mix(in srgb, #dc2626 8%, var(--surface));
+
+    .obras-att__icon {
+      transform: scale(1.35);
+    }
+  }
+
+  .obras-att--pdf .obras-att__info {
+    gap: 0.2rem;
+    padding: 0.45rem 2.15rem 0.5rem 0.55rem;
+  }
+
+  .obras-att--pdf .obras-att__name {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .obras-att--pdf .obras-att__expand {
+    align-self: stretch;
+    margin-top: 0.15rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, #dc2626 10%, var(--surface));
+    color: #b91c1c;
+    border: 1px solid color-mix(in srgb, #dc2626 22%, var(--border));
+  }
+
+  .obras-att--pdf .obras-att__size {
+    font-size: 0.7rem;
+    margin-top: 0.05rem;
+  }
+
+  .obras-att--pdf .obras-att__dl {
+    top: 0.4rem;
+    right: 0.4rem;
+    bottom: auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, #0f172a 12%, transparent);
+  }
+
+  :host-context(
+      .obras-tl__media-list:has(> .obras-tl__media-item:nth-child(2)):not(:has(.obras-att--audio)):not(
+          :has(.obras-att--pdf)
+        ):not(:has(.obras-att__meta-line))
+    ):is(.obras-att--image, .obras-att--video) {
+    .obras-att__thumb-btn {
+      min-height: 5.25rem;
+      max-height: 8.5rem;
+      aspect-ratio: 4 / 3;
+    }
+
+    .obras-att__info {
+      padding: 0.35rem 0.4rem 0.4rem;
+    }
+
+    .obras-att__name {
+      -webkit-line-clamp: 1;
+      font-size: 0.72rem;
+    }
+
+    .obras-att__expand {
+      margin-top: 0.1rem;
+      padding: 0.3rem 0.35rem;
+      font-size: 0.7rem;
+    }
+
+    .obras-att__size {
+      display: none;
+    }
+
+    .obras-att__dl {
+      top: 0.35rem;
+      right: 0.35rem;
+      bottom: auto;
+      width: 1.6rem;
+      height: 1.6rem;
+    }
+  }
+}

@@ -3,6 +3,7 @@
   [class.obras-att--video]="mediaKind() === 'video' && state() !== 'loading'"
   [class.obras-att--image]="mediaKind() === 'image' && state() !== 'loading'"
   [class.obras-att--audio]="mediaKind() === 'audio' && state() !== 'loading'"
+  [class.obras-att--pdf]="mediaKind() === 'pdf' && state() !== 'loading'"
   [class.obras-att--loading]="state() === 'loading'"
   [attr.data-kind]="mediaKind()"
 >

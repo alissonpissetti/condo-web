@@ -261,6 +261,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    &--wrap {
+      overflow: visible;
+      text-overflow: unset;
+      white-space: normal;
+      line-height: 1.35;
+    }
   }
 
   &__donut-wrap {
@@ -385,10 +392,18 @@
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--muted);
+  }
 
-    strong {
-      font-weight: 800;
-      color: var(--text);
+  &__legend-item {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.35rem;
+    min-width: 0;
+
+    &--total {
+      margin-left: auto;
+      font-size: 0.7rem;
     }
   }
 
@@ -397,8 +412,8 @@
     width: 0.55rem;
     height: 0.55rem;
     border-radius: 2px;
-    margin-right: 0.25rem;
-    vertical-align: middle;
+    flex-shrink: 0;
+    align-self: center;
 
     &--paid {
       background: #047857;
@@ -421,18 +436,15 @@
     }
   }
 
-  &__legend-text {
-    vertical-align: middle;
+  &__legend-label {
+    font-weight: 650;
+    color: var(--muted);
   }
 
-  &__legend-total {
-    margin-left: auto;
-    font-size: 0.7rem;
-
-    @media (max-width: 640px) {
-      margin-left: 0;
-      width: 100%;
-    }
+  &__legend-value {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
   }
 
   &__foot {
@@ -443,23 +455,197 @@
   }
 }
 
-@media (max-width: 640px) {
-  .obras-work-progress__grid {
-    grid-template-columns: 1fr;
+/* Detalhe da obra — mobile */
+@media (max-width: 720px) {
+  .page--work-detail {
+    .plan-detail-page {
+      padding-bottom: 1.5rem;
+    }
+
+    .form-card.plan-detail > .form-card__head {
+      padding: 1rem 1rem 0.85rem;
+    }
+
+    .plan-detail__head {
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+
+    .plan-detail__h1 {
+      font-size: 1.12rem;
+      line-height: 1.28;
+    }
+
+    .plan-detail__badges {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .obra-status-field {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .obra-status-select {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .plan-title-actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    .plan-detail__section {
+      padding: 0.95rem 0 1rem;
+    }
+
+    .obras-register-card .plan-create-toggle {
+      padding: 0.85rem 1rem;
+    }
   }
 
-  .obras-work-progress__cell--pct {
-    align-items: flex-start;
-    text-align: left;
-  }
+  .obras-work-progress {
+    margin-bottom: 0.65rem;
+    padding: 0.85rem 0.75rem;
 
-  .obras-work-progress__hint--remain {
-    max-width: none;
-    text-align: left;
-  }
+    &__grid {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
 
-  .obras-work-progress__donut-wrap {
-    margin-left: 0;
+    &__cell {
+      min-width: 0;
+      align-items: stretch;
+      text-align: left;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+
+      &:first-child {
+        padding-top: 0;
+      }
+    }
+
+    &__label {
+      font-size: 0.64rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.15rem;
+    }
+
+    &__value {
+      font-size: 1.05rem;
+    }
+
+    &__hint {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: unset;
+      line-height: 1.35;
+      margin-top: 0.2rem;
+    }
+
+    &__cell--pct {
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 0.85rem 0.25rem 0.65rem;
+      margin-top: 0;
+      border-bottom: none;
+      border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    }
+
+    &__cell--pct .obras-work-progress__label {
+      width: 100%;
+      margin-bottom: 0.35rem;
+      text-align: center;
+    }
+
+    &__hint--remain {
+      flex: none;
+      width: 100%;
+      max-width: 16rem;
+      margin: 0.35rem auto 0;
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    &__donut-wrap {
+      width: min(64vw, 9.25rem);
+      height: min(64vw, 9.25rem);
+      margin: 0.2rem auto 0;
+      flex-shrink: 0;
+    }
+
+    &__donut-pct {
+      font-size: clamp(0.95rem, 4.5vw, 1.15rem);
+    }
+
+    &__chart {
+      margin-top: 0.65rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    }
+
+    &__stack {
+      height: 0.72rem;
+      border-radius: 0.45rem;
+    }
+
+    &__legend {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.45rem;
+      margin-top: 0.65rem;
+    }
+
+    &__legend-item {
+      display: grid;
+      grid-template-columns: 0.65rem minmax(4.5rem, 38%) minmax(0, 1fr);
+      align-items: center;
+      column-gap: 0.45rem;
+      row-gap: 0.1rem;
+      width: 100%;
+      margin-left: 0;
+
+      &--total {
+        margin-left: 0;
+        padding-top: 0.5rem;
+        margin-top: 0.15rem;
+        border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+        grid-template-columns: minmax(5.5rem, 42%) minmax(0, 1fr);
+
+        .obras-work-progress__legend-swatch {
+          display: none;
+        }
+      }
+    }
+
+    &__legend-label {
+      text-align: left;
+    }
+
+    &__legend-value {
+      text-align: right;
+      justify-self: end;
+    }
+
+    &__foot {
+      line-height: 1.45;
+      text-align: center;
+      margin-top: 0.55rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    }
   }
 }
 
@@ -915,6 +1101,115 @@
 .obras-tl__media-item {
   min-width: 0;
   width: 100%;
+}
+
+@media (max-width: 720px) {
+  .obras-tl__media {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .obras-tl__media-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .obras-tl__media-list:has(> .obras-tl__media-item:nth-child(2)):not(:has(.obras-att--audio)):not(
+      :has(.obras-att--pdf)
+    ):not(:has(.obras-att__meta-line)) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .obras-tl__media-item {
+    min-width: 0;
+  }
+
+  .obras-tl__card:has(.obras-tl__actions) .obras-tl__card-head,
+  .obras-tl__card:has(.obras-tl__actions) .obras-tl__card-body {
+    padding-right: 0.65rem;
+  }
+
+  .obras-tl__actions {
+    position: static;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    padding: 0.4rem 0.5rem 0.2rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    background: color-mix(in srgb, var(--surface-2) 35%, var(--surface));
+  }
+
+  .obras-tl__action {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.4rem;
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  }
+
+  .obras-tl__card-head {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-top: 0.45rem;
+  }
+
+  .obras-tl__card-intro {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .obras-tl__card-title {
+    font-size: 0.95rem;
+    line-height: 1.32;
+    word-break: break-word;
+  }
+
+  .obras-tl__card-body {
+    padding-inline: 0.65rem;
+  }
+
+  .obras-tl__budget-value {
+    text-align: center;
+    width: 100%;
+    font-size: 1.35rem;
+  }
+
+  .obras-tl__facts {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+
+    div {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+    }
+  }
+
+  .obras-tl__budget-approved-tag,
+  .obras-tl__budget-actions {
+    text-align: center;
+    justify-content: center;
+  }
+
+  .obras-tl__comment {
+    font-size: 0.95rem;
+    line-height: 1.58;
+    letter-spacing: 0.01em;
+
+    &--secondary {
+      font-size: 0.9rem;
+      line-height: 1.52;
+    }
+  }
+
+  .obras-tl__media:has(.obras-att--audio) {
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+  }
 }
 
 .obras-tl__actions {

@@ -1065,26 +1065,102 @@
                 </label>
               </td>
               <td data-label="Transação" class="tx-table__main">
-                <small class="tx-table__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
+                <div class="tx-table__mobile-head">
+                  <small class="tx-table__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
+                  <span
+                    class="tx-table__status tx-table__status--mobile"
+                    [attr.data-pay]="t.paymentStatus ?? 'pending'"
+                    >{{ transactionPaymentStatusLabelPt(t.paymentStatus) }}</span
+                  >
+                  <span class="tx-table__kind" [attr.data-kind]="t.kind">{{
+                    transactionRowKindLabel(t)
+                  }}</span>
+                </div>
+                <small class="tx-table__date tx-table__date--table">{{
+                  formatDateDdMmYyyy(t.occurredOn)
+                }}</small>
                 <span class="tx-table__title">{{ t.title }}</span>
                 @if (t.description?.trim()) {
                   <span class="tx-table__desc">{{ t.description!.trim() }}</span>
                 }
-                <span class="tx-table__kind" [attr.data-kind]="t.kind">{{
+                <span class="tx-table__kind tx-table__kind--table" [attr.data-kind]="t.kind">{{
                   transactionRowKindLabel(t)
                 }}</span>
+                @if (
+                  t.fund?.name ||
+                  t.bankAccount ||
+                  (t.work?.title && t.workId)
+                ) {
+                  <div class="tx-table__mobile-meta">
+                    @if (t.fund?.name; as fundName) {
+                      <span class="tx-table__mobile-meta-item">{{ fundName }}</span>
+                    }
+                    @if (t.bankAccount) {
+                      <span class="tx-table__mobile-meta-item tx-table__mobile-meta-account">
+                        @if (bankLogoName(t); as logoName) {
+                          <app-bank-brand-mark [bankName]="logoName" size="sm" />
+                        }
+                        <span>{{ bankAccountNickname(t) }}</span>
+                      </span>
+                    }
+                    @if (t.work?.title && t.workId) {
+                      <a
+                        class="tx-table__work-link"
+                        [routerLink]="[
+                          '/painel/condominio',
+                          condominiumIdParam(),
+                          'obras',
+                          t.workId,
+                        ]"
+                        >{{ t.work!.title }}</a
+                      >
+                    }
+                  </div>
+                }
+                @if (
+                  documentKeysFromTx(t).length > 0 || t.receiptStorageKey
+                ) {
+                  <div class="tx-table__mobile-attach">
+                    @if (documentKeysFromTx(t).length > 0) {
+                      <button
+                        type="button"
+                        class="btn btn--ghost sm"
+                        (click)="downloadRowDocument(t)"
+                      >
+                        Doc. ({{ documentKeysFromTx(t).length }})
+                      </button>
+                    }
+                    @if (t.receiptStorageKey) {
+                      <button
+                        type="button"
+                        class="btn btn--ghost sm"
+                        (click)="downloadRowReceipt(t)"
+                      >
+                        Comprovante
+                      </button>
+                    }
+                  </div>
+                }
               </td>
-              <td data-label="Estado">
+              <td data-label="Estado" class="tx-table__status-col">
                 <span
                   class="tx-table__status"
                   [attr.data-pay]="t.paymentStatus ?? 'pending'"
                   >{{ transactionPaymentStatusLabelPt(t.paymentStatus) }}</span
                 >
               </td>
-              <td data-label="Fundo" class="tx-table__fund">{{
-                t.fund?.name || '—'
-              }}</td>
-              <td data-label="Obra" class="tx-table__work">
+              <td
+                data-label="Fundo"
+                class="tx-table__fund"
+                [class.tx-table__cell--skip-mobile]="!t.fund?.name"
+              >
+                {{ t.fund?.name || '—' }}
+              </td>
+              <td
+                data-label="Obra"
+                class="tx-table__work"
+                [class.tx-table__cell--skip-mobile]="!t.work?.title || !t.workId"
+              >
                 @if (t.work; as work) {
                   @if (work.title && t.workId) {
                     <a
@@ -1141,7 +1217,11 @@
                   }}
                 </td>
               }
-              <td data-label="Documento" class="cell-receipt">
+              <td
+                data-label="Documento"
+                class="cell-receipt"
+                [class.tx-table__cell--skip-mobile]="documentKeysFromTx(t).length === 0"
+              >
                 @if (documentKeysFromTx(t).length > 0) {
                   <button
                     type="button"
@@ -1154,7 +1234,11 @@
                   <span class="muted">—</span>
                 }
               </td>
-              <td data-label="Comprovante" class="cell-receipt">
+              <td
+                data-label="Comprovante"
+                class="cell-receipt"
+                [class.tx-table__cell--skip-mobile]="!t.receiptStorageKey"
+              >
                 @if (t.receiptStorageKey) {
                   <button
                     type="button"

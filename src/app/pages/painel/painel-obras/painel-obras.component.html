@@ -744,7 +744,9 @@
                         approved
                       }}</strong>
                       @if (workApprovedBudgetHint(); as hint) {
-                        <span class="obras-work-progress__hint muted">{{ hint }}</span>
+                        <span class="obras-work-progress__hint obras-work-progress__hint--wrap muted">{{
+                          hint
+                        }}</span>
                       }
                     } @else {
                       <span class="obras-work-progress__value obras-work-progress__value--muted"
@@ -761,7 +763,9 @@
                       workCostsForecastLabel()
                     }}</strong>
                     @if (workForecastBreakdownHint(); as breakdown) {
-                      <span class="obras-work-progress__hint muted">{{ breakdown }}</span>
+                      <span class="obras-work-progress__hint obras-work-progress__hint--wrap muted">{{
+                        breakdown
+                      }}</span>
                     } @else if (workCostsExpenseCount() > 0) {
                       <span class="obras-work-progress__hint muted"
                         >{{ workCostsExpenseCount() }} despesa{{
@@ -867,67 +871,80 @@
                     </div>
                     <ul class="obras-work-progress__legend">
                       @if (workPaidCentsNumber() > 0) {
-                        <li>
+                        <li class="obras-work-progress__legend-item">
                           <span
                             class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--paid"
+                            aria-hidden="true"
                           ></span>
-                          <span class="obras-work-progress__legend-text"
-                            >Pago <strong>{{ workCostsPaidLabel() }}</strong></span
-                          >
+                          <span class="obras-work-progress__legend-label">Pago</span>
+                          <strong class="obras-work-progress__legend-value">{{
+                            workCostsPaidLabel()
+                          }}</strong>
                         </li>
                       }
                       @if (workOverdueCentsNumber() > 0) {
-                        <li>
+                        <li class="obras-work-progress__legend-item">
                           <span
                             class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--overdue"
+                            aria-hidden="true"
                           ></span>
-                          <span class="obras-work-progress__legend-text"
-                            >Atrasado
-                            <strong>{{ workCostsOverdueLabel() }}</strong></span
-                          >
+                          <span class="obras-work-progress__legend-label">Atrasado</span>
+                          <strong class="obras-work-progress__legend-value">{{
+                            workCostsOverdueLabel()
+                          }}</strong>
                         </li>
                       }
                       @if (workFutureCentsNumber() > 0) {
-                        <li>
+                        <li class="obras-work-progress__legend-item">
                           <span
                             class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--future"
+                            aria-hidden="true"
                           ></span>
-                          <span class="obras-work-progress__legend-text"
-                            >Futuro
-                            <strong>{{ workCostsFutureLabel() }}</strong></span
-                          >
+                          <span class="obras-work-progress__legend-label">Futuro</span>
+                          <strong class="obras-work-progress__legend-value">{{
+                            workCostsFutureLabel()
+                          }}</strong>
                         </li>
                       }
                       @if (!workIsOverBudget() && workRemainingCents() > 0) {
-                        <li>
+                        <li class="obras-work-progress__legend-item">
                           <span
                             class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--remain"
+                            aria-hidden="true"
                           ></span>
-                          <span class="obras-work-progress__legend-text"
-                            >Falta <strong>{{ workBalanceLabel() }}</strong></span
-                          >
+                          <span class="obras-work-progress__legend-label">Falta</span>
+                          <strong class="obras-work-progress__legend-value">{{
+                            workBalanceLabel()
+                          }}</strong>
                         </li>
                       }
                       @if (workIsOverBudget()) {
-                        <li>
+                        <li class="obras-work-progress__legend-item">
                           <span
                             class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--over"
+                            aria-hidden="true"
                           ></span>
-                          <span class="obras-work-progress__legend-text"
-                            >Excedente
-                            <strong>{{ workBalanceLabel() }}</strong></span
-                          >
+                          <span class="obras-work-progress__legend-label">Excedente</span>
+                          <strong class="obras-work-progress__legend-value">{{
+                            workBalanceLabel()
+                          }}</strong>
                         </li>
                       }
-                      <li class="obras-work-progress__legend-total">
-                        Aprovado (total)
-                        <strong>{{ workApprovedBudgetLabel() }}</strong>
+                      <li
+                        class="obras-work-progress__legend-item obras-work-progress__legend-item--total"
+                      >
+                        <span class="obras-work-progress__legend-label"
+                          >Aprovado (total)</span
+                        >
+                        <strong class="obras-work-progress__legend-value">{{
+                          workApprovedBudgetLabel()
+                        }}</strong>
                       </li>
                     </ul>
                   </div>
                 }
                 @if (workBudgetCount() > 0) {
-                  <p class="obras-work-progress__foot muted">
+                  <p class="obras-work-progress__foot obras-work-progress__hint--wrap muted">
                     {{ workBudgetCount() }} orçamento{{
                       workBudgetCount() === 1 ? '' : 's'
                     }}
