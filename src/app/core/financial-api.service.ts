@@ -61,6 +61,13 @@ export interface FinancialTransaction {
   /** Lista de documentos anexados à transação. */
   documentStorageKeys?: string[] | null;
   fund?: FinancialFund | null;
+  bankAccountId?: string | null;
+  bankAccount?: { id: string; name: string; bankName?: string | null } | null;
+  /** Par de transferência entre contas/fundos (mesmo UUID nas duas pernas). */
+  transferGroupId?: string | null;
+  transferCounterpartId?: string | null;
+  workId?: string | null;
+  work?: { id: string; title: string } | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
   updatedAt: string;
@@ -87,11 +94,79 @@ export interface StatementTransactionRow {
   paymentStatus?: FinancialTransactionPaymentStatus;
 }
 
+export interface StatementMovementRow {
+  id: string;
+  kind: string;
+  title: string;
+  occurredOn: string;
+  paymentStatus: string;
+  signedDeltaCents: string;
+  runningAfterCents: string;
+  /** `transaction` | `fee_payment` | `fee_overdue` */
+  lineType?: string;
+  competenceYm?: string | null;
+  unitIdentifier?: string | null;
+  bankAccountName?: string | null;
+  affectsBalance?: boolean;
+}
+
+export interface StatementOverdueFeeRow {
+  id: string;
+  competenceYm: string;
+  unitIdentifier: string;
+  groupingName: string;
+  dueOn: string;
+  amountDueCents: string;
+}
+
+export interface StatementLedgerSection {
+  fundId: string | null;
+  fundName: string | null;
+  openingBalanceCents: string;
+  closingBalanceCents: string;
+  movements: StatementMovementRow[];
+  bankAccountsSeedCents?: string;
+  bankAccountsAsOfYmd?: string;
+  movementsOpeningBalanceCents?: string;
+  openingDerivedFromCurrentBalance?: boolean;
+  overdueFees?: StatementOverdueFeeRow[];
+  overdueFeesTotalCents?: string;
+  projectedBalanceCents?: string;
+}
+
+export interface CondominiumBankAccount {
+  id: string;
+  condominiumId: string;
+  name: string;
+  bankName: string | null;
+  initialBalanceCents: string;
+  /** Data de referência do saldo inicial (AAAA-MM-DD). */
+  initialBalanceOn: string;
+  /** Saldo até hoje (inicial + movimentos da conta). */
+  currentBalanceCents?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankAccountBalancePreview {
+  asOf: string;
+  initialBalanceOn: string;
+  initialBalanceCents: string;
+  movementsDeltaCents: string;
+  projectedBalanceCents: string;
+  transactionCount: number;
+}
+
 export interface FinancialStatement {
   from: string;
   to: string;
   byUnit: StatementByUnitRow[];
   transactions: StatementTransactionRow[];
+  /** Conta geral (sem fundo). Ausente em APIs antigas: derivar de `transactions`. */
+  general?: StatementLedgerSection;
+  /** Um extrato por fundo com movimento no período. */
+  funds?: StatementLedgerSection[];
 }
 
 export interface CondominiumFeeCharge {
@@ -195,10 +270,15 @@ export class FinancialApiService {
     fundId?: string | null,
     occurredFromYmd?: string | null,
     occurredToYmd?: string | null,
+    workId?: string | null,
   ): Observable<FinancialTransaction[]> {
     let params = new HttpParams();
     if (fundId) {
       params = params.set('fundId', fundId);
+    }
+    const work = workId?.trim();
+    if (work) {
+      params = params.set('workId', work);
     }
     const from = occurredFromYmd?.trim();
     const to = occurredToYmd?.trim();
@@ -234,6 +314,30 @@ export class FinancialApiService {
     });
   }
 
+  createTransfer(
+    condoId: string,
+    body: {
+      fromBankAccountId: string;
+      toBankAccountId: string;
+      fromFundId?: string | null;
+      toFundId?: string | null;
+      amountCents: number;
+      occurredOn: string;
+      title?: string;
+      description?: string | null;
+    },
+  ): Observable<{
+    transferGroupId: string;
+    outTransaction: FinancialTransaction;
+    inTransaction: FinancialTransaction;
+  }> {
+    return this.http.post<{
+      transferGroupId: string;
+      outTransaction: FinancialTransaction;
+      inTransaction: FinancialTransaction;
+    }>(`${this.base(condoId)}/transactions/transfers`, body);
+  }
+
   createTransaction(
     condoId: string,
     body: {
@@ -243,15 +347,27 @@ export class FinancialApiService {
       title: string;
       description?: string | null;
       fundId?: string | null;
+      bankAccountId: string;
       allocationRule: AllocationRule;
       documentStorageKey?: string;
       documentStorageKeys?: string[];
       receiptStorageKey?: string;
       recurringSeriesId?: string;
+      workId?: string | null;
     },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
       `${this.base(condoId)}/transactions`,
+      body,
+    );
+  }
+
+  bulkAssignWork(
+    condoId: string,
+    body: { transactionIds: string[]; workId?: string | null },
+  ): Observable<{ updated: number; skippedTransferIds: string[] }> {
+    return this.http.patch<{ updated: number; skippedTransferIds: string[] }>(
+      `${this.base(condoId)}/transactions/bulk/work`,
       body,
     );
   }
@@ -266,10 +382,12 @@ export class FinancialApiService {
       title: string;
       description: string | null;
       fundId: string | null;
+      bankAccountId?: string;
       allocationRule: AllocationRule;
       documentStorageKey: string | null;
       documentStorageKeys: string[] | null;
       receiptStorageKey: string | null;
+      workId?: string | null;
     }>,
   ): Observable<FinancialTransaction> {
     return this.http.patch<FinancialTransaction>(
@@ -320,6 +438,7 @@ export class FinancialApiService {
       titleBase?: string;
       description?: string | null;
       fundId?: string | null;
+      bankAccountId?: string;
       allocationRule?: AllocationRule;
       amountCents?: number;
       documentStorageKey?: string | null;
@@ -339,6 +458,77 @@ export class FinancialApiService {
   ): Observable<{ deleted: number }> {
     return this.http.delete<{ deleted: number }>(
       `${this.base(condoId)}/transactions/recurring-series/${seriesId}`,
+    );
+  }
+
+  listBankAccounts(condoId: string): Observable<CondominiumBankAccount[]> {
+    return this.http.get<CondominiumBankAccount[]>(
+      `${this.base(condoId)}/bank-accounts`,
+    );
+  }
+
+  previewBankAccountBalance(
+    condoId: string,
+    params: {
+      bankAccountId?: string;
+      initialBalanceCents: number;
+      initialBalanceOn: string;
+      asOf?: string;
+    },
+  ): Observable<BankAccountBalancePreview> {
+    let httpParams = new HttpParams()
+      .set('initialBalanceCents', String(params.initialBalanceCents))
+      .set('initialBalanceOn', params.initialBalanceOn);
+    if (params.bankAccountId?.trim()) {
+      httpParams = httpParams.set('bankAccountId', params.bankAccountId.trim());
+    }
+    if (params.asOf?.trim()) {
+      httpParams = httpParams.set('asOf', params.asOf.trim().slice(0, 10));
+    }
+    return this.http.get<BankAccountBalancePreview>(
+      `${this.base(condoId)}/bank-accounts/preview-balance`,
+      { params: httpParams },
+    );
+  }
+
+  createBankAccount(
+    condoId: string,
+    body: {
+      name: string;
+      bankName?: string;
+      initialBalanceCents: number;
+      initialBalanceOn: string;
+    },
+  ): Observable<CondominiumBankAccount> {
+    return this.http.post<CondominiumBankAccount>(
+      `${this.base(condoId)}/bank-accounts`,
+      body,
+    );
+  }
+
+  updateBankAccount(
+    condoId: string,
+    accountId: string,
+    body: {
+      name?: string;
+      bankName?: string | null;
+      initialBalanceCents?: number;
+      initialBalanceOn?: string;
+      isActive?: boolean;
+    },
+  ): Observable<CondominiumBankAccount> {
+    return this.http.patch<CondominiumBankAccount>(
+      `${this.base(condoId)}/bank-accounts/${accountId}`,
+      body,
+    );
+  }
+
+  deleteBankAccount(
+    condoId: string,
+    accountId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base(condoId)}/bank-accounts/${accountId}`,
     );
   }
 
@@ -410,11 +600,13 @@ export class FinancialApiService {
     options?: {
       incomeTransactionId?: string | null;
       paymentReceiptStorageKey?: string | null;
+      bankAccountId?: string | null;
     },
   ): Observable<CondominiumFeeCharge> {
     const body: {
       incomeTransactionId?: string;
       paymentReceiptStorageKey?: string;
+      bankAccountId?: string;
     } = {};
     const tx = options?.incomeTransactionId?.trim();
     if (tx) {
@@ -424,6 +616,10 @@ export class FinancialApiService {
     if (receipt) {
       body.paymentReceiptStorageKey = receipt;
     }
+    const bank = options?.bankAccountId?.trim();
+    if (bank) {
+      body.bankAccountId = bank;
+    }
     return this.http.post<CondominiumFeeCharge>(
       `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
       body,
@@ -431,8 +627,8 @@ export class FinancialApiService {
   }
 
   /**
-   * Substitui (ou define) o ficheiro anexado à cobrança já paga.
-   * O ficheiro deve ser enviado antes com `uploadTransactionReceipt`.
+   * Substitui (ou define) o arquivo anexado à cobrança já paga.
+   * O arquivo deve ser enviado antes com `uploadTransactionReceipt`.
    */
   replaceCondominiumFeePaymentReceipt(
     condoId: string,

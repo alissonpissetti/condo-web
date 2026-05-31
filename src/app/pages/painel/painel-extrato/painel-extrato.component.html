@@ -1,122 +1,437 @@
 <div class="page">
   <header class="page__header">
-    <h1>Extrato</h1>
-    <p class="page__intro">
-      Saldos por unidade no período (despesas e investimentos repartidos como
-      positivos, receitas repartidas como crédito) e lista de transações.
-    </p>
+    <h1>Extrato mensal</h1>
   </header>
 
-  <div class="filters card">
-    <div class="row wrap">
-      <label class="field">
-        <span>De</span>
-        <input
-          type="date"
-          class="input"
-          [value]="from()"
-          (input)="setFrom($any($event.target).value)"
-        />
-      </label>
-      <label class="field">
-        <span>Até</span>
-        <input
-          type="date"
-          class="input"
-          [value]="to()"
-          (input)="setTo($any($event.target).value)"
-        />
-      </label>
-      <label class="field grow">
-        <span>Fundo (opcional)</span>
-        <select
-          class="input"
-          [value]="fundFilter()"
-          (change)="setFundFilter($any($event.target).value)"
-        >
-          <option value="">Todos</option>
-          @for (f of funds(); track f.id) {
-            <option [value]="f.id">{{ f.name }}</option>
-          }
-        </select>
-      </label>
-      <button type="button" class="btn primary" (click)="load()">
-        Atualizar
-      </button>
+  <section class="form-card extrato-filters" aria-label="Filtrar período">
+    <div class="form-card__head">
+      <h2 class="form-card__title">Período</h2>
+      <p class="form-card__lede">
+        Escolha o mês civil ou um intervalo de datas; o extrato recarrega ao alterar o período.
+      </p>
     </div>
-  </div>
+    <div class="extrato-filters__body">
+      <label class="field field--block extrato-filters__field">
+        <span class="field__label">Período (data da transação)</span>
+        <div
+          class="mode-tabs mode-tabs--sub extrato-filters__mode"
+          role="group"
+          aria-label="Tipo de período"
+        >
+          <button
+            type="button"
+            class="mode-tab"
+            [class.mode-tab--active]="periodMode() === 'month'"
+            [attr.aria-pressed]="periodMode() === 'month'"
+            (click)="setPeriodMode('month')"
+          >
+            <span class="mode-tab__name">Mês / ano</span>
+          </button>
+          <button
+            type="button"
+            class="mode-tab"
+            [class.mode-tab--active]="periodMode() === 'custom'"
+            [attr.aria-pressed]="periodMode() === 'custom'"
+            (click)="setPeriodMode('custom')"
+          >
+            <span class="mode-tab__name">Intervalo</span>
+          </button>
+        </div>
+        @if (periodMode() === 'month') {
+          <div class="extrato-filters__period-row">
+            <input
+              type="month"
+              class="input input--lg"
+              [value]="periodMonthYm()"
+              (change)="setPeriodMonthYm($any($event.target).value)"
+              aria-label="Mês e ano"
+            />
+            <button
+              type="button"
+              class="btn ghost sm"
+              (click)="resetPeriodToCurrentMonth()"
+              [disabled]="loading()"
+            >
+              Mês atual
+            </button>
+          </div>
+        } @else {
+          <div class="period-row">
+            <input
+              type="date"
+              class="input input--lg"
+              [value]="from()"
+              (change)="setFrom($any($event.target).value)"
+              aria-label="Data inicial"
+            />
+            <span class="period-row__sep muted" aria-hidden="true">até</span>
+            <input
+              type="date"
+              class="input input--lg"
+              [value]="to()"
+              (change)="setTo($any($event.target).value)"
+              aria-label="Data final"
+            />
+          </div>
+        }
+      </label>
+      <div class="extrato-filters__actions">
+        <button
+          type="button"
+          class="btn primary"
+          (click)="load()"
+          [disabled]="loading()"
+        >
+          {{ loading() ? 'Carregando…' : 'Atualizar extrato' }}
+        </button>
+      </div>
+    </div>
+  </section>
 
   @if (loading()) {
-    <p class="muted">Carregando…</p>
+    <p class="muted page__loading">Carregando…</p>
   } @else if (loadError()) {
     <p class="error" role="alert">{{ loadError() }}</p>
   } @else if (statement()) {
-    <h2 class="section-title">Por unidade</h2>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Agrupamento</th>
-            <th>Unidade</th>
-            <th class="num">Saldo no período</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of statement()!.byUnit; track r.unitId) {
-            <tr>
-              <td>{{ r.groupingName }}</td>
-              <td>{{ r.unitIdentifier }}</td>
-              <td class="num">{{ formatCentsBrl(r.balanceCents) }}</td>
-            </tr>
+    @if (generalSection(); as gen) {
+      <section class="form-card stmt-card" aria-labelledby="stmt-general-title">
+        <div class="form-card__head stmt-card__head">
+          <h2 id="stmt-general-title" class="form-card__title">Conta geral</h2>
+        </div>
+        <div class="stmt-card__body">
+          <div class="fund-extrato__footer fund-extrato__footer--stack fund-extrato__footer--opening">
+            <p class="fund-extrato__footer-line">
+              <span class="fund-extrato__footer-label">Saldo inicial</span>
+              <strong
+                class="fund-extrato__footer-value"
+                [ngClass]="extratoBalanceCssClass(parseCentsBigint(gen.openingBalanceCents))"
+                >{{ formatCentsBrl(gen.openingBalanceCents) }}</strong
+              >
+            </p>
+            @if (gen.bankAccountsSeedCents != null) {
+              <p class="fund-extrato__footer-line fund-extrato__footer-line--detail">
+                <span class="fund-extrato__footer-label">
+                  @if (gen.openingDerivedFromCurrentBalance) {
+                    Contas bancárias (saldo atual
+                    @if (gen.bankAccountsAsOfYmd) {
+                      em {{ formatDateDdMmYyyy(gen.bankAccountsAsOfYmd) }}
+                    }
+                    )
+                  } @else {
+                    Contas bancárias (referência)
+                  }
+                </span>
+                <strong
+                  class="fund-extrato__footer-value"
+                  [ngClass]="extratoBalanceCssClass(parseCentsBigint(gen.bankAccountsSeedCents))"
+                  >{{ formatCentsBrl(gen.bankAccountsSeedCents) }}</strong
+                >
+              </p>
+              @if (gen.movementsOpeningBalanceCents != null) {
+                <p class="fund-extrato__footer-line fund-extrato__footer-line--detail">
+                  <span class="fund-extrato__footer-label">
+                    @if (gen.openingDerivedFromCurrentBalance) {
+                      Movimentos no período (deduzidos)
+                    } @else {
+                      Movimentos anteriores
+                    }
+                  </span>
+                  <strong
+                    class="fund-extrato__footer-value"
+                    [ngClass]="
+                      extratoBalanceCssClass(parseCentsBigint(gen.movementsOpeningBalanceCents))
+                    "
+                    >{{ formatCentsBrl(gen.movementsOpeningBalanceCents) }}</strong
+                  >
+                </p>
+              }
+              @if (gen.openingDerivedFromCurrentBalance) {
+                <p class="fund-extrato__footer-hint muted">
+                  O saldo inicial do mês é o saldo atual nas contas menos os lançamentos listados
+                  abaixo até a data indicada.
+                </p>
+              }
+              @if (condoAccess.canManage()) {
+                <p class="fund-extrato__footer-hint muted">
+                  <a [routerLink]="['/painel/condominio', condoId, 'contas-bancarias']"
+                    >Gerenciar contas bancárias</a
+                  >
+                </p>
+              }
+            }
+          </div>
+          @if (
+            generalCashMovements().length === 0 && generalOverdueMovements().length === 0
+          ) {
+            <p class="stmt-card__empty">Nenhum movimento na conta geral neste período.</p>
+            <div class="fund-extrato__footer">
+              <span class="fund-extrato__footer-label">Saldo de caixa</span>
+              <strong
+                class="fund-extrato__footer-value"
+                [ngClass]="extratoBalanceCssClass(parseCentsBigint(gen.closingBalanceCents))"
+                >{{ formatCentsBrl(gen.closingBalanceCents) }}</strong
+              >
+            </div>
+          } @else {
+            <div class="fund-extrato__table-wrap fund-extrato__table-wrap--after-opening">
+              <table class="fund-extrato-table fund-extrato-table--ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">Data</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Descrição</th>
+                    <th scope="col" class="num">Valor</th>
+                    <th scope="col" class="num">
+                      @if (generalOverdueMovements().length > 0) {
+                        Saldo / previsto
+                      } @else {
+                        Saldo após
+                      }
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of generalCashMovements(); track row.id) {
+                    <tr
+                      class="fund-extrato-table__row"
+                      [class.fund-extrato-table__row--cancelled]="
+                        isCancelled(row.paymentStatus)
+                      "
+                    >
+                      <td class="fund-extrato-table__date">{{
+                        formatDateDdMmYyyy(row.occurredOn)
+                      }}</td>
+                      <td>
+                        <span
+                          class="fund-extrato-table__kind"
+                          [attr.data-kind]="
+                            movementKindDataAttr(row.lineType, row.kind, row.occurredOn)
+                          "
+                          >{{
+                            movementLineTypeLabel(
+                              row.lineType,
+                              row.kind,
+                              row.occurredOn
+                            )
+                          }}</span
+                        >
+                      </td>
+                      <td class="fund-extrato-table__status">{{
+                        feePaymentStatusLabelPt(
+                          row.paymentStatus,
+                          row.lineType,
+                          row.occurredOn
+                        )
+                      }}</td>
+                      <td class="fund-extrato-table__desc">{{ movementTitle(row) }}</td>
+                      <td
+                        class="num fund-extrato-table__amt"
+                        [ngClass]="extratoDeltaCssClass(parseCentsBigint(row.signedDeltaCents))"
+                      >
+                        {{ formatCentsBrl(row.signedDeltaCents) }}
+                      </td>
+                      <td
+                        class="num fund-extrato-table__balance"
+                        [ngClass]="extratoBalanceCssClass(parseCentsBigint(row.runningAfterCents))"
+                      >
+                        {{ formatCentsBrl(row.runningAfterCents) }}
+                      </td>
+                    </tr>
+                  }
+                  @if (generalOverdueMovements().length > 0) {
+                    <tr class="fund-extrato-table__section-row">
+                      <td colspan="6">
+                        <strong>Taxas previstas e em atraso</strong>
+                        <span class="fund-extrato-table__section-hint"
+                          >— a vencer e vencidas; não entram no caixa</span
+                        >
+                      </td>
+                    </tr>
+                    @for (row of generalOverdueMovements(); track row.id) {
+                      <tr
+                        class="fund-extrato-table__row fund-extrato-table__row--projected"
+                      >
+                        <td class="fund-extrato-table__date">{{
+                          formatDateDdMmYyyy(row.occurredOn)
+                        }}</td>
+                        <td>
+                          <span
+                            class="fund-extrato-table__kind"
+                            [attr.data-kind]="
+                              movementKindDataAttr(row.lineType, row.kind, row.occurredOn)
+                            "
+                            >{{
+                              movementLineTypeLabel(
+                                row.lineType,
+                                row.kind,
+                                row.occurredOn
+                              )
+                            }}</span
+                          >
+                        </td>
+                        <td class="fund-extrato-table__status">{{
+                          feePaymentStatusLabelPt(
+                            row.paymentStatus,
+                            row.lineType,
+                            row.occurredOn
+                          )
+                        }}</td>
+                        <td class="fund-extrato-table__desc">{{ movementTitle(row) }}</td>
+                        <td
+                          class="num fund-extrato-table__amt fund-extrato-table__amt--in"
+                        >
+                          {{ formatCentsBrl(row.signedDeltaCents) }}
+                        </td>
+                        <td
+                          class="num fund-extrato-table__balance"
+                          [ngClass]="extratoBalanceCssClass(parseCentsBigint(row.runningAfterCents))"
+                          title="Saldo previsto se todas as taxas em atraso forem recebidas"
+                        >
+                          {{ formatCentsBrl(row.runningAfterCents) }}
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="fund-extrato__footer fund-extrato__footer--stack">
+              <p class="fund-extrato__footer-line">
+                <span class="fund-extrato__footer-label">Saldo de caixa</span>
+                <strong
+                  class="fund-extrato__footer-value"
+                  [ngClass]="extratoBalanceCssClass(parseCentsBigint(gen.closingBalanceCents))"
+                  >{{ formatCentsBrl(gen.closingBalanceCents) }}</strong
+                >
+              </p>
+              @if (generalOverdueFees().length > 0) {
+                <p class="fund-extrato__footer-line fund-extrato__footer-line--overdue">
+                  <span class="fund-extrato__footer-label">Total a receber (previsto)</span>
+                  <strong class="fund-extrato__footer-value fund-extrato-table__amt--in">{{
+                    formatCentsBrl(generalOverdueTotal())
+                  }}</strong>
+                </p>
+                @if (generalProjectedBalance(); as proj) {
+                  <p class="fund-extrato__footer-line">
+                    <span class="fund-extrato__footer-label">Saldo previsto (caixa + atrasos)</span>
+                    <strong
+                      class="fund-extrato__footer-value"
+                      [ngClass]="extratoBalanceCssClass(parseCentsBigint(proj))"
+                      >{{ formatCentsBrl(proj) }}</strong
+                    >
+                  </p>
+                }
+              }
+            </div>
           }
-          <tr class="total-row">
-            <td colspan="2">Total</td>
-            <td class="num">{{ formatCentsBrl(totalByUnitCents()) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      @if (statement()!.byUnit.length === 0) {
-        <p class="empty">Sem movimentos rateados neste período.</p>
-      }
-    </div>
+        </div>
+      </section>
+    }
 
-    <h2 class="section-title">Transações</h2>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Tipo</th>
-            <th>Estado</th>
-            <th>Título</th>
-            <th>Fundo</th>
-            <th class="num">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (t of statement()!.transactions; track t.id) {
-            <tr
-              [class.row--disabled]="
-                (t.paymentStatus ?? 'pending') === 'cancelled'
-              "
+    @for (sec of fundSections(); track sec.fundId) {
+      <section
+        class="form-card stmt-card"
+        [attr.aria-labelledby]="'stmt-fund-' + sec.fundId"
+      >
+        <div class="form-card__head stmt-card__head">
+          <h2 [id]="'stmt-fund-' + sec.fundId" class="form-card__title">
+            {{ sec.fundName || 'Fundo' }}
+          </h2>
+        </div>
+        <div class="stmt-card__body">
+          <div class="fund-extrato__footer fund-extrato__footer--opening">
+            <span class="fund-extrato__footer-label">Saldo inicial</span>
+            <strong
+              class="fund-extrato__footer-value"
+              [ngClass]="extratoBalanceCssClass(parseCentsBigint(sec.openingBalanceCents))"
+              >{{ formatCentsBrl(sec.openingBalanceCents) }}</strong
             >
-              <td>{{ formatDateDdMmYyyy(t.occurredOn) }}</td>
-              <td>{{ transactionKindLabelPt(t.kind) }}</td>
-              <td>{{ txPaymentStatusLabelPt(t.paymentStatus) }}</td>
-              <td>{{ t.title }}</td>
-              <td>{{ t.fundName || '—' }}</td>
-              <td class="num">{{ formatCentsBrl(t.amountCents) }}</td>
-            </tr>
+          </div>
+          @if (sec.movements.length === 0) {
+            <p class="stmt-card__empty">Nenhum lançamento deste fundo no período.</p>
+            <div class="fund-extrato__footer">
+              <span class="fund-extrato__footer-label">Saldo final no período</span>
+              <strong
+                class="fund-extrato__footer-value"
+                [ngClass]="extratoBalanceCssClass(parseCentsBigint(sec.closingBalanceCents))"
+                >{{ formatCentsBrl(sec.closingBalanceCents) }}</strong
+              >
+            </div>
+          } @else {
+            <div class="fund-extrato__table-wrap fund-extrato__table-wrap--after-opening">
+              <table class="fund-extrato-table fund-extrato-table--ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">Data</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Descrição</th>
+                    <th scope="col" class="num">Valor no fundo</th>
+                    <th scope="col" class="num">Saldo após</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of sec.movements; track row.id) {
+                    <tr
+                      class="fund-extrato-table__row"
+                      [class.fund-extrato-table__row--cancelled]="
+                        isCancelled(row.paymentStatus)
+                      "
+                    >
+                      <td class="fund-extrato-table__date">{{
+                        formatDateDdMmYyyy(row.occurredOn)
+                      }}</td>
+                      <td>
+                        <span
+                          class="fund-extrato-table__kind"
+                          [attr.data-kind]="row.kind"
+                          >{{ transactionKindLabelPt(row.kind) }}</span
+                        >
+                      </td>
+                      <td class="fund-extrato-table__status">{{
+                        feePaymentStatusLabelPt(
+                          row.paymentStatus,
+                          row.lineType,
+                          row.occurredOn
+                        )
+                      }}</td>
+                      <td class="fund-extrato-table__desc">{{ movementTitle(row) }}</td>
+                      <td
+                        class="num fund-extrato-table__amt"
+                        [ngClass]="extratoDeltaCssClass(parseCentsBigint(row.signedDeltaCents))"
+                      >
+                        {{ formatCentsBrl(row.signedDeltaCents) }}
+                      </td>
+                      <td
+                        class="num fund-extrato-table__balance"
+                        [ngClass]="extratoBalanceCssClass(parseCentsBigint(row.runningAfterCents))"
+                      >
+                        {{ formatCentsBrl(row.runningAfterCents) }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="fund-extrato__footer">
+              <span class="fund-extrato__footer-label">Saldo final no período</span>
+              <strong
+                class="fund-extrato__footer-value"
+                [ngClass]="extratoBalanceCssClass(parseCentsBigint(sec.closingBalanceCents))"
+                >{{ formatCentsBrl(sec.closingBalanceCents) }}</strong
+              >
+            </div>
           }
-          <tr class="total-row">
-            <td colspan="5">Total</td>
-            <td class="num">{{ formatCentsBrl(totalTransactionsCents()) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      @if (statement()!.transactions.length === 0) {
-        <p class="empty">Nenhuma transação no período.</p>
-      }
-    </div>
+        </div>
+      </section>
+    }
+
+    @if (hasNoLedgerMovements()) {
+      <p class="muted stmt-page__hint" role="status">
+        Nenhum lançamento no período. Ajuste as datas ou registre movimentos em
+        <a [routerLink]="['/painel/condominio', condoId, 'transacoes']">Transações</a>.
+      </p>
+    }
   }
 </div>

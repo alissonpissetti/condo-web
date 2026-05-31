@@ -1,7 +1,6 @@
 <section class="dados" aria-labelledby="dados-titulo">
   <header class="dados__header">
     <h1 id="dados-titulo">Meus Dados</h1>
-    <p class="dados__intro">Altere seus dados e faça a gestão de sua conta.</p>
   </header>
 
   @if (loadError()) {
@@ -56,13 +55,6 @@
             </div>
           </div>
         </details>
-      }
-
-      @if (saveError()) {
-        <div class="flash flash--error" role="alert">{{ saveError() }}</div>
-      }
-      @if (saveSuccess()) {
-        <div class="flash flash--ok" role="status">{{ saveSuccess() }}</div>
       }
 
       <form class="dados-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>

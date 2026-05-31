@@ -3,19 +3,6 @@
     <div class="page__header-top">
       <div class="page__header-text">
         <h1>Taxas condominiais</h1>
-        @if (condoAccess.canManage()) {
-          <p class="page__intro">
-            Cobranças por competência (AAAA-MM): soma das cotas rateadas no mês,
-            nivelada por agrupamento. Vencimento no dia 10 do mês seguinte. O envio
-            dos slips por WhatsApp usa o contacto da unidade (responsável financeiro,
-            proprietário ou referência indicada).
-          </p>
-        } @else {
-          <p class="page__intro">
-            Consulte as cobranças da sua unidade por competência (AAAA-MM) e
-            baixe o slip de pagamento ou comprovante quando disponível.
-          </p>
-        }
       </div>
     </div>
 
@@ -132,10 +119,6 @@
         </button>
       </div>
     </div>
-  }
-
-  @if (formError()) {
-    <p class="error" role="alert">{{ formError() }}</p>
   }
 
   @if (slipWaInfo(); as swi) {

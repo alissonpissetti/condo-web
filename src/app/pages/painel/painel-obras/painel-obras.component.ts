@@ -10,6 +10,7 @@ import {
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription, debounceTime, distinctUntilChanged, forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumWorksApiService,
@@ -20,6 +21,8 @@ import {
   type WorkTimelineEntry,
 } from '../../../core/condominium-works-api.service';
 import { ObrasTimelineAttachmentPreviewComponent } from './obras-timeline-attachment-preview.component';
+import { formatCentsBrl } from '../../../core/money-brl';
+import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 import {
   formatDateDdMmYyyy,
   formatDateTimeDdMmYyyyHhMm,
@@ -60,6 +63,10 @@ const STATUS_LABELS: Record<WorkStatus, string> = {
   cancelled: 'Cancelada',
 };
 
+const WORK_STATUS_OPTIONS: { value: WorkStatus; label: string }[] = (
+  Object.keys(STATUS_LABELS) as WorkStatus[]
+).map((value) => ({ value, label: STATUS_LABELS[value] }));
+
 const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
   received: 'Recebido',
   under_review: 'Em análise',
@@ -81,6 +88,7 @@ const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
 })
 export class PainelObrasComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(CondominiumWorksApiService);
@@ -91,13 +99,14 @@ export class PainelObrasComponent implements OnInit {
   protected readonly selected = signal<WorkDetail | null>(null);
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly listLoading = signal(true);
   protected readonly detailLoading = signal(false);
   protected readonly detailError = signal<string | null>(null);
   protected readonly detailWorkId = signal<string | null>(null);
   protected readonly createExpanded = signal(false);
+  /** Formulário «Nova interação» no detalhe da obra (colapsado por padrão). */
+  protected readonly registerExpanded = signal(false);
   protected readonly editingWork = signal(false);
   protected readonly registerTab = signal<ObrasRegisterTab>('note');
   protected readonly statusFilter = signal<WorkStatus | 'all'>('all');
@@ -149,7 +158,7 @@ export class PainelObrasComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.listLoading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -226,11 +235,43 @@ export class PainelObrasComponent implements OnInit {
     return BUDGET_STATUS_LABELS[s] ?? s;
   }
 
+  protected readonly workStatusOptions = WORK_STATUS_OPTIONS;
+
   protected workStatusPillClass(s: WorkStatus): string {
     if (s === 'in_progress') return 'plan-pill--open';
     if (s === 'completed') return 'plan-pill--decided';
     if (s === 'cancelled') return 'plan-pill--closed';
     return 'plan-pill--draft';
+  }
+
+  /** Classes do select inline de status (cores alinhadas ao `plan-pill`). */
+  protected workStatusSelectClass(s: WorkStatus): string {
+    return `obra-status-select--${s.replace(/_/g, '-')}`;
+  }
+
+  protected onWorkStatusChange(evt: Event): void {
+    const w = this.selected();
+    if (!w || !this.canManage() || this.busy()) return;
+    const next = (evt.target as HTMLSelectElement).value as WorkStatus;
+    if (next === w.status) return;
+    this.busy.set(true);
+    this.api.update(this.condominiumId, w.id, { status: next }).subscribe({
+      next: (detail) => {
+        this.busy.set(false);
+        this.applyWorkDetail(detail);
+        this.editForm.patchValue({ status: detail.status }, { emitEvent: false });
+        this.reloadList();
+        this.flash.success('Status da obra atualizado.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+        const cur = this.selected();
+        if (cur) {
+          this.editForm.patchValue({ status: cur.status }, { emitEvent: false });
+        }
+      },
+    });
   }
 
   protected budgetStatusPillClass(s: WorkBudgetStatus): string {
@@ -256,9 +297,14 @@ export class PainelObrasComponent implements OnInit {
     });
   }
 
+  protected readonly formatCentsBrl = formatCentsBrl;
+  protected readonly transactionKindLabelPt = transactionKindLabelPt;
+
   protected timelineKindLabel(kind: WorkTimelineEntry['kind']): string {
     if (kind === 'budget') return 'Orçamento';
     if (kind === 'document') return 'Documento';
+    if (kind === 'transaction') return 'Lançamento financeiro';
+    if (kind === 'edit') return 'Alteração';
     return 'Comentário';
   }
 
@@ -324,6 +370,9 @@ export class PainelObrasComponent implements OnInit {
   }
 
   protected timelineEntryTitle(entry: WorkTimelineEntry): string | null {
+    if (entry.kind === 'transaction' && entry.transaction) {
+      return entry.transaction.title;
+    }
     if (entry.kind === 'budget' && entry.budget) {
       return entry.budget.supplierName;
     }
@@ -343,6 +392,8 @@ export class PainelObrasComponent implements OnInit {
       (e) => e.kind === 'note' || e.kind === 'document',
     ).length;
     const budgets = entries.filter((e) => e.kind === 'budget').length;
+    const txs = entries.filter((e) => e.kind === 'transaction').length;
+    const edits = entries.filter((e) => e.kind === 'edit').length;
     const parts: string[] = [];
     if (comments > 0) {
       parts.push(
@@ -352,7 +403,23 @@ export class PainelObrasComponent implements OnInit {
     if (budgets > 0) {
       parts.push(`${budgets} orçamento${budgets === 1 ? '' : 's'}`);
     }
+    if (txs > 0) {
+      parts.push(`${txs} lançamento${txs === 1 ? '' : 's'}`);
+    }
+    if (edits > 0) {
+      parts.push(
+        `${edits} alteração${edits === 1 ? '' : 's'}`,
+      );
+    }
     return parts.join(' · ');
+  }
+
+  protected transactionPaymentStatusLabel(
+    status: string | undefined,
+  ): string {
+    if (status === 'paid') return 'Quitada';
+    if (status === 'cancelled') return 'Cancelada';
+    return 'Aguardando';
   }
 
   /** Classe do grid de anexos na timeline (1 / 2 / vários). */
@@ -387,13 +454,16 @@ export class PainelObrasComponent implements OnInit {
     this.persistCreateDraft();
   }
 
+  protected toggleRegisterExpanded(): void {
+    this.registerExpanded.update((v) => !v);
+  }
+
   protected toggleEditingWork(): void {
     this.editingWork.update((v) => !v);
   }
 
   protected submitCreate(): void {
     if (this.createForm.invalid || this.busy()) return;
-    this.actionError.set(null);
     this.busy.set(true);
     const v = this.createForm.getRawValue();
     this.api
@@ -417,7 +487,7 @@ export class PainelObrasComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -425,7 +495,6 @@ export class PainelObrasComponent implements OnInit {
   protected saveWorkHeader(): void {
     const w = this.selected();
     if (!w || this.editForm.invalid || this.busy() || !this.canManage()) return;
-    this.actionError.set(null);
     this.busy.set(true);
     const v = this.editForm.getRawValue();
     this.api
@@ -437,14 +506,15 @@ export class PainelObrasComponent implements OnInit {
       .subscribe({
         next: (detail) => {
           this.busy.set(false);
-          this.selected.set(detail);
+          this.applyWorkDetail(detail);
           this.editingWork.set(false);
           clearObrasDraft(obrasEditDraftKey(this.condominiumId, w.id));
           this.reloadList();
+          this.flash.success('Dados da obra salvos.');
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -472,10 +542,9 @@ export class PainelObrasComponent implements OnInit {
     const body = this.noteForm.getRawValue().body.trim();
     const files = this.notePendingFiles();
     if (!body && files.length === 0) {
-      this.actionError.set('Informe um texto ou envie ao menos um anexo.');
+      this.flash.warning('Informe um texto ou envie ao menos um anexo.');
       return;
     }
-    this.actionError.set(null);
     this.busy.set(true);
     this.api
       .addNote(
@@ -493,11 +562,12 @@ export class PainelObrasComponent implements OnInit {
           this.notePendingFiles.set([]);
           this.resetRecordedOnAfterSubmit();
           this.persistDetailUiDraft();
+          this.registerExpanded.set(false);
           this.loadDetail(w.id);
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -525,11 +595,10 @@ export class PainelObrasComponent implements OnInit {
     const v = this.budgetForm.getRawValue();
     const parsed = this.parseReaisToCents(v.amountReais);
     if (parsed === null) {
-      this.actionError.set('Informe um valor válido.');
+      this.flash.warning('Informe um valor válido.');
       return;
     }
     const files = this.budgetPendingFiles();
-    this.actionError.set(null);
     this.busy.set(true);
     this.api
       .addBudget(
@@ -559,11 +628,12 @@ export class PainelObrasComponent implements OnInit {
             status: 'received',
             notes: '',
           });
+          this.registerExpanded.set(false);
           this.loadDetail(w.id);
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -575,7 +645,6 @@ export class PainelObrasComponent implements OnInit {
   ): void {
     const w = this.selected();
     if (!w) return;
-    this.actionError.set(null);
     this.busy.set(true);
     this.api
       .downloadTimelineAttachmentBlob(
@@ -596,7 +665,7 @@ export class PainelObrasComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -617,7 +686,7 @@ export class PainelObrasComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -639,7 +708,7 @@ export class PainelObrasComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -648,7 +717,7 @@ export class PainelObrasComponent implements OnInit {
     return {
       onSaved: () => this.draftSavedAt.set(Date.now()),
       onStorageError: () =>
-        this.actionError.set(
+        this.flash.error(
           'Não foi possível salvar o rascunho no navegador (armazenamento cheio ou indisponível).',
         ),
     };
@@ -810,9 +879,20 @@ export class PainelObrasComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.listLoading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
+  }
+
+  private applyWorkDetail(detail: WorkDetail): void {
+    this.selected.set({
+      ...detail,
+      timeline: (detail.timeline ?? []).map((e) => ({
+        ...e,
+        attachments: e.attachments ?? [],
+      })),
+    });
+    this.initTimelineDayExpansion();
   }
 
   private loadDetail(workId: string): void {
@@ -823,14 +903,7 @@ export class PainelObrasComponent implements OnInit {
       list: this.api.list(this.condominiumId),
     }).subscribe({
       next: ({ detail, list }) => {
-        this.selected.set({
-          ...detail,
-          timeline: (detail.timeline ?? []).map((e) => ({
-            ...e,
-            attachments: e.attachments ?? [],
-          })),
-        });
-        this.initTimelineDayExpansion();
+        this.applyWorkDetail(detail);
         this.works.set(list);
         this.editForm.patchValue(
           {
@@ -848,6 +921,7 @@ export class PainelObrasComponent implements OnInit {
         }
         this.wireEditDraft(workId);
         this.editingWork.set(false);
+        this.registerExpanded.set(false);
         this.detailLoading.set(false);
         this.listLoading.set(false);
       },

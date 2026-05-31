@@ -8,7 +8,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { translateHttpErrorMessage } from '../../core/api-errors-pt';
+import { FlashMessageService } from '../../core/flash-message.service';
 import { AuthService } from '../../core/auth.service';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
@@ -37,17 +37,16 @@ export class ForgotPasswordComponent {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly fb = inject(FormBuilder);
+  private readonly flash = inject(FlashMessageService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
-
-  protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
-  protected readonly success = signal<string | null>(null);
   protected readonly step = signal<ResetStep>('request');
   protected readonly channel = signal<ResetChannel>('email');
   protected readonly sending = signal(false);
   protected readonly verifying = signal(false);
   protected readonly completing = signal(false);
+  protected readonly resetComplete = signal(false);
 
   private resetToken: string | null = null;
 
@@ -78,12 +77,10 @@ export class ForgotPasswordComponent {
   );
 
   setChannel(ch: ResetChannel): void {
-    this.error.set(null);
     this.channel.set(ch);
   }
 
   submitRequest(): void {
-    this.error.set(null);
     this.info.set(null);
     const ch = this.channel();
     if (ch === 'email') {
@@ -127,13 +124,12 @@ export class ForgotPasswordComponent {
       },
       error: (err: HttpErrorResponse) => {
         this.sending.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   submitCode(): void {
-    this.error.set(null);
     if (this.codeForm.invalid) {
       this.codeForm.markAllAsTouched();
       return;
@@ -164,15 +160,14 @@ export class ForgotPasswordComponent {
       },
       error: (err: HttpErrorResponse) => {
         this.verifying.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   submitNewPassword(): void {
-    this.error.set(null);
     if (!this.resetToken) {
-      this.error.set('Etapa inválida. Volte ao início do processo.');
+      this.flash.warning('Etapa inválida. Volte ao início do processo.');
       return;
     }
     if (this.passwordForm.invalid) {
@@ -186,14 +181,15 @@ export class ForgotPasswordComponent {
       .subscribe({
         next: () => {
           this.completing.set(false);
-          this.success.set(
+          this.resetComplete.set(true);
+          this.flash.success(
             'Senha alterada com sucesso. Você já pode fazer login.',
           );
           this.resetToken = null;
         },
         error: (err: HttpErrorResponse) => {
           this.completing.set(false);
-          this.error.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -203,7 +199,6 @@ export class ForgotPasswordComponent {
   }
 
   backToRequest(): void {
-    this.error.set(null);
     this.info.set(null);
     this.step.set('request');
     this.resetToken = null;
@@ -217,13 +212,5 @@ export class ForgotPasswordComponent {
       return '';
     }
     return d.slice(-4);
-  }
-
-  private messageFromHttp(err: HttpErrorResponse): string {
-    return translateHttpErrorMessage(err, {
-      network:
-        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
-      default: 'Não foi possível concluir o pedido.',
-    });
   }
 }

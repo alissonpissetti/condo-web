@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { condominiumFinanceReadGuard } from '../../core/condominium-finance-read.guard';
 import { condominiumManagementGuard } from '../../core/condominium-management.guard';
 import { planFeatureGuard } from '../../core/plan-feature.guard';
 import { selectedCondominiumGuard } from '../../core/selected-condominium.guard';
@@ -111,13 +112,25 @@ export const painelRoutes: Routes = [
         path: 'condominio/:condominiumId/extrato',
         canActivate: [
           selectedCondominiumGuard,
-          condominiumManagementGuard,
+          condominiumFinanceReadGuard,
           planFeatureGuard('financialStatement'),
         ],
         loadComponent: () =>
           import('./painel-extrato/painel-extrato.component').then(
             (m) => m.PainelExtratoComponent,
           ),
+      },
+      {
+        path: 'condominio/:condominiumId/contas-bancarias',
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('financialTransactions'),
+        ],
+        loadComponent: () =>
+          import(
+            './painel-contas-bancarias/painel-contas-bancarias.component'
+          ).then((m) => m.PainelContasBancariasComponent),
       },
       {
         path: 'condominio/:condominiumId/fundos',

@@ -6,7 +6,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { translateHttpErrorMessage } from '../../core/api-errors-pt';
+import { FlashMessageService } from '../../core/flash-message.service';
 import { AuthService } from '../../core/auth.service';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { controlErrorMessagesPt } from '../../core/form-errors-pt';
@@ -23,11 +23,10 @@ export class LoginComponent {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly fb = inject(FormBuilder);
+  private readonly flash = inject(FlashMessageService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-
-  protected readonly error = signal<string | null>(null);
   protected readonly submitting = signal(false);
   protected readonly loginMode = signal<LoginMode>('email');
 
@@ -50,7 +49,6 @@ export class LoginComponent {
   });
 
   setMode(mode: LoginMode): void {
-    this.error.set(null);
     this.loginMode.set(mode);
     if (mode === 'email') {
       this.resetSmsFlow();
@@ -58,7 +56,6 @@ export class LoginComponent {
   }
 
   submit(): void {
-    this.error.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -69,7 +66,7 @@ export class LoginComponent {
       next: () => void this.navigateAfterLogin(),
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível fazer login.');
       },
     });
   }
@@ -83,7 +80,6 @@ export class LoginComponent {
   }
 
   requestSmsCode(): void {
-    this.error.set(null);
     this.smsInfo.set(null);
     const phoneCtrl = this.smsForm.controls.phone;
     if (phoneCtrl.invalid) {
@@ -107,7 +103,7 @@ export class LoginComponent {
       },
       error: (err: HttpErrorResponse) => {
         this.smsSending.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível fazer login.');
       },
     });
   }
@@ -116,7 +112,6 @@ export class LoginComponent {
     if (!this.smsAwaitingCode()) {
       return;
     }
-    this.error.set(null);
     if (this.smsForm.invalid) {
       this.smsForm.markAllAsTouched();
       return;
@@ -127,7 +122,7 @@ export class LoginComponent {
       next: () => void this.navigateAfterLogin(),
       error: (err: HttpErrorResponse) => {
         this.smsVerifying.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível fazer login.');
       },
     });
   }
@@ -152,13 +147,5 @@ export class LoginComponent {
       return;
     }
     void this.router.navigateByUrl('/painel');
-  }
-
-  private messageFromHttp(err: HttpErrorResponse): string {
-    return translateHttpErrorMessage(err, {
-      network:
-        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
-      default: 'Não foi possível fazer login.',
-    });
   }
 }

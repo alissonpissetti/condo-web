@@ -3,18 +3,10 @@
   width: 100%;
 }
 
-.chamado {
+.chamado--public {
   max-width: 46rem;
   margin: 0 auto;
-  padding: 0 1rem 3rem;
-}
-
-.chamado--painel {
-  max-width: min(52rem, 100%);
-}
-
-.chamado--public {
-  padding-top: 1rem;
+  padding: 1rem 1rem 3rem;
 }
 
 .chamado__public-head {
@@ -36,26 +28,74 @@
   letter-spacing: -0.02em;
 }
 
-.chamado__back {
-  margin-bottom: 1.25rem;
+/* ——— Painel: cabeçalho ——— */
+.chamado-nav {
+  margin-bottom: 0.85rem;
 }
 
-.chamado__back-link {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
+.chamado-nav__back {
   text-decoration: none;
 }
 
-.chamado__skeleton {
-  padding: 1rem 0;
+.chamado-header__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.chamado-header__sub {
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+/* ——— Status ——— */
+.chamado-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.chamado-badge[data-status='open'],
+.chamado-badge[data-status='triaged'] {
+  background: color-mix(in srgb, #3b82f6 14%, var(--surface));
+  border-color: color-mix(in srgb, #3b82f6 28%, var(--border));
+  color: #1d4ed8;
+}
+
+.chamado-badge[data-status='in_progress'] {
+  background: color-mix(in srgb, #a855f7 14%, var(--surface));
+  border-color: color-mix(in srgb, #a855f7 26%, var(--border));
+  color: #6b21a8;
+}
+
+.chamado-badge[data-status='resolved'],
+.chamado-badge[data-status='closed'] {
+  background: color-mix(in srgb, #22c55e 12%, var(--surface));
+  border-color: color-mix(in srgb, #22c55e 26%, var(--border));
+  color: #166534;
+}
+
+/* ——— Carregamento ——— */
+.chamado-skeleton {
+  padding: 0.5rem 0 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.chamado__sk {
-  border-radius: 0.5rem;
+.chamado-skeleton__bar {
+  height: 0.85rem;
+  border-radius: var(--ma-radius);
   background: linear-gradient(
     90deg,
     var(--surface-2) 0%,
@@ -64,19 +104,15 @@
   );
   background-size: 200% 100%;
   animation: chamado-shimmer 1.2s ease-in-out infinite;
-}
 
-.chamado__sk--title {
-  height: 2.25rem;
-  max-width: 85%;
-}
+  &--title {
+    height: 2rem;
+    max-width: 55%;
+  }
 
-.chamado__sk--line {
-  height: 0.85rem;
-}
-
-.chamado__sk--short {
-  max-width: 55%;
+  &--short {
+    max-width: 40%;
+  }
 }
 
 @keyframes chamado-shimmer {
@@ -88,143 +124,104 @@
   }
 }
 
-.chamado__hero {
-  margin-bottom: 1.5rem;
-  padding: 1.35rem 1.35rem 1.2rem;
-  border-radius: 1rem;
-  border: 1px solid var(--border);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--accent) 6%, var(--surface)) 0%,
-    var(--surface) 48%,
-    var(--surface-2) 100%
-  );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+.error {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--ma-radius);
+  background: color-mix(in srgb, var(--ma-danger) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ma-danger) 28%, var(--border));
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--text);
 }
 
-.chamado__hero-top {
+.muted {
+  color: var(--muted);
+}
+
+/* ——— Hero (link público) ——— */
+.chamado-hero {
+  margin-bottom: 1.25rem;
+}
+
+.chamado-hero__top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.65rem 1rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.75rem;
 }
 
-.chamado__badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.28rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-
-.chamado__badge[data-status='open'],
-.chamado__badge[data-status='triaged'] {
-  background: color-mix(in srgb, #3b82f6 14%, var(--surface));
-  border-color: color-mix(in srgb, #3b82f6 28%, var(--border));
-  color: #1d4ed8;
-}
-
-.chamado__badge[data-status='in_progress'] {
-  background: color-mix(in srgb, #a855f7 14%, var(--surface));
-  border-color: color-mix(in srgb, #a855f7 26%, var(--border));
-  color: #6b21a8;
-}
-
-.chamado__badge[data-status='resolved'],
-.chamado__badge[data-status='closed'] {
-  background: color-mix(in srgb, #22c55e 12%, var(--surface));
-  border-color: color-mix(in srgb, #22c55e 26%, var(--border));
-  color: #166534;
-}
-
-.chamado__hero-sub {
+.chamado-hero__sub {
   font-size: 0.82rem;
-  color: var(--muted);
   font-weight: 500;
 }
 
-.chamado__title {
+.chamado-hero__title {
   margin: 0 0 1rem;
-  font-size: clamp(1.4rem, 3.2vw, 1.85rem);
-  font-weight: 800;
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 1.18;
+  line-height: 1.2;
+  color: var(--heading-color);
 }
 
-.chamado__facts {
+/* ——— Blocos / cartões ——— */
+.chamado-summary,
+.chamado-block {
+  margin-bottom: 1.25rem;
+}
+
+.chamado-summary__body,
+.chamado-block__body {
+  padding: 0 var(--form-card-pad-inline, 1.25rem) var(--form-card-pad-bottom, 1.15rem);
+}
+
+.chamado-block--initial .chamado-block__body {
+  background: color-mix(in srgb, var(--border) 8%, var(--surface));
+  margin: 0 var(--form-card-pad-inline, 1.25rem) var(--form-card-pad-bottom, 1.15rem);
+  padding: 0.9rem 1rem;
+  border-radius: var(--ma-radius);
+  border: 1px solid var(--border);
+}
+
+.chamado-block--reply {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+
+.chamado-block__head .form-card__lede.chamado-block__count {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+}
+
+.chamado-facts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: 0.85rem 1.25rem;
   margin: 0;
 }
 
-.chamado__fact {
+.chamado-facts div {
   margin: 0;
 }
 
-.chamado__fact dt {
-  margin: 0 0 0.2rem;
-  font-size: 0.68rem;
+.chamado-facts dt {
+  margin: 0 0 0.15rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
 }
 
-.chamado__fact dd {
+.chamado-facts dd {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
-.chamado__card {
-  margin-bottom: 1.35rem;
-  padding: 1.15rem 1.2rem 1.25rem;
-  border-radius: 0.9rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.chamado__card--initial {
-  background: var(--surface-2);
-}
-
-.chamado__card--reply {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.chamado__card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.85rem;
-}
-
-.chamado__card-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.chamado__count {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.chamado__body-rich {
+.chamado-body-text {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.6;
@@ -232,12 +229,20 @@
   word-break: break-word;
 }
 
-.chamado__empty {
-  margin: 0.25rem 0 0;
+.chamado-empty {
+  margin: 0;
   font-size: 0.92rem;
 }
 
-.chamado__timeline {
+.chamado-hint {
+  margin: 0;
+  padding: 0 var(--form-card-pad-inline, 1.25rem) var(--form-card-pad-bottom, 1.15rem);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* ——— Timeline ——— */
+.chamado-timeline {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -246,41 +251,39 @@
   gap: 1rem;
 }
 
-.chamado__bubble {
-  position: relative;
+.chamado-bubble {
+  display: flex;
   margin: 0;
   padding: 0;
-  display: flex;
 }
 
-.chamado__bubble--team {
+.chamado-bubble--team {
   justify-content: flex-start;
 }
 
-.chamado__bubble--user {
+.chamado-bubble--user {
   justify-content: flex-end;
 }
 
-.chamado__bubble-inner {
-  max-width: min(100%, 34rem);
+.chamado-bubble__inner {
+  max-width: min(100%, 36rem);
   padding: 0.85rem 1rem 0.95rem;
-  border-radius: 1rem;
+  border-radius: var(--ma-radius-lg);
   border: 1px solid var(--border);
-  position: relative;
 }
 
-.chamado__bubble--team .chamado__bubble-inner {
-  border-bottom-left-radius: 0.35rem;
+.chamado-bubble--team .chamado-bubble__inner {
+  border-bottom-left-radius: var(--ma-radius-sm);
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
 }
 
-.chamado__bubble--user .chamado__bubble-inner {
-  border-bottom-right-radius: 0.35rem;
+.chamado-bubble--user .chamado-bubble__inner {
+  border-bottom-right-radius: var(--ma-radius-sm);
   background: var(--surface-2);
 }
 
-.chamado__bubble-meta {
+.chamado-bubble__meta {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -289,25 +292,25 @@
   font-size: 0.78rem;
 }
 
-.chamado__bubble-author {
-  font-weight: 800;
-  color: var(--text);
+.chamado-bubble__author {
+  font-weight: 700;
+  color: var(--heading-color);
 }
 
-.chamado__bubble-time {
-  color: var(--muted);
+.chamado-bubble__time {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.chamado__bubble-body {
+.chamado-bubble__body {
   font-size: 0.92rem;
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.chamado__attach-list {
+/* ——— Anexos na conversa ——— */
+.chamado-attach-list {
   list-style: none;
   margin: 0.65rem 0 0;
   padding: 0;
@@ -316,16 +319,16 @@
   gap: 0.45rem;
 }
 
-.chamado__attach-chip {
+.chamado-attach-chip {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   width: 100%;
   text-align: left;
   padding: 0.5rem 0.65rem;
-  border-radius: 0.55rem;
+  border-radius: var(--ma-radius);
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
   font: inherit;
   font-size: 0.82rem;
   cursor: pointer;
@@ -335,7 +338,7 @@
 
   &:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-    background: var(--surface);
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   }
 
   &:disabled {
@@ -344,11 +347,11 @@
   }
 }
 
-.chamado__attach-icon {
+.chamado-attach-chip__icon {
   flex-shrink: 0;
   width: 1.85rem;
   height: 1.85rem;
-  border-radius: 0.45rem;
+  border-radius: var(--ma-radius-sm);
   background: var(--surface-2);
   border: 1px solid var(--border);
   position: relative;
@@ -384,7 +387,7 @@
   }
 }
 
-.chamado__attach-name {
+.chamado-attach-chip__name {
   flex: 1;
   min-width: 0;
   font-weight: 600;
@@ -393,47 +396,33 @@
   white-space: nowrap;
 }
 
-.chamado__attach-size {
+.chamado-attach-chip__size {
   flex-shrink: 0;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.chamado__reply-lead {
-  margin: -0.25rem 0 1rem;
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-.chamado__reply-form .field {
+/* ——— Formulário de resposta ——— */
+.chamado-reply-form {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
+  gap: 1rem;
 }
 
-.chamado__reply-form textarea {
-  width: 100%;
-  min-height: 7.5rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  font-family: inherit;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  resize: vertical;
+.chamado-reply-form__actions {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
 }
 
-.chamado__dropzone {
+.chamado-dropzone {
   position: relative;
-  margin-bottom: 1rem;
-  border-radius: 0.75rem;
+  border-radius: var(--ma-radius-lg);
   border: 2px dashed color-mix(in srgb, var(--accent) 28%, var(--border));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface-2));
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:hover {
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
@@ -441,7 +430,7 @@
   }
 }
 
-.chamado__file-input {
+.chamado-dropzone__input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -453,7 +442,7 @@
   border: 0;
 }
 
-.chamado__dropzone-label {
+.chamado-dropzone__label {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -462,41 +451,40 @@
   text-align: center;
 }
 
-.chamado__dropzone-title {
-  font-weight: 800;
+.chamado-dropzone__title {
+  font-weight: 700;
   font-size: 0.92rem;
 }
 
-.chamado__dropzone-hint {
+.chamado-dropzone__hint {
   font-size: 0.82rem;
-  color: var(--muted);
   font-weight: 500;
 }
 
-.chamado__pending {
+.chamado-pending {
   list-style: none;
-  margin: 0 0 0.65rem;
+  margin: 0;
   padding: 0;
-  border-radius: 0.65rem;
+  border-radius: var(--ma-radius);
   border: 1px solid var(--border);
   overflow: hidden;
 }
 
-.chamado__pending-row {
+.chamado-pending__row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 0.65rem;
   font-size: 0.84rem;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface);
 
   &:last-child {
     border-bottom: 0;
   }
 }
 
-.chamado__pending-name {
+.chamado-pending__name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -505,19 +493,18 @@
   font-weight: 600;
 }
 
-.chamado__pending-meta {
+.chamado-pending__meta {
   font-size: 0.75rem;
-  color: var(--muted);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.chamado__pending-remove {
+.chamado-pending__remove {
   flex-shrink: 0;
   width: 1.75rem;
   height: 1.75rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: var(--ma-radius-sm);
   background: transparent;
   color: var(--muted);
   font-size: 1.25rem;
@@ -526,87 +513,20 @@
   font-family: inherit;
 
   &:hover {
-    background: color-mix(in srgb, #ef4444 12%, var(--surface));
-    color: #b91c1c;
+    background: color-mix(in srgb, var(--ma-danger) 12%, var(--surface));
+    color: var(--ma-danger);
   }
 }
 
-.chamado__reply-actions {
-  margin-top: 0.35rem;
-}
-
-.chamado__hint {
-  font-size: 0.9rem;
-  line-height: 1.55;
-  padding: 1rem 1.15rem;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.flash {
-  padding: 0.75rem 1rem;
-  border-radius: 0.65rem;
-  font-size: 0.9rem;
-  margin-bottom: 0.75rem;
-
-  &--error {
-    background: color-mix(in srgb, #ef4444 12%, var(--surface));
-    border: 1px solid color-mix(in srgb, #ef4444 32%, var(--border));
+@media (min-width: 900px) {
+  .page.chamado {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
 
-  &--ok {
-    background: color-mix(in srgb, #22c55e 12%, var(--surface));
-    border: 1px solid color-mix(in srgb, #22c55e 32%, var(--border));
+  .chamado-summary,
+  .chamado-block--initial {
+    max-width: 100%;
   }
-}
-
-.field-error {
-  font-size: 0.78rem;
-  color: #b91c1c;
-  font-weight: 500;
-}
-
-.field__label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem 1.15rem;
-  border-radius: 0.6rem;
-  font-weight: 700;
-  font-size: 0.88rem;
-  font-family: inherit;
-  cursor: pointer;
-  border: 1px solid transparent;
-  text-decoration: none;
-}
-
-.btn.primary {
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn--ghost {
-  background: transparent;
-  color: var(--text);
-  border-color: var(--border);
-}
-
-.btn--text {
-  background: transparent;
-  color: var(--accent);
-  border: 0;
-  padding: 0.35rem 0.5rem;
-  margin-bottom: 0.5rem;
-  font-weight: 700;
-  font-size: 0.82rem;
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
 }

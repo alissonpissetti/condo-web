@@ -17,6 +17,7 @@ import {
 } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   AuthService,
   type Condominium,
@@ -153,6 +154,7 @@ export class PainelSuporteComponent implements OnInit {
   }
 
   private readonly fb = inject(FormBuilder);
+  private readonly flash = inject(FlashMessageService);
   private readonly auth = inject(AuthService);
   private readonly api = inject(SupportTicketsApiService);
   private readonly selectedCondo = inject(SelectedCondominiumService);
@@ -165,8 +167,6 @@ export class PainelSuporteComponent implements OnInit {
 
   protected readonly loadError = signal<string | null>(null);
   protected readonly listError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
-  protected readonly formSuccess = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly tickets = signal<SupportTicketRow[]>([]);
@@ -243,15 +243,16 @@ export class PainelSuporteComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err: unknown) => {
-        this.loadError.set(
+        const msg =
           err instanceof HttpErrorResponse
             ? translateHttpErrorMessage(err, {
                 network:
                   'Sem conexão com o servidor. Verifique a internet e tente novamente.',
                 default: 'Não foi possível carregar os dados.',
               })
-            : 'Não foi possível carregar os dados.',
-        );
+            : 'Não foi possível carregar os dados.';
+        this.loadError.set(msg);
+        this.flash.error(msg);
         this.loading.set(false);
       },
     });
@@ -291,17 +292,16 @@ export class PainelSuporteComponent implements OnInit {
   }
 
   protected addOpenFiles(files: File[]): void {
-    this.formError.set(null);
     const next = [...this.pendingOpenFiles()];
     for (const f of files) {
       if (next.length >= SUPPORT_MAX_FILES) {
-        this.formError.set(
+        this.flash.warning(
           `No máximo ${SUPPORT_MAX_FILES} arquivos na abertura do chamado.`,
         );
         break;
       }
       if (f.size > SUPPORT_MAX_FILE_BYTES) {
-        this.formError.set(
+        this.flash.warning(
           `Cada arquivo deve ter no máximo ${supportFormatFileSize(SUPPORT_MAX_FILE_BYTES)} (${f.name}).`,
         );
         continue;
@@ -340,8 +340,6 @@ export class PainelSuporteComponent implements OnInit {
   }
 
   protected submit(): void {
-    this.formError.set(null);
-    this.formSuccess.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -351,7 +349,7 @@ export class PainelSuporteComponent implements OnInit {
     const files = this.pendingOpenFiles();
     if (bodyText.length < 10 && files.length === 0) {
       this.form.controls.body.markAsTouched();
-      this.formError.set(
+      this.flash.warning(
         'Escreva pelo menos 10 caracteres na descrição ou anexe arquivos.',
       );
       return;
@@ -367,7 +365,7 @@ export class PainelSuporteComponent implements OnInit {
     this.saving.set(true);
     this.api.create(payload, files).subscribe({
       next: () => {
-        this.formSuccess.set(
+        this.flash.success(
           'Solicitação registrada. A equipe pode contatá-lo pela conta ou pelo e-mail em caso de dúvidas.',
         );
         this.form.reset({
@@ -383,7 +381,7 @@ export class PainelSuporteComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.saving.set(false);
-        this.formError.set(
+        this.flash.error(
           err instanceof HttpErrorResponse
             ? translateHttpErrorMessage(err, {
                 network:

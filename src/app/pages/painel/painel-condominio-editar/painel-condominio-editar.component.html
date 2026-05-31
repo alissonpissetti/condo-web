@@ -1,70 +1,42 @@
-<section class="condo-edit" aria-labelledby="condo-edit-titulo">
-  <header class="condo-edit__header">
-    <h1 id="condo-edit-titulo">
+<div class="page">
+  <header class="page__header">
+    <h1>
       {{ readOnlyView() ? 'Dados do condomínio' : 'Editar condomínio' }}
     </h1>
     @if (loading()) {
-      <p class="condo-edit__intro muted">Carregando dados…</p>
-    } @else {
-      @if (condominiumName(); as cn) {
-        <p class="condo-edit__intro">
-          <span class="condo-edit__name">{{ cn }}</span>
-          <span class="condo-edit__intro-rest">
-            @if (readOnlyView()) {
-              — consulta dos dados públicos de identificação e cobrança nos
-              relatórios (só leitura).
-            } @else {
-              — identificação, marca nos PDFs, PIX e WhatsApp para comprovantes.
-            }
-          </span>
-        </p>
-      } @else {
-        <p class="condo-edit__intro muted">
-          Identificação, marca nos PDFs e dados de cobrança nos relatórios.
-        </p>
-      }
+      <p class="muted page__status">Carregando dados…</p>
+    } @else if (condominiumName()) {
+      <p class="page__condo-name">{{ condominiumName() }}</p>
     }
   </header>
 
   @if (loadError()) {
-    <div class="flash flash--error" role="alert">{{ loadError() }}</div>
+    <p class="error" role="alert">{{ loadError() }}</p>
   }
 
   @if (!loading() && !loadError() && readOnlyView()) {
-    <div class="flash flash--info" role="status">
+    <p class="info-banner" role="status">
       Só visualização. Para alterar nome, logo, PIX ou WhatsApp é necessário ser
       titular da conta do condomínio, síndico, subsíndico ou administrador.
-    </div>
+    </p>
   }
 
   @if (!loading() && !loadError()) {
-    <div class="condo-edit__layout">
-      <form
-        class="condo-edit__form"
-        [class.condo-edit__form--readonly]="readOnlyView()"
-        [formGroup]="form"
-        (ngSubmit)="save()"
-        novalidate
-        [attr.aria-readonly]="readOnlyView() ? 'true' : null"
-      >
-        @if (formError(); as fe) {
-          <div class="flash flash--error" role="alert">{{ fe }}</div>
-        }
-        @if (saveSuccess(); as ok) {
-          <div class="flash flash--ok" role="status">{{ ok }}</div>
-        }
-
-        <!-- fieldset disabled bloqueia os controlos no DOM mesmo se o FormGroup falhar a sincronizar -->
-        <fieldset
-          class="condo-edit__fieldset"
-          [disabled]="readOnlyView()"
-        >
-        <section class="form-card" aria-labelledby="sec-ident">
-          <div class="form-card__accent" aria-hidden="true"></div>
-          <div class="form-card__body">
-            <div class="form-card__head">
-              <h2 id="sec-ident" class="form-card__title">Identificação</h2>
-              <p class="form-card__hint">
+    <form
+      class="form-card condo-edit-form"
+      [class.condo-edit-form--readonly]="readOnlyView()"
+      [formGroup]="form"
+      (ngSubmit)="save()"
+      novalidate
+      [attr.aria-readonly]="readOnlyView() ? 'true' : null"
+    >
+      <fieldset class="condo-edit-form__fieldset" [disabled]="readOnlyView()">
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">1</span>
+            <div>
+              <h2 id="sec-ident" class="form-section__title">Identificação</h2>
+              <p class="form-section__hint">
                 @if (readOnlyView()) {
                   Nome usado em telas e documentos gerados pela aplicação.
                 } @else {
@@ -73,179 +45,168 @@
                 }
               </p>
             </div>
-            <div class="field-grid field-grid--1">
-              <label class="field">
-                <span class="field__label">Nome do condomínio</span>
-                <input
-                  type="text"
-                  formControlName="name"
-                  autocomplete="organization"
-                  [readOnly]="readOnlyView()"
-                />
-                @for (msg of fieldErrorsPt(form.controls.name); track msg) {
-                  <small class="field-error">{{ msg }}</small>
-                }
-              </label>
-            </div>
           </div>
-        </section>
+          <label class="field field--block">
+            <span class="field__label">Nome do condomínio</span>
+            <input
+              type="text"
+              class="input input--lg"
+              formControlName="name"
+              autocomplete="organization"
+              [readOnly]="readOnlyView()"
+            />
+            @for (msg of fieldErrorsPt(form.controls.name); track msg) {
+              <span class="field-err">{{ msg }}</span>
+            }
+          </label>
+        </div>
 
-        <section class="form-card" aria-labelledby="sec-logo">
-          <div
-            class="form-card__accent form-card__accent--teal"
-            aria-hidden="true"
-          ></div>
-          <div class="form-card__body">
-            <div class="form-card__head">
-              <h2 id="sec-logo" class="form-card__title">Marca no PDF</h2>
-              <p class="form-card__hint">
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">2</span>
+            <div>
+              <h2 id="sec-logo" class="form-section__title">Marca no PDF</h2>
+              <p class="form-section__hint">
                 Imagem no topo do PDF de transparência e do comprovante de taxa.
                 @if (!readOnlyView()) {
                   Formatos PNG, JPG ou WEBP; tamanho máximo 2&nbsp;MB.
                 }
               </p>
             </div>
-
-            @if (logoPreviewUrl(); as logoSrc) {
-              <div class="logo-panel">
-                <div class="logo-panel__preview-wrap">
-                  <img
-                    [src]="logoSrc"
-                    alt="Pré-visualização da logo da gestão"
-                    class="logo-panel__img"
-                  />
-                </div>
-                @if (!readOnlyView()) {
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    (click)="removeManagementLogo()"
-                    [disabled]="logoBusy() || saving()"
-                  >
-                    Remover logo
-                  </button>
-                }
-              </div>
-            } @else {
-              <p class="logo-panel__empty muted">
-                Nenhuma imagem enviada ainda.
-              </p>
-            }
-
-            @if (!readOnlyView()) {
-              <div class="field logo-upload">
-                <span class="field__label">Enviar nova imagem</span>
-                <div class="logo-upload__box">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    class="logo-upload__input"
-                    aria-label="Enviar nova imagem da logo para PDFs"
-                    [disabled]="logoBusy() || saving()"
-                    (change)="onManagementLogoSelected($event)"
-                  />
-                  <span class="logo-upload__cta">
-                    {{ logoBusy() ? 'Enviando…' : 'Escolher arquivo' }}
-                  </span>
-                  <span class="logo-upload__hint muted">
-                    PNG, JPG ou WEBP · máx. 2 MB
-                  </span>
-                </div>
-              </div>
-            }
           </div>
-        </section>
 
-        <section class="form-card" aria-labelledby="sec-cobranca">
-          <div
-            class="form-card__accent form-card__accent--rose"
-            aria-hidden="true"
-          ></div>
-          <div class="form-card__body">
-            <div class="form-card__head">
-              <h2 id="sec-cobranca" class="form-card__title">
+          @if (logoPreviewUrl(); as logoSrc) {
+            <div class="logo-panel">
+              <div class="logo-panel__preview-wrap">
+                <img
+                  [src]="logoSrc"
+                  alt="Pré-visualização da logo da gestão"
+                  class="logo-panel__img"
+                />
+              </div>
+              @if (!readOnlyView()) {
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="removeManagementLogo()"
+                  [disabled]="logoBusy() || saving()"
+                >
+                  Remover logo
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="logo-panel__empty muted">Nenhuma imagem enviada ainda.</p>
+          }
+
+          @if (!readOnlyView()) {
+            <label class="field field--block logo-upload">
+              <span class="field__label">Enviar nova imagem</span>
+              <div class="logo-upload__box">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  class="logo-upload__input"
+                  aria-label="Enviar nova imagem da logo para PDFs"
+                  [disabled]="logoBusy() || saving()"
+                  (change)="onManagementLogoSelected($event)"
+                />
+                <span class="logo-upload__cta">{{
+                  logoBusy() ? 'Enviando…' : 'Escolher arquivo'
+                }}</span>
+                <span class="logo-upload__hint muted">
+                  PNG, JPG ou WEBP · máx. 2 MB
+                </span>
+              </div>
+            </label>
+          }
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">3</span>
+            <div>
+              <h2 id="sec-cobranca" class="form-section__title">
                 Modelo de cobrança
               </h2>
-              <p class="form-card__hint">
+              <p class="form-section__hint">
                 Define como a taxa condominial é cobrada dos moradores, o dia de
                 vencimento padrão e a taxa de juros aplicada quando há atraso.
               </p>
             </div>
-
-            <div class="field-grid field-grid--stack">
-              <label class="field field--span-wide">
-                <span class="field__label">Tipo de cobrança</span>
-                <select formControlName="billingChargeModel">
-                  @for (m of billingChargeModels; track m.value) {
-                    <option [value]="m.value">{{ m.label }}</option>
-                  }
-                </select>
-                <small class="field__hint muted">
-                  No modelo «Pagamento manual via PIX» o morador paga pela chave
-                  configurada abaixo e envia o comprovante ao síndico pelo
-                  WhatsApp.
-                </small>
-              </label>
-
-              <label class="field">
-                <span class="field__label">Dia de vencimento padrão</span>
-                <input
-                  type="number"
-                  formControlName="billingDefaultDueDay"
-                  min="1"
-                  max="31"
-                  step="1"
-                  inputmode="numeric"
-                  [readOnly]="readOnlyView()"
-                />
-                <small class="field__hint muted">
-                  Dia do mês (1 a 31) usado como sugestão ao gerar a cobrança.
-                </small>
-                @for (
-                  msg of fieldErrorsPt(form.controls.billingDefaultDueDay);
-                  track msg
-                ) {
-                  <small class="field-error">{{ msg }}</small>
-                }
-              </label>
-
-              <label class="field">
-                <span class="field__label">Juros em atraso (% ao mês)</span>
-                <input
-                  type="number"
-                  formControlName="billingLateInterestPercent"
-                  min="0"
-                  max="99.99"
-                  step="0.01"
-                  inputmode="decimal"
-                  [readOnly]="readOnlyView()"
-                />
-                <small class="field__hint muted">
-                  Percentual aplicado sobre o valor da taxa quando o pagamento
-                  ultrapassa o vencimento. Use 0 para não cobrar juros.
-                </small>
-                @for (
-                  msg of fieldErrorsPt(form.controls.billingLateInterestPercent);
-                  track msg
-                ) {
-                  <small class="field-error">{{ msg }}</small>
-                }
-              </label>
-            </div>
           </div>
-        </section>
 
-        <section class="form-card" aria-labelledby="sec-pix">
-          <div
-            class="form-card__accent form-card__accent--amber"
-            aria-hidden="true"
-          ></div>
-          <div class="form-card__body">
-            <div class="form-card__head">
-              <h2 id="sec-pix" class="form-card__title">
+          <div class="values-grid condo-edit-form__values">
+            <label class="field field--block condo-edit-form__span-all">
+              <span class="field__label">Tipo de cobrança</span>
+              <select class="input input--lg" formControlName="billingChargeModel">
+                @for (m of billingChargeModels; track m.value) {
+                  <option [value]="m.value">{{ m.label }}</option>
+                }
+              </select>
+              <span class="field-hint muted">
+                No modelo «Pagamento manual via PIX» o morador paga pela chave
+                configurada abaixo e envia o comprovante ao síndico pelo WhatsApp.
+              </span>
+            </label>
+
+            <label class="field field--block">
+              <span class="field__label">Dia de vencimento padrão</span>
+              <input
+                type="number"
+                class="input input--lg"
+                formControlName="billingDefaultDueDay"
+                min="1"
+                max="31"
+                step="1"
+                inputmode="numeric"
+                [readOnly]="readOnlyView()"
+              />
+              <span class="field-hint muted">
+                Dia do mês (1 a 31) usado como sugestão ao gerar a cobrança.
+              </span>
+              @for (
+                msg of fieldErrorsPt(form.controls.billingDefaultDueDay);
+                track msg
+              ) {
+                <span class="field-err">{{ msg }}</span>
+              }
+            </label>
+
+            <label class="field field--block">
+              <span class="field__label">Juros em atraso (% ao mês)</span>
+              <input
+                type="number"
+                class="input input--lg"
+                formControlName="billingLateInterestPercent"
+                min="0"
+                max="99.99"
+                step="0.01"
+                inputmode="decimal"
+                [readOnly]="readOnlyView()"
+              />
+              <span class="field-hint muted">
+                Percentual sobre o valor da taxa após o vencimento. Use 0 para não
+                cobrar juros.
+              </span>
+              @for (
+                msg of fieldErrorsPt(form.controls.billingLateInterestPercent);
+                track msg
+              ) {
+                <span class="field-err">{{ msg }}</span>
+              }
+            </label>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__step" aria-hidden="true">4</span>
+            <div>
+              <h2 id="sec-pix" class="form-section__title">
                 Cobrança e transparência
               </h2>
-              <p class="form-card__hint">
+              <p class="form-section__hint">
                 @if (readOnlyView()) {
                   Dados de PIX e contato usados no relatório mensal aos
                   proprietários.
@@ -256,94 +217,97 @@
                 }
               </p>
             </div>
+          </div>
 
-            <div class="field-grid field-grid--stack">
-              <label class="field field--span-wide">
-                <span class="field__label">Chave PIX do condomínio</span>
+          <div class="values-grid condo-edit-form__values">
+            <label class="field field--block condo-edit-form__span-all">
+              <span class="field__label">Chave PIX do condomínio</span>
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="billingPixKey"
+                autocomplete="off"
+                placeholder="E-mail, CPF/CNPJ, telefone ou EVP"
+                [readOnly]="readOnlyView()"
+              />
+            </label>
+
+            <label class="field field--block">
+              <span class="field__label"
+                >Beneficiário (PIX, até 25 caracteres)</span
+              >
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="billingPixBeneficiaryName"
+                maxlength="25"
+                [readOnly]="readOnlyView()"
+              />
+            </label>
+
+            <label class="field field--block">
+              <span class="field__label">Cidade</span>
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="billingPixCity"
+                maxlength="15"
+                [readOnly]="readOnlyView()"
+              />
+            </label>
+
+            <div class="field field--block condo-edit-form__span-all">
+              <label class="checkbox-row">
                 <input
-                  type="text"
-                  formControlName="billingPixKey"
-                  autocomplete="off"
-                  placeholder="E-mail, CPF/CNPJ, telefone ou EVP"
-                  [readOnly]="readOnlyView()"
+                  type="checkbox"
+                  formControlName="transparencyPdfIncludePixQrCode"
+                  class="checkbox-row__input"
                 />
-              </label>
-
-              <label class="field">
-                <span class="field__label"
-                  >Beneficiário (PIX, até 25 caracteres)</span
-                >
-                <input
-                  type="text"
-                  formControlName="billingPixBeneficiaryName"
-                  maxlength="25"
-                  [readOnly]="readOnlyView()"
-                />
-              </label>
-
-              <label class="field">
-                <span class="field__label">Cidade</span>
-                <input
-                  type="text"
-                  formControlName="billingPixCity"
-                  maxlength="15"
-                  [readOnly]="readOnlyView()"
-                />
-              </label>
-
-              <div class="field field--checkbox field--span-wide">
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    formControlName="transparencyPdfIncludePixQrCode"
-                    class="checkbox-row__input"
-                  />
-                  <span class="checkbox-row__text">
-                    <span class="checkbox-row__label"
-                      >Incluir QR Code e «Copia e cola» no PDF de transparência</span
-                    >
-                    <span class="checkbox-row__hint muted">
-                      Se desmarcar, o PDF mostra só beneficiário, cidade e chave
-                      PIX em texto — sem código BR nem imagem de QR.
-                    </span>
+                <span class="checkbox-row__text">
+                  <span class="checkbox-row__label"
+                    >Incluir QR Code e «Copia e cola» no PDF de transparência</span
+                  >
+                  <span class="checkbox-row__hint muted">
+                    Se desmarcar, o PDF mostra só beneficiário, cidade e chave PIX
+                    em texto — sem código BR nem imagem de QR.
                   </span>
-                </label>
-              </div>
-
-              <label class="field field--span-wide">
-                <span class="field__label">WhatsApp para comprovantes</span>
-                <input
-                  type="text"
-                  formControlName="syndicWhatsappForReceipts"
-                  placeholder="(41) 99989-7602"
-                  appBrPhoneMask
-                  [mobileOnly]="true"
-                  [readOnly]="readOnlyView()"
-                />
-                @for (
-                  msg of fieldErrorsPt(form.controls.syndicWhatsappForReceipts);
-                  track msg
-                ) {
-                  <small class="field-error">{{ msg }}</small>
-                }
+                </span>
               </label>
             </div>
-          </div>
-        </section>
-        </fieldset>
 
-        @if (editableByUser()) {
-          <div class="form-actions">
-            <button
-              type="submit"
-              class="btn btn--primary"
-              [disabled]="saving() || logoBusy()"
-            >
-              {{ saving() ? 'Salvando…' : 'Salvar alterações' }}
-            </button>
+            <label class="field field--block condo-edit-form__span-all">
+              <span class="field__label">WhatsApp para comprovantes</span>
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="syndicWhatsappForReceipts"
+                placeholder="(41) 99989-7602"
+                appBrPhoneMask
+                [mobileOnly]="true"
+                [readOnly]="readOnlyView()"
+              />
+              @for (
+                msg of fieldErrorsPt(form.controls.syndicWhatsappForReceipts);
+                track msg
+              ) {
+                <span class="field-err">{{ msg }}</span>
+              }
+            </label>
           </div>
-        }
-      </form>
-    </div>
+        </div>
+      </fieldset>
+
+      @if (editableByUser()) {
+        <footer class="form-footer condo-edit-form__footer">
+          <button
+            type="submit"
+            class="btn btn--submit"
+            [disabled]="saving() || logoBusy()"
+          >
+            {{ saving() ? 'Salvando…' : 'Salvar alterações' }}
+          </button>
+        </footer>
+      }
+    </form>
   }
-</section>
+</div>

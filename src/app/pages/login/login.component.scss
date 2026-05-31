@@ -3,10 +3,10 @@
   min-height: 100vh;
   background: radial-gradient(
       120% 80% at 100% 0%,
-      color-mix(in srgb, var(--accent) 18%, transparent),
+      color-mix(in srgb, var(--accent) 14%, transparent),
       transparent
     ),
-    var(--bg);
+    var(--ma-body-bg);
 }
 
 .page {
@@ -55,6 +55,7 @@ h1 {
   margin: 0 0 0.35rem;
   font-size: 1.5rem;
   letter-spacing: -0.02em;
+  color: var(--heading-color);
 }
 
 .sub {

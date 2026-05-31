@@ -6,10 +6,11 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, Subscription } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   formatBrPhoneDisplay,
   optionalBrMobilePhoneValidator,
@@ -32,12 +33,13 @@ import {
 
 @Component({
   selector: 'app-painel-unidades',
-  imports: [ReactiveFormsModule, BrPhoneMaskDirective],
+  imports: [ReactiveFormsModule, FormsModule, BrPhoneMaskDirective],
   templateUrl: './painel-unidades.component.html',
   styleUrl: './painel-unidades.component.scss',
 })
 export class PainelUnidadesComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(CondominiumManagementService);
   private readonly navData = inject(CondominiumNavDataService);
   private readonly planningApi = inject(PlanningApiService);
@@ -50,7 +52,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   protected readonly loadError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
-  protected readonly actionError = signal<string | null>(null);
 
   protected readonly newGroupingName = signal('');
   protected readonly editingGroupingId = signal<string | null>(null);
@@ -88,7 +89,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -108,9 +109,11 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     this.fragmentSub?.unsubscribe();
   }
 
-  reload(): void {
+  reload(options?: { silent?: boolean }): void {
     this.loadError.set(null);
-    this.loading.set(true);
+    if (!options?.silent) {
+      this.loading.set(true);
+    }
     forkJoin({
       rows: this.api.loadGroupingsWithUnits(this.condominiumId),
       access: this.planningApi.access(this.condominiumId),
@@ -122,9 +125,151 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.messageFromHttp(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
+  }
+
+  private findUnitRow(groupingId: string, unitId: string): UnitRow | null {
+    const group = this.rows().find((g) => g.id === groupingId);
+    return group?.units.find((u) => u.id === unitId) ?? null;
+  }
+
+  /** Atualiza uma unidade na árvore local sem recarregar a página inteira. */
+  private patchUnitInRows(groupingId: string, updated: UnitRow): void {
+    this.rows.update((groups) =>
+      groups.map((g) => {
+        if (g.id !== groupingId) {
+          return g;
+        }
+        return {
+          ...g,
+          units: g.units.map((unit) => {
+            if (unit.id !== updated.id) {
+              return unit;
+            }
+            const merged = this.mergeUnitRow(unit, updated);
+            return merged;
+          }),
+        };
+      }),
+    );
+  }
+
+  /** Comparação estável de UUIDs no `<select>` (evita mismatch de maiúsculas/minúsculas). */
+  private normalizePersonId(id: string | null | undefined): string | null {
+    if (id === undefined || id === null) {
+      return null;
+    }
+    const t = String(id).trim();
+    return t.length ? t.toLowerCase() : null;
+  }
+
+  private personIdsEqual(
+    a: string | null | undefined,
+    b: string | null | undefined,
+  ): boolean {
+    const na = this.normalizePersonId(a);
+    const nb = this.normalizePersonId(b);
+    if (na === null && nb === null) {
+      return true;
+    }
+    return na !== null && na === nb;
+  }
+
+  private mergeUnitRow(previous: UnitRow, incoming: UnitRow): UnitRow {
+    const responsiblePeople =
+      incoming.responsiblePeople?.length
+        ? incoming.responsiblePeople
+        : previous.responsiblePeople;
+
+    const financialResponsiblePersonId =
+      this.resolveFinancialResponsiblePersonId(incoming, previous);
+
+    const financialResponsiblePerson = this.resolveFinancialResponsiblePerson(
+      financialResponsiblePersonId,
+      responsiblePeople,
+      incoming.financialResponsiblePerson,
+      incoming.financialResponsibleName,
+    );
+
+    const financialResponsibleName =
+      incoming.financialResponsibleName !== undefined
+        ? incoming.financialResponsibleName
+        : financialResponsiblePerson?.fullName ??
+          previous.financialResponsibleName ??
+          null;
+
+    const { financialResponsiblePerson: _dropPerson, ...incomingRest } =
+      incoming;
+
+    return {
+      ...previous,
+      ...incomingRest,
+      responsiblePeople,
+      financialResponsiblePersonId,
+      financialResponsiblePerson,
+      financialResponsibleName,
+    };
+  }
+
+  private resolveFinancialResponsiblePerson(
+    personId: string | null,
+    responsiblePeople: UnitPersonRef[] | undefined,
+    fromApi: UnitPersonRef | null | undefined,
+    displayName: string | null | undefined,
+  ): UnitPersonRef | null {
+    if (!personId) {
+      return null;
+    }
+    const fromList = responsiblePeople?.find((p) =>
+      this.personIdsEqual(p.id, personId),
+    );
+    if (fromList) {
+      return fromList;
+    }
+    if (fromApi?.id && this.personIdsEqual(fromApi.id, personId)) {
+      return fromApi;
+    }
+    const name = displayName?.trim();
+    if (name) {
+      return { id: personId, fullName: name };
+    }
+    return { id: personId, fullName: '—' };
+  }
+
+  /** Valor do `<select>` (responsável principal); `ngModel` exige string estável. */
+  protected financialPrincipalSelectValue(u: UnitRow): string {
+    const id = this.resolveFinancialResponsiblePersonId(u, u);
+    return id ?? '';
+  }
+
+  /** Valor de cada `<option>` (mesma normalização do modelo). */
+  protected financialPrincipalOptionValue(personId: string): string {
+    return this.normalizePersonId(personId) ?? '';
+  }
+
+  /**
+   * ID do responsável principal. Se `financialResponsiblePersonId` vier na resposta
+   * (incluindo `null`), não usa relação antiga que ainda pode vir no JSON.
+   */
+  private resolveFinancialResponsiblePersonId(
+    source: UnitRow,
+    fallback: UnitRow,
+  ): string | null {
+    if (source.financialResponsiblePersonId !== undefined) {
+      return this.normalizePersonId(source.financialResponsiblePersonId);
+    }
+    if (fallback.financialResponsiblePersonId !== undefined) {
+      return this.normalizePersonId(fallback.financialResponsiblePersonId);
+    }
+    const fromRelation = this.normalizePersonId(
+      source.financialResponsiblePerson?.id,
+    );
+    if (fromRelation) {
+      return fromRelation;
+    }
+    return this.normalizePersonId(fallback.financialResponsiblePerson?.id);
   }
 
   /** Titular ou síndico: alinhado à API de atualização de telefone. */
@@ -176,7 +321,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     if (!this.canEditResidentPhones()) {
       return;
     }
-    this.clearActionError();
     this.phoneEditContext.set({
       groupingId,
       unitId: u.id,
@@ -207,7 +351,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       /\D/g,
       '',
     );
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .patchUnitPersonPhone(this.condominiumId, groupingId, unitId, personId, {
@@ -219,10 +362,11 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
           this.cancelPhoneEdit();
           this.reload();
           this.navData.refresh(this.condominiumId, { force: true });
+          this.flash.success('Telefone atualizado.');
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -235,7 +379,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     if (!this.canManageCondominium()) return;
     const name = this.newGroupingName().trim();
     if (!name) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api.createGrouping(this.condominiumId, { name }).subscribe({
       next: () => {
@@ -243,10 +386,11 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         this.busy.set(false);
         this.reload();
         this.navData.refresh(this.condominiumId, { force: true });
+        this.flash.success('Agrupamento criado.');
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -275,7 +419,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     if (!this.canManageCondominium()) return;
     const name = this.groupingNameDraft().trim();
     if (!name) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .updateGrouping(this.condominiumId, groupingId, { name })
@@ -288,7 +431,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -300,7 +443,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       `Excluir o agrupamento «${g.name}» e todas as suas unidades?`,
     );
     if (!ok) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api.deleteGrouping(this.condominiumId, g.id).subscribe({
       next: () => {
@@ -310,7 +452,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -335,7 +477,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     const d = this.newUnitFor(groupingId);
     const identifier = d.identifier.trim();
     if (!identifier) return;
-    this.clearActionError();
     this.busy.set(true);
     const notes = d.notes.trim() || null;
     this.api
@@ -354,7 +495,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -377,7 +518,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     const d = this.unitDraft();
     const identifier = d.identifier.trim();
     if (!identifier) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .updateUnit(this.condominiumId, groupingId, unitId, {
@@ -393,7 +533,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -402,7 +542,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     if (!this.canManageCondominium()) return;
     const ok = confirm(`Excluir a unidade «${u.identifier}»?`);
     if (!ok) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api.deleteUnit(this.condominiumId, groupingId, u.id).subscribe({
       next: () => {
@@ -412,7 +551,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -432,7 +571,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
 
   protected startEditUnitPendingWa(u: UnitRow): void {
     if (!this.canManageCondominium()) return;
-    this.clearActionError();
     this.pendingWaEditUnitId.set(u.id);
     const digits = toNationalPhoneDigits(u.pendingWhatsappPhone ?? '');
     this.unitPendingWaForm.reset({ phone: digits });
@@ -451,7 +589,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       /\D/g,
       '',
     );
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .updateUnit(this.condominiumId, groupingId, unitId, {
@@ -466,14 +603,13 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   protected clearUnitPendingWhatsapp(groupingId: string, u: UnitRow): void {
     if (!this.canManageCondominium() || !u.pendingWhatsappPhone) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .updateUnit(this.condominiumId, groupingId, u.id, {
@@ -488,7 +624,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -529,36 +665,55 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     return this.responsibleWithProfileCount(u) >= 2;
   }
 
-  protected onFinancialPrincipalChange(
+  protected onFinancialPrincipalModelChange(
     groupingId: string,
-    u: UnitRow,
-    evt: Event,
+    unitId: string,
+    raw: string,
   ): void {
     if (!this.canManageCondominium()) {
       return;
     }
-    const raw = (evt.target as HTMLSelectElement).value.trim();
-    const nextId = raw.length ? raw : null;
-    const cur = u.financialResponsiblePersonId ?? null;
-    if (nextId === cur) {
+    const u = this.findUnitRow(groupingId, unitId);
+    if (!u) {
       return;
     }
-    this.clearActionError();
+    const snapshot = { ...u };
+    const nextId = this.normalizePersonId(raw);
+    const cur = this.resolveFinancialResponsiblePersonId(u, u);
+    if (this.personIdsEqual(nextId, cur)) {
+      return;
+    }
+    const picked = nextId
+      ? (u.responsiblePeople?.find((p) => this.personIdsEqual(p.id, nextId)) ??
+        null)
+      : null;
+    const apiPersonId = picked?.id ?? nextId;
+    this.patchUnitInRows(groupingId, {
+      ...u,
+      financialResponsiblePersonId: apiPersonId,
+      financialResponsiblePerson: picked,
+      financialResponsibleName: picked?.fullName ?? null,
+    });
     this.busy.set(true);
     this.api
-      .updateUnit(this.condominiumId, groupingId, u.id, {
-        financialResponsiblePersonId: nextId,
+      .updateUnit(this.condominiumId, groupingId, unitId, {
+        financialResponsiblePersonId: apiPersonId,
       })
       .subscribe({
-        next: () => {
+        next: (updated) => {
           this.busy.set(false);
-          this.reload();
+          this.patchUnitInRows(groupingId, {
+            ...updated,
+            financialResponsiblePersonId: apiPersonId,
+          });
           this.navData.refresh(this.condominiumId, { force: true });
+          this.flash.success('Responsável principal atualizado.');
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
-          this.reload();
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+          this.patchUnitInRows(groupingId, snapshot);
+          this.reload({ silent: true });
         },
       });
   }
@@ -574,7 +729,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       `Remover «${personName}» da lista de responsáveis da unidade «${u.identifier}»?`,
     );
     if (!ok) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .removeOneUnitResponsible(
@@ -591,7 +745,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -603,7 +757,6 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       `Confirma remover todos os responsáveis da unidade «${u.identifier}» (incluindo nome livre, se houver)? O proprietário, se existir, não é alterado.`,
     );
     if (!ok) return;
-    this.clearActionError();
     this.busy.set(true);
     this.api
       .clearUnitResponsible(this.condominiumId, groupingId, u.id)
@@ -615,7 +768,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -628,11 +781,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     return this.rows().length > 1;
   }
 
-  private clearActionError(): void {
-    this.actionError.set(null);
-  }
-
-  private messageFromHttp(err: HttpErrorResponse): string {
+  private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
         'Sem conexão com o servidor. Verifique a internet e tente novamente.',

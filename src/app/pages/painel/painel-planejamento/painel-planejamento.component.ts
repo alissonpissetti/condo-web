@@ -16,6 +16,7 @@ import {
 } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   formatDateDdMmYyyy,
   localIsoDateDaysAgo,
@@ -60,6 +61,7 @@ const BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
 })
 export class PainelPlanejamentoComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(PlanningApiService);
   private readonly fb = inject(FormBuilder);
@@ -74,7 +76,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     [],
   );
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
   /** Último documento `assembly_minutes_draft` por pauta (para download do PDF em Pautas). */
   protected readonly minutesDraftDocumentIdByPollId = signal<
@@ -180,7 +181,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.listLoading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -497,8 +498,8 @@ export class PainelPlanejamentoComponent implements OnInit {
       );
       this.lastLocalBodySaveAt.set(Date.now());
     } catch {
-      this.actionError.set(
-        'Não foi possível guardar o rascunho no navegador (armazenamento cheio ou indisponível).',
+      this.flash.error(
+        'Não foi possível salvar o rascunho no navegador (armazenamento cheio ou indisponível).',
       );
     }
   }
@@ -559,7 +560,6 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   protected saveBody(p: PlanningPoll): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .updatePoll(this.condominiumId, p.id, {
         body: this.bodyEditForm.getRawValue().body ?? '',
@@ -575,7 +575,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -586,7 +586,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     input.value = '';
     if (!file) return;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.uploadPollAttachment(this.condominiumId, p.id, file).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -596,7 +595,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -618,7 +617,6 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   private removeAttachment(p: PlanningPoll, a: PlanningPollAttachment): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .deletePollAttachment(this.condominiumId, p.id, a.id)
       .subscribe({
@@ -630,7 +628,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -639,14 +637,13 @@ export class PainelPlanejamentoComponent implements OnInit {
     p: PlanningPoll,
     a: PlanningPollAttachment,
   ): void {
-    this.actionError.set(null);
     this.api
       .downloadPollAttachmentBlob(this.condominiumId, p.id, a.id)
       .subscribe({
         next: (blob) =>
           this.triggerBlobDownload(blob, a.originalFilename || 'anexo'),
         error: (err: HttpErrorResponse) => {
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -940,7 +937,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const ymd = this.competenceEditForm.getRawValue().competenceDate.trim();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .updatePoll(this.condominiumId, p.id, { competenceDate: ymd })
       .subscribe({
@@ -952,7 +948,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -980,7 +976,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       }
       const labels = v.options.map((x) => x.trim()).filter(Boolean);
       if (labels.length < 2) {
-        this.actionError.set('Indique pelo menos duas opções com texto.');
+        this.flash.warning('Indique pelo menos duas opções com texto.');
         this.typeSettingsForm.markAllAsTouched();
         return;
       }
@@ -1004,7 +1000,6 @@ export class PainelPlanejamentoComponent implements OnInit {
         .map((label) => ({ label }));
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.updatePoll(this.condominiumId, p.id, patch).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -1014,7 +1009,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1026,7 +1021,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const t = this.titleEditForm.getRawValue().title.trim();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.updatePoll(this.condominiumId, p.id, { title: t }).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -1036,7 +1030,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1139,25 +1133,22 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.listFilterForm.patchValue({ titleQuery: '' }, { emitEvent: false });
     const { registeredFrom, registeredTo } = this.listFilterForm.getRawValue();
     if (registeredFrom.trim() > registeredTo.trim()) {
-      this.actionError.set('A data «de» não pode ser posterior à data «até».');
+      this.flash.warning('A data «de» não pode ser posterior à data «até».');
       return;
     }
-    this.actionError.set(null);
     this.reload();
   }
 
   protected searchByTitleOnly(): void {
     const q = this.listFilterForm.getRawValue().titleQuery?.trim() ?? '';
     if (!q) {
-      this.actionError.set('Digite um trecho do título para buscar.');
+      this.flash.warning('Digite um trecho do título para buscar.');
       return;
     }
-    this.actionError.set(null);
     this.reload();
   }
 
   protected clearListFilters(): void {
-    this.actionError.set(null);
     this.listFilterForm.patchValue({
       registeredFrom: localIsoDateDaysAgo(29),
       registeredTo: todayLocalIsoDate(),
@@ -1184,7 +1175,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.listLoading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -1219,7 +1210,6 @@ export class PainelPlanejamentoComponent implements OnInit {
   private applySelectedPoll(p: PlanningPoll): void {
     this.selected.set(p);
     this.results.set(null);
-    this.actionError.set(null);
     this.resetLiveEditingState();
     this.editingBody.set(false);
     this.editingTitle.set(false);
@@ -1292,7 +1282,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         ? []
         : v.options.map((x) => x.trim()).filter(Boolean);
     if (v.assemblyType !== 'ata' && labels.length < 2) {
-      this.actionError.set('Indique pelo menos duas opções com texto.');
+      this.flash.warning('Indique pelo menos duas opções com texto.');
       this.createForm.markAllAsTouched();
       return;
     }
@@ -1301,7 +1291,6 @@ export class PainelPlanejamentoComponent implements OnInit {
         ? false
         : !!v.allowMultiple;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .createPoll(this.condominiumId, {
         title: v.title.trim(),
@@ -1334,7 +1323,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -1349,7 +1338,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1364,14 +1353,13 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   finalizeAta(p: PlanningPoll): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.finalizeAtaPoll(this.condominiumId, p.id).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -1380,7 +1368,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1397,7 +1385,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1407,7 +1395,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.api.generateMinutesDraft(this.condominiumId, p.id).subscribe({
       next: (doc) => {
         this.busy.set(false);
-        this.actionError.set(null);
         this.minutesDraftDocumentIdByPollId.update((m) => ({
           ...m,
           [p.id]: doc.id,
@@ -1422,13 +1409,13 @@ export class PainelPlanejamentoComponent implements OnInit {
                 this.minutesDraftDownloadFilename(p.title, doc.title),
               ),
             error: (err: HttpErrorResponse) => {
-              this.actionError.set(this.msg(err));
+              this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
             },
           });
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1440,7 +1427,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const optionIds = this.voteOptionIds();
     if (optionIds.length === 0) {
-      this.actionError.set(
+      this.flash.warning(
         this.pollAllowsMulti(p)
           ? 'Selecione pelo menos uma opção.'
           : 'Selecione uma opção.',
@@ -1449,13 +1436,11 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const { unitId } = this.voteForm.getRawValue();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .castVote(this.condominiumId, p.id, { unitId, optionIds })
       .subscribe({
         next: () => {
           this.busy.set(false);
-          this.actionError.set(null);
           this.api.getPoll(this.condominiumId, p.id).subscribe({
             next: (fresh) => {
               this.upsertPollInList(fresh);
@@ -1468,7 +1453,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -1583,7 +1568,6 @@ export class PainelPlanejamentoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.downloadDocumentBlob(this.condominiumId, docId).subscribe({
       next: (blob) => {
         this.busy.set(false);
@@ -1594,7 +1578,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }

@@ -7,20 +7,6 @@
   padding: 0 0 2.75rem;
 }
 
-.page:not(.page--work-detail) {
-  max-width: 36rem;
-}
-
-@media (min-width: 640px) {
-  .page:not(.page--work-detail) {
-    max-width: 48rem;
-  }
-}
-
-.page--work-detail {
-  max-width: 56rem;
-}
-
 .page__header {
   margin-bottom: 1.35rem;
   padding-bottom: 1.1rem;
@@ -50,6 +36,18 @@
 .obras-list-filter {
   margin-top: 0.65rem;
   max-width: 14rem;
+}
+
+.plan-detail__body {
+  gap: 1.25rem;
+}
+
+.obras-register-card {
+  margin-bottom: 0;
+
+  .plan-create-panel {
+    padding: 0 1.25rem 1.15rem;
+  }
 }
 
 .obras-register {
@@ -307,6 +305,11 @@
   &[data-kind='document'] {
     --tl-accent: #7c3aed;
     --tl-node: #7c3aed;
+  }
+
+  &[data-kind='edit'] {
+    --tl-accent: #0f766e;
+    --tl-node: #0d9488;
   }
 }
 
@@ -656,6 +659,82 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+  }
+}
+
+/* Status editável no cabeçalho do detalhe (direita) */
+.obra-status-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.28rem;
+  min-width: min(100%, 11.5rem);
+}
+
+.obra-status-field__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.obra-status-select {
+  width: 100%;
+  min-width: 10.5rem;
+  padding: 0.4rem 2.1rem 0.4rem 0.75rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2364748b' d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  background-size: 0.85rem;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+
+  &:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &--planned {
+    background-color: color-mix(in srgb, var(--muted) 14%, var(--surface));
+    color: var(--muted);
+  }
+
+  &--in-progress {
+    background-color: color-mix(in srgb, #0284c7 14%, var(--surface));
+    color: color-mix(in srgb, #0c4a6e 96%, var(--text));
+    border-color: color-mix(in srgb, #0369a1 32%, var(--border));
+  }
+
+  &--completed {
+    background-color: color-mix(in srgb, #16a34a 14%, var(--surface));
+    color: color-mix(in srgb, #14532d 96%, var(--text));
+    border-color: color-mix(in srgb, #15803d 32%, var(--border));
+  }
+
+  &--cancelled {
+    background-color: color-mix(in srgb, var(--muted) 16%, var(--surface));
+    color: var(--muted);
+    border-color: var(--border);
   }
 }
 

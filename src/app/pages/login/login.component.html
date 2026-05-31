@@ -41,10 +41,6 @@
       </button>
     </div>
 
-    @if (error()) {
-      <div class="alert" role="alert">{{ error() }}</div>
-    }
-
     @if (loginMode() === 'email') {
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <label>

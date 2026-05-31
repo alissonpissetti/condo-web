@@ -1,20 +1,7 @@
 <div class="page">
   <header class="page__header">
     <h1>Documentos do condomínio</h1>
-    <p class="page__intro">
-      @if (canManageUpload()) {
-        Arquivos gerais (regulamentos, contratos e outros). O sistema registra quem enviou e
-        a data/hora do envio. Moradores com acesso podem consultar e fazer o download.
-      } @else {
-        Documentos disponibilizados pela gestão. Você pode consultar a lista e fazer o
-        download dos arquivos.
-      }
-    </p>
   </header>
-
-  @if (actionError(); as ae) {
-    <p class="error" role="alert">{{ ae }}</p>
-  }
 
   @if (canManageUpload()) {
     <section class="card upload-card">

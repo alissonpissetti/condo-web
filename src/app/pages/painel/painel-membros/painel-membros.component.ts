@@ -14,6 +14,7 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { CondominiumManagementService } from '../../../core/condominium-management.service';
 import {
   PlanningApiService,
@@ -32,6 +33,7 @@ import {
 })
 export class PainelMembrosComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly planningApi = inject(PlanningApiService);
   private readonly condoApi = inject(CondominiumManagementService);
   private readonly fb = inject(FormBuilder);
@@ -41,9 +43,6 @@ export class PainelMembrosComponent implements OnInit {
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly condoName = signal<string | null>(null);
   protected readonly participants = signal<CondominiumParticipant[]>([]);
-
-  protected readonly actionError = signal<string | null>(null);
-  protected readonly actionOk = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly lookupBusy = signal(false);
   protected readonly lookupResult = signal<{
@@ -87,7 +86,7 @@ export class PainelMembrosComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -161,8 +160,6 @@ export class PainelMembrosComponent implements OnInit {
     const sel = ev.target as HTMLSelectElement;
     const v = sel.value;
     this.selectedEligibleUserId.set(v);
-    this.actionError.set(null);
-    this.actionOk.set(null);
     this.assignForm.patchValue({ email: '' });
     if (!v) {
       this.lookupResult.set(null);
@@ -222,7 +219,7 @@ export class PainelMembrosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -231,11 +228,9 @@ export class PainelMembrosComponent implements OnInit {
     if (!this.canAssignRoles()) return;
     const email = this.assignForm.controls.email.value.trim();
     if (!email) {
-      this.actionError.set('Indique o e-mail.');
+      this.flash.warning('Indique o e-mail.');
       return;
     }
-    this.actionError.set(null);
-    this.actionOk.set(null);
     this.lookupResult.set(null);
     this.selectedEligibleUserId.set('');
     this.lookupBusy.set(true);
@@ -246,7 +241,7 @@ export class PainelMembrosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.lookupBusy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -255,13 +250,11 @@ export class PainelMembrosComponent implements OnInit {
     if (!this.canAssignRoles()) return;
     const lu = this.lookupResult();
     if (!lu) {
-      this.actionError.set('Use “Identificar” antes de confirmar.');
+      this.flash.warning('Use “Identificar” antes de confirmar.');
       return;
     }
     const role = this.assignForm.controls.role.value;
     this.busy.set(true);
-    this.actionError.set(null);
-    this.actionOk.set(null);
     this.planningApi
       .createParticipant(this.condominiumId, {
         userId: lu.userId,
@@ -274,7 +267,7 @@ export class PainelMembrosComponent implements OnInit {
           this.assignForm.patchValue({ email: '' });
           this.lookupResult.set(null);
           this.selectedEligibleUserId.set('');
-          this.actionOk.set(
+          this.flash.success(
             role === 'syndic'
               ? 'Síndico atualizado.'
               : role === 'sub_syndic'
@@ -285,7 +278,7 @@ export class PainelMembrosComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -295,19 +288,17 @@ export class PainelMembrosComponent implements OnInit {
     if (row.role === 'owner') return;
     if (row.role === 'syndic') return;
     this.removingId.set(row.id);
-    this.actionError.set(null);
-    this.actionOk.set(null);
     this.planningApi
       .removeParticipant(this.condominiumId, row.id)
       .subscribe({
         next: () => {
           this.removingId.set(null);
-          this.actionOk.set('Papel removido.');
+          this.flash.success('Papel removido.');
           this.refreshParticipants();
         },
         error: (err: HttpErrorResponse) => {
           this.removingId.set(null);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }

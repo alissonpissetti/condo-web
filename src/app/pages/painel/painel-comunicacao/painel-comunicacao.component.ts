@@ -13,6 +13,7 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import type { Condominium } from '../../../core/auth.service';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   CommunicationsApiService,
   type AudiencePreviewUser,
@@ -55,6 +56,7 @@ type DeliveryDefaultsMode = 'digital' | 'print';
 })
 export class PainelComunicacaoComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(CommunicationsApiService);
@@ -68,7 +70,6 @@ export class PainelComunicacaoComponent implements OnInit {
   protected readonly selected = signal<Communication | null>(null);
   protected readonly loading = signal(true);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly pdfBusy = signal(false);
   protected readonly removeBusyId = signal<string | null>(null);
@@ -109,7 +110,7 @@ export class PainelComunicacaoComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     if (this.route.snapshot.queryParamMap.get('leitura') === '1') {
@@ -263,7 +264,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.previewBusy.set(true);
-    this.actionError.set(null);
     const scope = this.audienceScope();
     const body =
       scope === 'units'
@@ -287,7 +287,7 @@ export class PainelComunicacaoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.previewBusy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -517,7 +517,7 @@ export class PainelComunicacaoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -532,7 +532,6 @@ export class PainelComunicacaoComponent implements OnInit {
   }
 
   private openDetail(id: string): void {
-    this.actionError.set(null);
     this.busy.set(true);
     this.api.getOne(this.condominiumId, id).subscribe({
       next: (c) => {
@@ -566,7 +565,7 @@ export class PainelComunicacaoComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
         this.loading.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         this.selected.set(null);
       },
     });
@@ -595,7 +594,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.removeBusyId.set(c.id);
-    this.actionError.set(null);
     this.api.remove(this.condominiumId, c.id).subscribe({
       next: () => {
         this.removeBusyId.set(null);
@@ -607,14 +605,13 @@ export class PainelComunicacaoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.removeBusyId.set(null);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   protected createDraft(): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .create(this.condominiumId, { title: 'Novo informativo' })
       .subscribe({
@@ -624,7 +621,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -703,7 +700,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .update(this.condominiumId, c.id, this.buildDraftPatch())
       .subscribe({
@@ -715,7 +711,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -727,7 +723,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     const patch = this.buildDraftPatch();
     this.api
       .update(this.condominiumId, c.id, patch)
@@ -740,7 +735,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -757,7 +752,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .update(this.condominiumId, c.id, this.buildDraftPatch())
       .subscribe({
@@ -769,7 +763,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -782,7 +776,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     const patch = this.buildDraftPatch();
     this.api
       .update(this.condominiumId, c.id, patch)
@@ -796,7 +789,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -808,7 +801,6 @@ export class PainelComunicacaoComponent implements OnInit {
     const file = input.files?.[0];
     if (!file) return;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.uploadAttachment(this.condominiumId, c.id, file).subscribe({
       next: (updated) => {
         this.busy.set(false);
@@ -817,7 +809,7 @@ export class PainelComunicacaoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
     input.value = '';
@@ -827,7 +819,6 @@ export class PainelComunicacaoComponent implements OnInit {
     const c = this.selected();
     if (!c || (c.status !== 'draft' && c.status !== 'sent')) return;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .deleteAttachment(this.condominiumId, c.id, att.id)
       .subscribe({
@@ -838,7 +829,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -859,7 +850,7 @@ export class PainelComunicacaoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -960,7 +951,6 @@ export class PainelComunicacaoComponent implements OnInit {
       return;
     }
     this.pdfBusy.set(true);
-    this.actionError.set(null);
     const payload: CommunicationPdfInput = {
       condominiumName: this.condoName(),
       title: c.title,
@@ -974,7 +964,7 @@ export class PainelComunicacaoComponent implements OnInit {
     void this.communicationPdf
       .download(payload)
       .catch(() => {
-        this.actionError.set(
+        this.flash.error(
           'Não foi possível gerar o PDF. Tente novamente em instantes.',
         );
       })

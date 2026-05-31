@@ -3,11 +3,6 @@
   width: 100%;
 }
 
-.page {
-  max-width: 72rem;
-  padding: 0 0 2.5rem;
-}
-
 /* ========================================================== */
 /* Header + toolbar                                             */
 /* ========================================================== */
@@ -724,7 +719,6 @@
 
 @media (max-width: 720px) {
   .page {
-    max-width: none;
     padding-bottom: 1.75rem;
   }
 
@@ -1184,6 +1178,20 @@
 .due-targets__due {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.bank-account-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.settle-bank {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 @media (max-width: 520px) {

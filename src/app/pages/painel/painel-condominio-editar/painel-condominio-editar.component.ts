@@ -14,6 +14,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { optionalBrMobilePhoneValidator } from '../../../core/br-phone-mask';
 import { BrPhoneMaskDirective } from '../../../core/br-phone-mask.directive';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
@@ -35,6 +36,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(FormBuilder);
   private readonly api = inject(CondominiumManagementService);
@@ -65,8 +67,6 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
   protected readonly readOnlyView = computed(() => !this.editableByUser());
 
   protected readonly loadError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
-  protected readonly saveSuccess = signal<string | null>(null);
   protected readonly condominiumName = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
@@ -75,7 +75,6 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
 
   private condominiumId = '';
   private logoObjectUrl: string | null = null;
-  private saveSuccessTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Lista de modelos de cobrança exibidos no combo. Mantida no frontend em
@@ -134,7 +133,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
     if (!id) {
       this.loading.set(false);
       this.dataLoaded.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -184,7 +183,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
           this.loading.set(false);
           this.dataLoaded.set(false);
           this.pageAccess.set(null);
-          this.loadError.set(this.messageFromHttp(err));
+          (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
         },
       });
   }
@@ -193,8 +192,6 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
     if (!this.editableByUser()) {
       return;
     }
-    this.formError.set(null);
-    this.clearSaveSuccess();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -225,35 +222,17 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.saving.set(false);
-          this.formError.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   ngOnDestroy(): void {
-    this.clearSaveSuccessTimer();
     this.clearLogoPreview();
   }
 
-  private clearSaveSuccessTimer(): void {
-    if (this.saveSuccessTimer) {
-      clearTimeout(this.saveSuccessTimer);
-      this.saveSuccessTimer = null;
-    }
-  }
-
-  private clearSaveSuccess(): void {
-    this.clearSaveSuccessTimer();
-    this.saveSuccess.set(null);
-  }
-
   private showSaveSuccess(message: string): void {
-    this.clearSaveSuccessTimer();
-    this.saveSuccess.set(message);
-    this.saveSuccessTimer = setTimeout(() => {
-      this.saveSuccess.set(null);
-      this.saveSuccessTimer = null;
-    }, 4500);
+    this.flash.success(message);
   }
 
   onManagementLogoSelected(ev: Event): void {
@@ -265,7 +244,6 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
     if (!file) {
       return;
     }
-    this.formError.set(null);
     this.logoBusy.set(true);
     this.api.uploadManagementLogo(this.condominiumId, file).subscribe({
       next: () => {
@@ -275,7 +253,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.logoBusy.set(false);
-        this.formError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -287,7 +265,6 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
     if (!confirm('Remover a logo do condomínio dos PDFs?')) {
       return;
     }
-    this.formError.set(null);
     this.logoBusy.set(true);
     this.api.deleteManagementLogo(this.condominiumId).subscribe({
       next: () => {
@@ -296,7 +273,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.logoBusy.set(false);
-        this.formError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -322,7 +299,7 @@ export class PainelCondominioEditarComponent implements OnInit, OnDestroy {
     this.logoPreviewUrl.set(null);
   }
 
-  private messageFromHttp(err: HttpErrorResponse): string {
+  private msg(err: HttpErrorResponse): string {
     return translateHttpErrorMessage(err, {
       network:
         'Sem conexão com o servidor. Verifique a internet e tente novamente.',

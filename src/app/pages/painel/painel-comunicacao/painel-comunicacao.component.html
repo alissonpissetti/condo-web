@@ -1,11 +1,6 @@
 <div class="page">
   <header class="page__header">
     <h1>Comunicação</h1>
-    <p class="page__intro">
-      Informativos com anexos. O síndico escolhe destinatários (contas de usuários ligadas às unidades
-      como proprietário ou responsável), canais (e-mail, SMS e WhatsApp em integração) e envia. A
-      leitura fica registrada ao abrir no painel ou pelo link do e-mail.
-    </p>
   </header>
 
   @if (readConfirmedBanner()) {
@@ -13,10 +8,6 @@
       Leitura registrada (link do e-mail).
       <button type="button" class="btn ghost sm" (click)="dismissReadBanner()">Fechar</button>
     </p>
-  }
-
-  @if (actionError(); as ae) {
-    <p class="error" role="alert">{{ ae }}</p>
   }
 
   @if (loading()) {

@@ -45,7 +45,7 @@
           src="/logo-white.png"
           width="677"
           height="369"
-          alt=""
+          alt="Meu Condomínio"
         />
       </a>
       <button
@@ -265,6 +265,40 @@
           </button>
           @if (financeiroExpanded()) {
             <div id="sidebar-financeiro-panel" class="nav-section__panel">
+              @if (planFeatures.isBlocked('financialStatement')) {
+                <a
+                  class="nav-link--locked"
+                  [routerLink]="['/painel/condominio', condoId, 'upgrade']"
+                  [queryParams]="{ feature: 'financialStatement' }"
+                  title="Recurso não incluso no plano atual"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    class="nav-lock"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                  </svg>
+                  <span>Extrato</span>
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'extrato']"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  >Extrato</a
+                >
+              }
+
               @if (condoAccess.canManage()) {
                 @if (planFeatures.isBlocked('financialTransactions')) {
                   <a
@@ -300,11 +334,11 @@
                   >
                 }
 
-                @if (planFeatures.isBlocked('financialStatement')) {
+                @if (planFeatures.isBlocked('financialTransactions')) {
                   <a
                     class="nav-link--locked"
                     [routerLink]="['/painel/condominio', condoId, 'upgrade']"
-                    [queryParams]="{ feature: 'financialStatement' }"
+                    [queryParams]="{ feature: 'financialTransactions' }"
                     title="Recurso não incluso no plano atual"
                   >
                     <svg
@@ -323,14 +357,18 @@
                       <rect x="5" y="11" width="14" height="9" rx="2"></rect>
                       <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
                     </svg>
-                    <span>Extrato</span>
+                    <span>Contas bancárias</span>
                   </a>
                 } @else {
                   <a
-                    [routerLink]="['/painel/condominio', condoId, 'extrato']"
+                    [routerLink]="[
+                      '/painel/condominio',
+                      condoId,
+                      'contas-bancarias'
+                    ]"
                     routerLinkActive="active"
                     [routerLinkActiveOptions]="{ exact: true }"
-                    >Extrato</a
+                    >Contas bancárias</a
                   >
                 }
 

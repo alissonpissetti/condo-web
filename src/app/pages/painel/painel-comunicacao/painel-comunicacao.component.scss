@@ -3,18 +3,6 @@
   width: 100%;
 }
 
-.page {
-  max-width: 100%;
-  padding: 0 0 2.75rem;
-  box-sizing: border-box;
-}
-
-@media (min-width: 900px) {
-  .page {
-    max-width: min(72rem, 100%);
-  }
-}
-
 .page__header {
   margin-bottom: 1.35rem;
   padding-bottom: 1.1rem;

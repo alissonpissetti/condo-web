@@ -9,8 +9,10 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { Observable, of, from, forkJoin } from 'rxjs';
 import { switchMap, concatMap, last, finalize } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
@@ -19,20 +21,41 @@ import {
   type GroupingWithUnits,
 } from '../../../core/condominium-management.service';
 import {
+  CondominiumWorksApiService,
+  type WorkListItem,
+} from '../../../core/condominium-works-api.service';
+import {
   FinancialApiService,
   type AllocationRule,
+  type CondominiumBankAccount,
   type FinancialFund,
   type FinancialTransaction,
   type FinancialTransactionPaymentStatus,
 } from '../../../core/financial-api.service';
 import {
-  firstDayOfMonthLocalIsoDate,
+  firstDayOfMonthFromYm,
   formatDateDdMmYyyy,
-  lastDayOfMonthLocalIsoDate,
+  lastDayOfMonthFromYm,
+  localIsoMonthYm,
   todayLocalIsoDate,
 } from '../../../core/date-display';
+import {
+  extratoBalanceCssClass,
+  extratoDeltaCssClass,
+  parseCentsBigint,
+  signedDeltaForTransaction,
+} from '../../../core/financial-extrato-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
+import {
+  clearTxCreateDraft,
+  readTxCreateDraft,
+  txCreateDraftHasContent,
+  txCreateDraftKey,
+  writeTxCreateDraft,
+  type TxCreateDraft,
+  type TxCreateDraftAllocKind,
+} from '../../../core/tx-form-draft.util';
 
 type TxKind = 'expense' | 'income' | 'investment';
 
@@ -45,34 +68,52 @@ type AllocKind =
 
 @Component({
   selector: 'app-painel-transacoes',
+  imports: [FormsModule, RouterLink],
   templateUrl: './painel-transacoes.component.html',
   styleUrl: './painel-transacoes.component.scss',
 })
 export class PainelTransacoesComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(FinancialApiService);
   private readonly condoApi = inject(CondominiumManagementService);
+  private readonly worksApi = inject(CondominiumWorksApiService);
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
   protected readonly transactionKindLabelPt = transactionKindLabelPt;
+  protected readonly extratoDeltaCssClass = extratoDeltaCssClass;
+  protected readonly extratoBalanceCssClass = extratoBalanceCssClass;
+  protected readonly parseCentsBigint = parseCentsBigint;
+  protected readonly signedDeltaForTransaction = signedDeltaForTransaction;
 
   protected readonly transactions = signal<FinancialTransaction[]>([]);
+  protected readonly works = signal<WorkListItem[]>([]);
   protected readonly funds = signal<FinancialFund[]>([]);
+  protected readonly bankAccounts = signal<CondominiumBankAccount[]>([]);
   protected readonly tree = signal<GroupingWithUnits[]>([]);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly fundFilter = signal<string>('');
+  protected readonly workFilter = signal<string>('');
   /** Período da lista (AAAA-MM-DD), inclusive; por defeito o mês civil corrente. */
   protected readonly periodFrom = signal('');
   protected readonly periodTo = signal('');
+  /** `month` = mês/ano; `custom` = intervalo livre entre duas datas. */
+  protected readonly periodMode = signal<'month' | 'custom'>('month');
+  protected readonly periodMonthYm = signal(localIsoMonthYm());
   protected readonly searchTerm = signal('');
 
   protected readonly txKind = signal<TxKind>('expense');
   /** Única transação ou série mensal (apenas criação). */
-  protected readonly entryMode = signal<'single' | 'recurring'>('single');
+  protected readonly entryMode = signal<'single' | 'recurring' | 'transfer'>(
+    'single',
+  );
+  protected readonly transferFromBankAccountId = signal('');
+  protected readonly transferToBankAccountId = signal('');
+  protected readonly transferFromFundId = signal('');
+  protected readonly transferToFundId = signal('');
   protected readonly recurringMode = signal<'by_installment' | 'by_total'>(
     'by_installment',
   );
@@ -84,6 +125,30 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly titleTx = signal('');
   protected readonly descriptionTx = signal('');
   protected readonly fundIdForm = signal<string>('');
+  protected readonly workIdForm = signal<string>('');
+  protected readonly bankAccountIdForm = signal<string>('');
+
+  /** Explica efeito no saldo do fundo e na taxa condominial ao escolher fundo + tipo. */
+  protected fundLaunchHint(): string | null {
+    if (!this.fundIdForm().trim()) {
+      return null;
+    }
+    const k = this.txKind();
+    if (k === 'income') {
+      return (
+        'Com fundo + Receita: o saldo do fundo sobe. Este lançamento não entra na taxa condominial ' +
+        '(só movimenta o fundo). A contribuição mensal nas unidades vem do fechamento/regeneração ' +
+        '(mensalidade automática do fundo, também receita no fundo).'
+      );
+    }
+    if (k === 'expense' || k === 'investment') {
+      return (
+        'Com fundo + Despesa/Aplicação: o saldo do fundo desce. Não entra na taxa condominial. ' +
+        'Se o valor deveria aumentar o fundo, troque o tipo para Receita.'
+      );
+    }
+    return null;
+  }
   protected readonly allocKind = signal<AllocKind>('all_units_equal');
   protected readonly selectedUnitIds = signal<string[]>([]);
   protected readonly selectedGroupingIds = signal<string[]>([]);
@@ -124,6 +189,9 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly bulkSettleReceiptFile = signal<File | null>(null);
   protected readonly bulkSettleError = signal<string | null>(null);
   protected readonly bulkSettleBusy = signal(false);
+  protected readonly bulkAssignWorkOpen = signal(false);
+  protected readonly bulkAssignWorkId = signal<string>('');
+  protected readonly bulkAssignWorkError = signal<string | null>(null);
 
   /**
    * Formulário de criação/edição colapsado por padrão; ao editar abre
@@ -131,7 +199,14 @@ export class PainelTransacoesComponent implements OnInit {
    */
   protected readonly formExpanded = signal(false);
 
-  private condoId = '';
+  protected condoId = '';
+
+  protected condominiumIdParam(): string {
+    return this.condoId;
+  }
+
+  /** Evita gravar rascunho enquanto restaura do localStorage. */
+  private suppressDraftPersistence = false;
 
   constructor() {
     effect(() => {
@@ -141,6 +216,30 @@ export class PainelTransacoesComponent implements OnInit {
           queueMicrotask(() => this.scrollFormIntoView());
         }
       }
+    });
+
+    effect((onCleanup) => {
+      if (
+        this.suppressDraftPersistence ||
+        this.editingId() ||
+        this.editingSeriesId() ||
+        !this.condoId
+      ) {
+        return;
+      }
+      const snapshot = this.buildCreateDraftSnapshot();
+      const key = txCreateDraftKey(this.condoId);
+      const timer = setTimeout(() => {
+        if (
+          this.suppressDraftPersistence ||
+          this.editingId() ||
+          this.editingSeriesId()
+        ) {
+          return;
+        }
+        writeTxCreateDraft(key, snapshot);
+      }, 400);
+      onCleanup(() => clearTimeout(timer));
     });
   }
 
@@ -160,6 +259,23 @@ export class PainelTransacoesComponent implements OnInit {
     if (el && 'scrollIntoView' in el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  /** Últimas linhas visíveis: menu abre para cima para não ser cortado pelo scroll da tabela. */
+  protected rowActionMenuOpensUpward(): boolean {
+    const id = this.rowActionMenuForId();
+    if (!id) {
+      return false;
+    }
+    const rows = this.filteredTransactions();
+    if (rows.length === 0) {
+      return false;
+    }
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx < 0) {
+      return false;
+    }
+    return idx >= rows.length - 2;
   }
 
   toggleRowActionMenu(txId: string, ev: Event): void {
@@ -183,6 +299,37 @@ export class PainelTransacoesComponent implements OnInit {
     if (this.settleTarget()) {
       this.closeTxSettle();
     }
+  }
+
+  protected formatTransactionAmount(t: FinancialTransaction): string {
+    return formatCentsBrl(signedDeltaForTransaction(t));
+  }
+
+  protected bankLogoName(t: FinancialTransaction): string | null {
+    const bank = t.bankAccount?.bankName?.trim();
+    if (bank) {
+      return bank;
+    }
+    return t.bankAccount?.name?.trim() || null;
+  }
+
+  protected bankAccountNickname(t: FinancialTransaction): string {
+    return t.bankAccount?.name?.trim() || '—';
+  }
+
+  protected bankInstitutionSubLabel(t: FinancialTransaction): string | null {
+    const bank = t.bankAccount?.bankName?.trim();
+    const nick = t.bankAccount?.name?.trim();
+    if (!bank || !nick || bank.toLowerCase() === nick.toLowerCase()) {
+      return null;
+    }
+    return bank;
+  }
+
+  protected attachmentCount(t: FinancialTransaction): number {
+    return (
+      this.documentKeysFromTx(t).length + (t.receiptStorageKey ? 1 : 0)
+    );
   }
 
   protected transactionPaymentStatusLabelPt(
@@ -234,12 +381,11 @@ export class PainelTransacoesComponent implements OnInit {
     this.rowActionMenuForId.set(null);
     const list = this.bulkPendingSelected();
     if (list.length === 0) {
-      this.formError.set(
-        'Nas linhas seleccionadas não há transações em «aguardando» para quitar.',
+      this.flash.warning(
+        'Nas linhas selecionadas não há transações em «aguardando» para quitar.',
       );
       return;
     }
-    this.formError.set(null);
     this.bulkSettleError.set(null);
     this.bulkSettleReceiptFile.set(null);
     this.bulkSettleTargets.set(list);
@@ -349,7 +495,6 @@ export class PainelTransacoesComponent implements OnInit {
     ) {
       return;
     }
-    this.formError.set(null);
     this.bulkActionBusy.set(true);
     from(list)
       .pipe(
@@ -363,7 +508,39 @@ export class PainelTransacoesComponent implements OnInit {
           this.refreshList();
         },
         error: (err: HttpErrorResponse) => {
-          this.formError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+        },
+      });
+  }
+
+  protected confirmBulkReopen(): void {
+    const list = this.bulkPaidReopenableSelected();
+    if (list.length === 0) {
+      return;
+    }
+    if (
+      !confirm(
+        `Reabrir quitação de ${list.length} transação(ões) quitada(s)? Voltam a «aguardando» e podem voltar a entrar na taxa condominial.`,
+      )
+    ) {
+      return;
+    }
+    this.bulkActionBusy.set(true);
+    from(list)
+      .pipe(
+        concatMap((t) =>
+          this.api.reopenTransactionSettlement(this.condoId, t.id),
+        ),
+        last(),
+        finalize(() => this.bulkActionBusy.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.bulkSelectedIds.set(new Set());
+          this.refreshList();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -380,7 +557,6 @@ export class PainelTransacoesComponent implements OnInit {
     ) {
       return;
     }
-    this.formError.set(null);
     this.bulkActionBusy.set(true);
     from(list)
       .pipe(
@@ -394,7 +570,7 @@ export class PainelTransacoesComponent implements OnInit {
           this.refreshList();
         },
         error: (err: HttpErrorResponse) => {
-          this.formError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -418,6 +594,18 @@ export class PainelTransacoesComponent implements OnInit {
     this.rowActionMenuForId.set(null);
     this.removeSeries(seriesId);
   }
+
+  protected readonly activeBankAccounts = computed(() =>
+    this.bankAccounts().filter((a) => a.isActive),
+  );
+
+  protected readonly selectedFormBankAccount = computed(() => {
+    const id = this.bankAccountIdForm().trim();
+    if (!id) {
+      return null;
+    }
+    return this.bankAccounts().find((a) => a.id === id) ?? null;
+  });
 
   protected readonly flatUnits = computed(() => {
     const out: { id: string; identifier: string; groupingName: string }[] =
@@ -446,6 +634,8 @@ export class PainelTransacoesComponent implements OnInit {
       const title = (t.title ?? '').toLowerCase();
       const description = (t.description ?? '').toLowerCase();
       const fund = (t.fund?.name ?? '').toLowerCase();
+      const work = (t.work?.title ?? '').toLowerCase();
+      const bank = (t.bankAccount?.name ?? '').toLowerCase();
       const statusLabel = this.transactionPaymentStatusLabelPt(
         t.paymentStatus,
       ).toLowerCase();
@@ -453,7 +643,10 @@ export class PainelTransacoesComponent implements OnInit {
         title.includes(term) ||
         description.includes(term) ||
         fund.includes(term) ||
+        work.includes(term) ||
+        bank.includes(term) ||
         kindLabel.includes(term) ||
+        (t.transferGroupId && 'transferência'.includes(term)) ||
         statusLabel.includes(term) ||
         dateLabel.includes(term) ||
         occurred.includes(term)
@@ -488,12 +681,28 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly bulkDeletableSelected = computed(() => {
     const ids = this.bulkSelectedIds();
     return this.filteredTransactions().filter(
-      (t) => ids.has(t.id) && (t.paymentStatus ?? 'pending') !== 'paid',
+      (t) =>
+        ids.has(t.id) &&
+        ((t.paymentStatus ?? 'pending') !== 'paid' || !!t.transferGroupId),
     );
   });
 
   protected readonly bulkDeletableSelectedCount = computed(
     () => this.bulkDeletableSelected().length,
+  );
+
+  protected readonly bulkPaidReopenableSelected = computed(() => {
+    const ids = this.bulkSelectedIds();
+    return this.filteredTransactions().filter(
+      (t) =>
+        ids.has(t.id) &&
+        (t.paymentStatus ?? 'pending') === 'paid' &&
+        !t.transferGroupId,
+    );
+  });
+
+  protected readonly bulkPaidReopenableSelectedCount = computed(
+    () => this.bulkPaidReopenableSelected().length,
   );
 
   /** Resumo do lançamento recorrente (apenas UI). */
@@ -541,13 +750,18 @@ export class PainelTransacoesComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condoId = id;
+    const workFromQuery = this.route.snapshot.queryParamMap.get('workId');
+    if (workFromQuery?.trim()) {
+      this.workFilter.set(workFromQuery.trim());
+    }
     this.occurredOn.set(todayLocalIsoDate());
-    this.periodFrom.set(firstDayOfMonthLocalIsoDate());
-    this.periodTo.set(lastDayOfMonthLocalIsoDate());
+    this.periodMode.set('month');
+    this.periodMonthYm.set(localIsoMonthYm());
+    this.applyMonthPeriod(this.periodMonthYm());
     this.reloadAll();
   }
 
@@ -557,29 +771,41 @@ export class PainelTransacoesComponent implements OnInit {
     this.condoApi.loadGroupingsWithUnits(this.condoId).subscribe({
       next: (t) => {
         this.tree.set(t);
-        this.api.listFunds(this.condoId).subscribe({
-          next: (f) => {
-            this.funds.set(f);
+        forkJoin({
+          funds: this.api.listFunds(this.condoId),
+          bankAccounts: this.api.listBankAccounts(this.condoId),
+          works: this.worksApi.list(this.condoId),
+        }).subscribe({
+          next: ({ funds, bankAccounts, works }) => {
+            this.funds.set(funds);
+            this.bankAccounts.set(bankAccounts);
+            this.works.set(works);
+            this.ensureDefaultBankAccount();
+            this.restoreCreateDraftFromStorage();
             this.refreshList();
           },
           error: () => {
             this.funds.set([]);
+            this.bankAccounts.set([]);
+            this.works.set([]);
+            this.restoreCreateDraftFromStorage();
             this.refreshList();
           },
         });
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
 
   refreshList(): void {
     const fid = this.fundFilter() || undefined;
+    const wid = this.workFilter() || undefined;
     const from = this.periodFrom().trim().slice(0, 10);
     const to = this.periodTo().trim().slice(0, 10);
-    this.api.listTransactions(this.condoId, fid, from, to).subscribe({
+    this.api.listTransactions(this.condoId, fid, from, to, wid).subscribe({
       next: (rows) => {
         this.transactions.set(rows);
         this.bulkSelectedIds.set(new Set());
@@ -587,7 +813,7 @@ export class PainelTransacoesComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -597,12 +823,109 @@ export class PainelTransacoesComponent implements OnInit {
     this.refreshList();
   }
 
+  setWorkFilter(v: string): void {
+    this.workFilter.set(v);
+    this.refreshList();
+  }
+
+  protected readonly bulkWorkAssignableSelected = computed(() => {
+    const ids = this.bulkSelectedIds();
+    return this.filteredTransactions().filter(
+      (t) => ids.has(t.id) && !t.transferGroupId?.trim(),
+    );
+  });
+
+  protected readonly bulkWorkAssignableSelectedCount = computed(
+    () => this.bulkWorkAssignableSelected().length,
+  );
+
+  protected openBulkAssignWorkModal(): void {
+    const list = this.bulkWorkAssignableSelected();
+    if (list.length === 0) {
+      return;
+    }
+    this.bulkAssignWorkError.set(null);
+    const commonWork = list.every(
+      (t) => (t.workId ?? '') === (list[0]?.workId ?? ''),
+    )
+      ? list[0]?.workId ?? ''
+      : '';
+    this.bulkAssignWorkId.set(commonWork);
+    this.bulkAssignWorkOpen.set(true);
+  }
+
+  protected closeBulkAssignWorkModal(): void {
+    if (this.bulkActionBusy()) {
+      return;
+    }
+    this.bulkAssignWorkOpen.set(false);
+    this.bulkAssignWorkError.set(null);
+  }
+
+  protected confirmBulkAssignWork(): void {
+    const ids = this.bulkWorkAssignableSelected().map((t) => t.id);
+    if (ids.length === 0) {
+      return;
+    }
+    const workId = this.bulkAssignWorkId().trim() || null;
+    this.bulkActionBusy.set(true);
+    this.bulkAssignWorkError.set(null);
+    this.api
+      .bulkAssignWork(this.condoId, { transactionIds: ids, workId })
+      .subscribe({
+        next: (res) => {
+          this.bulkActionBusy.set(false);
+          this.bulkAssignWorkOpen.set(false);
+          this.bulkSelectedIds.set(new Set());
+          this.refreshList();
+          if (res.skippedTransferIds.length > 0) {
+            this.flash.warning(
+              `${res.updated} transação(ões) vinculada(s). ${res.skippedTransferIds.length} transferência(s) foram ignoradas.`,
+            );
+          } else {
+            this.flash.success(
+              workId
+                ? `${res.updated} transação(ões) vinculada(s) à obra.`
+                : `Vínculo com obra removido em ${res.updated} transação(ões).`,
+            );
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.bulkActionBusy.set(false);
+          this.bulkAssignWorkError.set(this.msg(err));
+        },
+      });
+  }
+
+  setPeriodMode(mode: 'month' | 'custom'): void {
+    if (this.periodMode() === mode) return;
+    this.periodMode.set(mode);
+    if (mode === 'month') {
+      const from = this.periodFrom().trim().slice(0, 10);
+      const ym = from.length >= 7 ? from.slice(0, 7) : localIsoMonthYm();
+      this.periodMonthYm.set(ym);
+      this.applyMonthPeriod(ym);
+      this.refreshList();
+    }
+  }
+
+  setPeriodMonthYm(ym: string): void {
+    const head = ym.trim().slice(0, 7);
+    if (!head) return;
+    this.periodMonthYm.set(head);
+    this.applyMonthPeriod(head);
+    this.refreshList();
+  }
+
   setPeriodFrom(v: string): void {
     const head = v.trim().slice(0, 10);
     this.periodFrom.set(head);
     const to = this.periodTo().trim().slice(0, 10);
     if (head && to && head > to) {
       this.periodTo.set(head);
+    }
+    if (head.length >= 7) {
+      this.periodMonthYm.set(head.slice(0, 7));
     }
     this.refreshList();
   }
@@ -614,13 +937,23 @@ export class PainelTransacoesComponent implements OnInit {
     if (from && head && head < from) {
       this.periodFrom.set(head);
     }
+    if (head.length >= 7) {
+      this.periodMonthYm.set(head.slice(0, 7));
+    }
     this.refreshList();
   }
 
   resetPeriodToCurrentMonth(): void {
-    this.periodFrom.set(firstDayOfMonthLocalIsoDate());
-    this.periodTo.set(lastDayOfMonthLocalIsoDate());
+    this.periodMode.set('month');
+    const ym = localIsoMonthYm();
+    this.periodMonthYm.set(ym);
+    this.applyMonthPeriod(ym);
     this.refreshList();
+  }
+
+  private applyMonthPeriod(ym: string): void {
+    this.periodFrom.set(firstDayOfMonthFromYm(ym));
+    this.periodTo.set(lastDayOfMonthFromYm(ym));
   }
 
   setSearchTerm(v: string): void {
@@ -632,14 +965,98 @@ export class PainelTransacoesComponent implements OnInit {
     this.amountReais.set(Number.isFinite(n) ? n : 0);
   }
 
-  setEntryMode(m: 'single' | 'recurring'): void {
+  setEntryMode(m: 'single' | 'recurring' | 'transfer'): void {
     this.entryMode.set(m);
-    this.formError.set(null);
+    if (m === 'transfer') {
+      this.workIdForm.set('');
+      this.ensureTransferDefaults();
+    }
+  }
+
+  private ensureTransferDefaults(): void {
+    const accounts = this.activeBankAccounts();
+    if (accounts.length === 0) {
+      return;
+    }
+    if (!this.transferFromBankAccountId().trim()) {
+      const from =
+        this.bankAccountIdForm().trim() || this.primaryBankAccountId() || accounts[0]!.id;
+      this.transferFromBankAccountId.set(from);
+    }
+    if (!this.transferToBankAccountId().trim()) {
+      const to =
+        accounts.find((a) => a.id !== this.transferFromBankAccountId())?.id ??
+        accounts[0]!.id;
+      this.transferToBankAccountId.set(to);
+    }
+    this.syncTransferAccountIfDuplicate();
+  }
+
+  protected onTransferFromAccountChange(accountId: string): void {
+    this.transferFromBankAccountId.set(accountId);
+    this.syncTransferAccountIfDuplicate('to');
+  }
+
+  protected onTransferToAccountChange(accountId: string): void {
+    this.transferToBankAccountId.set(accountId);
+    this.syncTransferAccountIfDuplicate('from');
+  }
+
+  protected onTransferFromFundChange(fundId: string): void {
+    this.transferFromFundId.set(fundId);
+  }
+
+  protected onTransferToFundChange(fundId: string): void {
+    this.transferToFundId.set(fundId);
+  }
+
+  /** Evita origem = destino na mesma conta sem fundos distintos (só se houver outra conta). */
+  private syncTransferAccountIfDuplicate(adjust: 'from' | 'to' = 'to'): void {
+    if (!this.transferEndpointsConflict()) {
+      return;
+    }
+    const accounts = this.activeBankAccounts();
+    if (accounts.length < 2) {
+      return;
+    }
+    const from = this.transferFromBankAccountId().trim();
+    const alt = accounts.find((a) => a.id !== from);
+    if (!alt) {
+      return;
+    }
+    if (adjust === 'to') {
+      this.transferToBankAccountId.set(alt.id);
+    } else {
+      this.transferFromBankAccountId.set(alt.id);
+    }
+  }
+
+  private transferEndpointsConflict(): boolean {
+    const fromBank = this.transferFromBankAccountId().trim();
+    const toBank = this.transferToBankAccountId().trim();
+    if (!fromBank || !toBank || fromBank !== toBank) {
+      return false;
+    }
+    const fromFund = this.transferFromFundId().trim() || null;
+    const toFund = this.transferToFundId().trim() || null;
+    return fromFund === toFund;
+  }
+
+  protected transactionRowKindLabel(t: FinancialTransaction): string {
+    if (t.transferGroupId) {
+      return t.kind === 'expense'
+        ? 'Transferência (saída)'
+        : 'Transferência (entrada)';
+    }
+    return transactionKindLabelPt(t.kind);
+  }
+
+  protected isTransferLeg(t: FinancialTransaction): boolean {
+    return !!t.transferGroupId?.trim();
   }
 
   setRecurringMode(m: 'by_installment' | 'by_total'): void {
     this.recurringMode.set(m);
-    this.formError.set(null);
   }
 
   setRecurringCountFromInput(v: string): void {
@@ -750,12 +1167,105 @@ export class PainelTransacoesComponent implements OnInit {
     }
   }
 
+  private buildCreateDraftSnapshot(): TxCreateDraft {
+    return {
+      formExpanded: this.formExpanded(),
+      txKind: this.txKind(),
+      entryMode: this.entryMode(),
+      transferFromBankAccountId: this.transferFromBankAccountId(),
+      transferToBankAccountId: this.transferToBankAccountId(),
+      transferFromFundId: this.transferFromFundId(),
+      transferToFundId: this.transferToFundId(),
+      recurringMode: this.recurringMode(),
+      recurringCount: this.recurringCount(),
+      recurringInstallmentReais: this.recurringInstallmentReais(),
+      recurringTotalReais: this.recurringTotalReais(),
+      amountReais: this.amountReais(),
+      occurredOn: this.occurredOn(),
+      titleTx: this.titleTx(),
+      descriptionTx: this.descriptionTx(),
+      fundIdForm: this.fundIdForm(),
+      bankAccountIdForm: this.bankAccountIdForm(),
+      allocKind: this.allocKind() as TxCreateDraftAllocKind,
+      selectedUnitIds: [...this.selectedUnitIds()],
+      selectedGroupingIds: [...this.selectedGroupingIds()],
+      excludeUnitIds: [...this.excludeUnitIds()],
+    };
+  }
+
+  private restoreCreateDraftFromStorage(): void {
+    if (!this.condoId || this.editingId() || this.editingSeriesId()) {
+      return;
+    }
+    const draft = readTxCreateDraft(txCreateDraftKey(this.condoId));
+    if (!draft || !txCreateDraftHasContent(draft)) {
+      return;
+    }
+    this.suppressDraftPersistence = true;
+    try {
+      if (draft.formExpanded) {
+        this.formExpanded.set(true);
+      }
+      this.txKind.set(draft.txKind);
+      this.entryMode.set(draft.entryMode);
+      const fromBank = (draft.transferFromBankAccountId ?? '').trim();
+      const toBank = (draft.transferToBankAccountId ?? '').trim();
+      if (fromBank && this.bankAccounts().some((a) => a.id === fromBank)) {
+        this.transferFromBankAccountId.set(fromBank);
+      }
+      if (toBank && this.bankAccounts().some((a) => a.id === toBank)) {
+        this.transferToBankAccountId.set(toBank);
+      }
+      this.transferFromFundId.set(draft.transferFromFundId ?? '');
+      this.transferToFundId.set(draft.transferToFundId ?? '');
+      if (draft.entryMode === 'transfer') {
+        this.ensureTransferDefaults();
+      }
+      this.recurringMode.set(draft.recurringMode);
+      this.recurringCount.set(draft.recurringCount);
+      this.recurringInstallmentReais.set(draft.recurringInstallmentReais);
+      this.recurringTotalReais.set(draft.recurringTotalReais);
+      this.amountReais.set(draft.amountReais);
+      if (draft.occurredOn.trim()) {
+        this.occurredOn.set(draft.occurredOn.trim().slice(0, 10));
+      }
+      this.titleTx.set(draft.titleTx);
+      this.descriptionTx.set(draft.descriptionTx);
+      this.fundIdForm.set(draft.fundIdForm);
+      const bankId = draft.bankAccountIdForm.trim();
+      if (bankId && this.bankAccounts().some((a) => a.id === bankId)) {
+        this.bankAccountIdForm.set(bankId);
+      } else {
+        this.ensureDefaultBankAccount();
+      }
+      this.allocKind.set(draft.allocKind);
+      this.selectedUnitIds.set([...draft.selectedUnitIds]);
+      this.selectedGroupingIds.set([...draft.selectedGroupingIds]);
+      this.excludeUnitIds.set([...draft.excludeUnitIds]);
+    } finally {
+      queueMicrotask(() => {
+        this.suppressDraftPersistence = false;
+      });
+    }
+  }
+
+  private clearCreateDraftStorage(): void {
+    if (this.condoId) {
+      clearTxCreateDraft(txCreateDraftKey(this.condoId));
+    }
+  }
+
   resetForm(): void {
+    this.clearCreateDraftStorage();
     this.editingId.set(null);
     this.editingSeriesId.set(null);
     this.seriesUniformAmountReais.set(0);
     this.txKind.set('expense');
     this.entryMode.set('single');
+    this.transferFromBankAccountId.set('');
+    this.transferToBankAccountId.set('');
+    this.transferFromFundId.set('');
+    this.transferToFundId.set('');
     this.recurringMode.set('by_installment');
     this.recurringCount.set(2);
     this.recurringInstallmentReais.set(0);
@@ -765,6 +1275,8 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set('');
     this.descriptionTx.set('');
     this.fundIdForm.set('');
+    this.workIdForm.set('');
+    this.ensureDefaultBankAccount();
     this.allocKind.set('all_units_equal');
     this.selectedUnitIds.set([]);
     this.selectedGroupingIds.set([]);
@@ -776,14 +1288,30 @@ export class PainelTransacoesComponent implements OnInit {
     this.editingReceiptKey.set(null);
     this.clearDocumentFileInput();
     this.clearReceiptFileInput();
-    this.formError.set(null);
+  }
+
+  private isFundMonthlyAccrualTitle(title: string): boolean {
+    return /^Mensalidade fundo /i.test(title.trim());
   }
 
   startEdit(t: FinancialTransaction): void {
+    this.clearCreateDraftStorage();
+    if (this.isFundMonthlyAccrualTitle(t.title)) {
+      window.alert(
+        'Esta linha é mensalidade automática do fundo (fechamento/regeneração). Já entra quitada. Não edite tipo nem valor — ajuste em Fundos ou «Regenerar cobranças» na taxa condominial.',
+      );
+      return;
+    }
+    if (t.transferGroupId) {
+      window.alert(
+        'Transferências não podem ser editadas. Exclua o par e registre novamente, se necessário.',
+      );
+      return;
+    }
     const ps = t.paymentStatus ?? 'pending';
     if (ps === 'cancelled') {
       window.alert(
-        'Esta transação está cancelada (desactivada) e não pode ser editada.',
+        'Esta transação está cancelada (desativada) e não pode ser editada.',
       );
       return;
     }
@@ -805,6 +1333,10 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set(t.title);
     this.descriptionTx.set(t.description ?? '');
     this.fundIdForm.set(t.fundId ?? '');
+    this.workIdForm.set(t.workId ?? '');
+    this.bankAccountIdForm.set(
+      t.bankAccountId ?? t.bankAccount?.id ?? this.primaryBankAccountId() ?? '',
+    );
     const r = t.allocationRule;
     if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
     else if (r.kind === 'none') this.allocKind.set('none');
@@ -825,10 +1357,10 @@ export class PainelTransacoesComponent implements OnInit {
     this.editingReceiptKey.set(t.receiptStorageKey ?? null);
     this.clearDocumentFileInput();
     this.clearReceiptFileInput();
-    this.formError.set(null);
   }
 
   startEditSeries(seriesId: string): void {
+    this.clearCreateDraftStorage();
     const members = this.transactions()
       .filter((t) => t.recurringSeriesId === seriesId)
       .sort((a, b) => {
@@ -843,7 +1375,7 @@ export class PainelTransacoesComponent implements OnInit {
     const bad = members.some((m) => (m.paymentStatus ?? 'pending') !== 'pending');
     if (bad) {
       window.alert(
-        'A série contém transações quitadas ou canceladas. Reabra quitações ou edite registos individuais.',
+        'A série contém transações quitadas ou canceladas. Reabra quitações ou edite registros individuais.',
       );
       return;
     }
@@ -862,6 +1394,12 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set(this.titleBaseFromTransactionTitle(first.title));
     this.descriptionTx.set(first.description ?? '');
     this.fundIdForm.set(first.fundId ?? '');
+    this.bankAccountIdForm.set(
+      first.bankAccountId ??
+        first.bankAccount?.id ??
+        this.primaryBankAccountId() ??
+        '',
+    );
     const r = first.allocationRule;
     if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
     else if (r.kind === 'none') this.allocKind.set('none');
@@ -889,7 +1427,6 @@ export class PainelTransacoesComponent implements OnInit {
     this.editingReceiptKey.set(withReceipt?.receiptStorageKey ?? null);
     this.clearDocumentFileInput();
     this.clearReceiptFileInput();
-    this.formError.set(null);
   }
 
   /** Remove sufixo « (k/n) » do título, se existir. */
@@ -1005,7 +1542,7 @@ export class PainelTransacoesComponent implements OnInit {
         URL.revokeObjectURL(url);
       },
       error: (err: HttpErrorResponse) => {
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1018,17 +1555,26 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   submit(): void {
-    this.formError.set(null);
+    const editId = this.editingId();
+    const editSeriesId = this.editingSeriesId();
+    const isTransfer =
+      !editId && !editSeriesId && this.entryMode() === 'transfer';
+
+    if (isTransfer) {
+      this.submitTransfer();
+      return;
+    }
+
     const title = this.titleTx().trim();
     if (!title) {
-      this.formError.set('Indique o título.');
+      this.flash.warning('Indique o título.');
       return;
     }
     let rule: AllocationRule;
     try {
       rule = this.buildRule();
     } catch (e) {
-      this.formError.set(
+      this.flash.warning(
         e instanceof Error ? e.message : 'Regra de rateio inválida.',
       );
       return;
@@ -1037,49 +1583,54 @@ export class PainelTransacoesComponent implements OnInit {
       (this.txKind() === 'expense' || this.txKind() === 'investment') &&
       rule.kind === 'none'
     ) {
-      this.formError.set(
+      this.flash.warning(
         'Despesa e investimento exigem rateio (não pode ser «sem repartição»).',
       );
       return;
     }
+    const bankAccountId = this.bankAccountIdForm().trim();
+    if (!bankAccountId) {
+      this.flash.warning(
+        'Selecione a conta bancária. Cadastre uma em Contas bancárias se necessário.',
+      );
+      return;
+    }
 
-    const editId = this.editingId();
-    const editSeriesId = this.editingSeriesId();
     const isRecurring =
       !editId && !editSeriesId && this.entryMode() === 'recurring';
 
     if (!isRecurring && !editSeriesId) {
       const ar = this.amountReais();
       if (!Number.isFinite(ar) || ar <= 0) {
-        this.formError.set('Indique um valor válido em reais.');
+        this.flash.warning('Indique um valor válido em reais.');
         return;
       }
     } else if (editSeriesId) {
       const u = this.seriesUniformAmountReais();
       if (u !== 0 && (!Number.isFinite(u) || u <= 0)) {
-        this.formError.set('Valor único para todas as parcelas inválido.');
+        this.flash.warning('Valor único para todas as parcelas inválido.');
         return;
       }
     } else if (isRecurring) {
       const n = Math.floor(this.recurringCount());
       if (!Number.isFinite(n) || n < 2) {
-        this.formError.set('Informe pelo menos 2 parcelas ou meses.');
+        this.flash.warning('Informe pelo menos 2 parcelas ou meses.');
         return;
       }
       if (n > 120) {
-        this.formError.set('No máximo 120 parcelas por lançamento.');
+        this.flash.warning('No máximo 120 parcelas por lançamento.');
         return;
       }
       if (this.recurringMode() === 'by_installment') {
         const v = this.recurringInstallmentReais();
         if (!Number.isFinite(v) || v <= 0) {
-          this.formError.set('Indique o valor de cada parcela.');
+          this.flash.warning('Indique o valor de cada parcela.');
           return;
         }
       } else {
         const t = this.recurringTotalReais();
         if (!Number.isFinite(t) || t <= 0) {
-          this.formError.set('Indique o valor total a dividir.');
+          this.flash.warning('Indique o valor total a dividir.');
           return;
         }
       }
@@ -1128,6 +1679,7 @@ export class PainelTransacoesComponent implements OnInit {
               titleBase: title,
               description: this.descriptionTx().trim() || null,
               fundId: this.fundIdForm() || null,
+              bankAccountId,
               allocationRule: rule,
             };
             const uniform = this.seriesUniformAmountReais();
@@ -1155,11 +1707,13 @@ export class PainelTransacoesComponent implements OnInit {
               title,
               description: this.descriptionTx().trim() || null,
               fundId: this.fundIdForm() || null,
+              bankAccountId,
               allocationRule: rule,
             };
             const patch: Parameters<
               FinancialApiService['updateTransaction']
             >[2] = { ...baseBody };
+            patch.workId = this.resolveWorkIdForPayload();
             patch.documentStorageKeys = finalDocumentKeys;
             if (receiptKey) {
               patch.receiptStorageKey = receiptKey;
@@ -1194,7 +1748,9 @@ export class PainelTransacoesComponent implements OnInit {
             title,
             description: this.descriptionTx().trim() || null,
             fundId: this.fundIdForm() || null,
+            bankAccountId,
             allocationRule: rule,
+            workId: this.resolveWorkIdForPayload(),
           };
           if (finalDocumentKeys.length > 0) {
             createBody.documentStorageKeys = finalDocumentKeys;
@@ -1217,9 +1773,75 @@ export class PainelTransacoesComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.saving.set(false);
-          this.formError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
+  }
+
+  private submitTransfer(): void {
+    const accounts = this.activeBankAccounts();
+    if (accounts.length < 2) {
+      this.flash.warning(
+        'Cadastre pelo menos duas contas bancárias ativas para transferir saldo entre contas.',
+      );
+      return;
+    }
+
+    const fromBankAccountId = this.transferFromBankAccountId().trim();
+    const toBankAccountId = this.transferToBankAccountId().trim();
+    if (!fromBankAccountId || !toBankAccountId) {
+      this.flash.warning('Selecione as contas de origem e destino.');
+      return;
+    }
+    const fromFundId = this.transferFromFundId().trim() || null;
+    const toFundId = this.transferToFundId().trim() || null;
+    if (this.transferEndpointsConflict()) {
+      this.flash.warning(
+        fromFundId || toFundId
+          ? 'Na mesma conta bancária, escolha fundos de origem e destino diferentes.'
+          : 'Escolha contas de origem e destino diferentes (pode ser o mesmo banco, ex.: investimento → corrente).',
+      );
+      return;
+    }
+    const ar = this.amountReais();
+    if (!Number.isFinite(ar) || ar <= 0) {
+      this.flash.warning('Indique um valor válido em reais.');
+      return;
+    }
+    if (!this.occurredOn().trim()) {
+      this.flash.warning('Indique a data da transferência.');
+      return;
+    }
+
+    const body: Parameters<FinancialApiService['createTransfer']>[1] = {
+      fromBankAccountId,
+      toBankAccountId,
+      fromFundId,
+      toFundId,
+      amountCents: reaisToCents(ar),
+      occurredOn: this.occurredOn(),
+      description: this.descriptionTx().trim() || null,
+    };
+    const title = this.titleTx().trim();
+    if (title) {
+      body.title = title;
+    }
+
+    this.saving.set(true);
+    this.api.createTransfer(this.condoId, body).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.resetForm();
+        this.refreshList();
+        if (typeof window !== 'undefined' && window.innerWidth < 900) {
+          this.formExpanded.set(false);
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+      },
+    });
   }
 
   private addCalendarMonths(isoYmd: string, deltaMonths: number): string {
@@ -1238,6 +1860,14 @@ export class PainelTransacoesComponent implements OnInit {
     return Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
   }
 
+  private resolveWorkIdForPayload(): string | null {
+    if (this.entryMode() === 'transfer') {
+      return null;
+    }
+    const id = this.workIdForm().trim();
+    return id || null;
+  }
+
   private buildRecurringCreatePayloads(
     title: string,
     rule: AllocationRule,
@@ -1249,6 +1879,8 @@ export class PainelTransacoesComponent implements OnInit {
     const start = this.occurredOn();
     const desc = this.descriptionTx().trim() || null;
     const fundId = this.fundIdForm() || null;
+    const workId = this.resolveWorkIdForPayload();
+    const bankAccountId = this.bankAccountIdForm().trim();
     const kind = this.txKind();
 
     let amounts: number[];
@@ -1270,8 +1902,10 @@ export class PainelTransacoesComponent implements OnInit {
         title: n > 1 ? `${title} (${i + 1}/${n})` : title,
         description: desc,
         fundId,
+        bankAccountId,
         allocationRule: rule,
         recurringSeriesId,
+        workId,
       };
       if (i === 0 && documentKeys.length > 0) {
         body.documentStorageKeys = documentKeys;
@@ -1283,9 +1917,23 @@ export class PainelTransacoesComponent implements OnInit {
     });
   }
 
+  private primaryBankAccountId(): string | null {
+    const active = this.activeBankAccounts();
+    return active[0]?.id ?? null;
+  }
+
+  private ensureDefaultBankAccount(): void {
+    if (this.bankAccountIdForm().trim()) {
+      return;
+    }
+    const id = this.primaryBankAccountId();
+    if (id) {
+      this.bankAccountIdForm.set(id);
+    }
+  }
+
   protected openSettleFromMenu(t: FinancialTransaction): void {
     this.rowActionMenuForId.set(null);
-    this.formError.set(null);
     this.settleError.set(null);
     this.settleReceiptFile.set(null);
     this.settleTarget.set(t);
@@ -1378,7 +2026,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.rowActionMenuForId.set(null);
     if (
       !confirm(
-        `Cancelar o lançamento «${t.title}»? Deixa de entrar na taxa condominial e nos saldos (aparece como desactivado).`,
+        `Cancelar o lançamento «${t.title}»? Deixa de entrar na taxa condominial e nos saldos (aparece como desativado).`,
       )
     ) {
       return;
@@ -1386,7 +2034,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.api.cancelTransaction(this.condoId, t.id).subscribe({
       next: () => this.refreshList(),
       error: (err: HttpErrorResponse) => {
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1403,17 +2051,20 @@ export class PainelTransacoesComponent implements OnInit {
     this.api.reopenTransactionSettlement(this.condoId, t.id).subscribe({
       next: () => this.refreshList(),
       error: (err: HttpErrorResponse) => {
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   remove(t: FinancialTransaction): void {
-    if (!confirm(`Excluir a transação «${t.title}»?`)) return;
+    const msg = t.transferGroupId
+      ? `Excluir a transferência «${t.title}»? As duas pernas (saída e entrada) serão removidas.`
+      : `Excluir a transação «${t.title}»?`;
+    if (!confirm(msg)) return;
     this.api.deleteTransaction(this.condoId, t.id).subscribe({
       next: () => this.refreshList(),
       error: (err: HttpErrorResponse) => {
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1435,7 +2086,7 @@ export class PainelTransacoesComponent implements OnInit {
         this.refreshList();
       },
       error: (err: HttpErrorResponse) => {
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }

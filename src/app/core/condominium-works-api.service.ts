@@ -15,7 +15,21 @@ export type WorkBudgetStatus =
   | 'approved'
   | 'rejected';
 
-export type WorkTimelineKind = 'note' | 'document' | 'budget';
+export type WorkTimelineKind =
+  | 'note'
+  | 'document'
+  | 'budget'
+  | 'transaction'
+  | 'edit';
+
+export interface WorkTimelineTransaction {
+  id: string;
+  kind: string;
+  title: string;
+  amountCents: string;
+  occurredOn: string;
+  paymentStatus: string;
+}
 
 export interface WorkTimelineAttachment {
   id: string;
@@ -43,6 +57,8 @@ export interface WorkTimelineEntry {
   authorUserId: string;
   authorDisplayName: string;
   createdAt: string;
+  financialTransactionId?: string | null;
+  transaction?: WorkTimelineTransaction | null;
 }
 
 export interface WorkListItem {

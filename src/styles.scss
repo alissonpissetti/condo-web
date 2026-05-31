@@ -1,18 +1,7 @@
+@use './styles/design-tokens.scss';
+@use './styles/global-ui.scss';
 @use './styles/painel-form-ui.scss';
 @use './styles/painel-plan-layout.scss';
-
-:root {
-  color-scheme: light;
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --muted: #64748b;
-  --accent: #3b82f6;
-  --accent-2: #6366f1;
-  --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
-}
 
 *,
 *::before,
@@ -28,14 +17,36 @@ body {
   margin: 0;
   min-height: 100%;
   font-family:
-    'Inter',
+    'Nunito',
+    'Open Sans',
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
   background: var(--bg);
-  color: var(--text);
+  color: var(--body-color);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--heading-color);
+  font-weight: 700;
+}
+
+a {
+  color: var(--accent);
+
+  &:hover {
+    color: var(--ma-primary-hover);
+  }
 }
 
 /* Trava o scroll do body enquanto o menu lateral do painel está aberto (mobile). */

@@ -1,0 +1,57 @@
+/* Design tokens — inspirado em ModernAdmin (BootstrapMade / Bootstrap 5 admin) */
+
+:root {
+  color-scheme: light;
+
+  /* Marca */
+  --ma-primary: #4154f1;
+  --ma-primary-hover: #3448d4;
+  --ma-primary-soft: #e8ecfd;
+  --ma-secondary: #596277;
+  --ma-success: #2eca6a;
+  --ma-danger: #dc3545;
+  --ma-warning: #ffc107;
+  --ma-info: #17a2b8;
+
+  /* Tipografia */
+  --ma-heading: #012970;
+  --ma-body: #444444;
+  --ma-muted: #6c757d;
+
+  /* Layout admin */
+  --ma-sidebar-bg: #eef1f6;
+  --ma-sidebar-text: #5c6678;
+  --ma-sidebar-text-hover: var(--ma-heading);
+  --ma-sidebar-active-bg: #ffffff;
+  --ma-sidebar-active-text: var(--ma-primary);
+  --ma-sidebar-border: #dde3ec;
+  --ma-topbar-bg: #ffffff;
+  --ma-body-bg: #f6f9ff;
+  --ma-card-bg: #ffffff;
+  --ma-card-border: #ebeef4;
+  --ma-card-shadow: 0px 0 30px rgba(1, 41, 112, 0.08);
+  --ma-radius: 0.375rem;
+  --ma-radius-lg: 0.5rem;
+
+  /* Aliases usados no projeto (compatibilidade) */
+  --bg: var(--ma-body-bg);
+  --surface: var(--ma-card-bg);
+  --surface-2: #f0f4f9;
+  --border: var(--ma-card-border);
+  --text: var(--ma-heading);
+  --muted: var(--ma-muted);
+  --accent: var(--ma-primary);
+  --accent-2: #2c3cdd;
+  --accent-contrast: #ffffff;
+  --shadow: var(--ma-card-shadow);
+  --heading-color: var(--ma-heading);
+  --body-color: var(--ma-body);
+
+  /* Sidebar (painel) */
+  --sidebar-bg: var(--ma-sidebar-bg);
+  --sidebar-text: var(--ma-sidebar-text);
+  --sidebar-text-active: var(--ma-sidebar-active-text);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.72);
+  --sidebar-active-bg: var(--ma-sidebar-active-bg);
+  --sidebar-border: var(--ma-sidebar-border);
+}

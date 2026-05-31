@@ -6,19 +6,15 @@
         <span class="condo-pill">{{ cn }}</span>
       }
     </div>
-    <p class="page__intro">
-      Quem gere este condomínio na plataforma — titular, síndico, equipa administrativa e contas com
-      vínculo (membros). Papéis de gestão restringem-se ao titular e a responsáveis nas unidades.
-    </p>
     <details class="page__more">
       <summary>Regras dos papéis e atribuição</summary>
       <p>
-        Papéis de gestão (síndico, subsíndico, administrador) só podem ser dados ao
-        <strong>titular da conta</strong> ou a pessoas que já figurem como
-        <strong>responsáveis</strong> em alguma unidade (com conta associada à ficha, em
-        Unidades). O síndico só é alterado por <strong>troca</strong>: um novo síndico substitui o
-        anterior. Apenas o titular ou o síndico alteram papéis; os restantes perfis de gestão veem a
-        lista em leitura.
+        Papéis de gestão (síndico, subsíndico, administrador) só podem ser atribuídos ao
+        <strong>titular da conta</strong> ou a pessoas que já constem como
+        <strong>responsáveis</strong> em alguma unidade (com usuário vinculado no cadastro, em
+        Unidades). O síndico só muda por <strong>substituição</strong>: um novo síndico troca o
+        anterior. Só o titular ou o síndico alteram papéis; os demais perfis de gestão veem a lista
+        somente para leitura.
       </p>
     </details>
   </header>
@@ -26,26 +22,20 @@
   @if (loading()) {
     <p class="muted">Carregando…</p>
   } @else if (loadError()) {
-    <p class="banner banner--error" role="alert">{{ loadError() }}</p>
+    <p class="error" role="alert">{{ loadError() }}</p>
   } @else if (!isMgmt()) {
-    <p class="banner banner--error" role="alert">
-      Sem permissão para ver a equipa de gestão deste condomínio.
+    <p class="error" role="alert">
+      Sem permissão para ver a equipe de gestão deste condomínio.
     </p>
   } @else {
-    @if (actionError()) {
-      <p class="banner banner--error" role="alert">{{ actionError() }}</p>
-    }
-    @if (actionOk()) {
-      <p class="banner banner--ok" role="status">{{ actionOk() }}</p>
-    }
 
     <div class="membros-layout">
       <div class="membros-layout__main">
         <section class="card card--team">
           <header class="card__head">
-            <h2 class="card__title">Equipa de gestão</h2>
+            <h2 class="card__title">Equipe de gestão</h2>
             <p class="card__subtitle">
-              Papéis com permissões no condomínio. Administradores são auxiliares do síndico; o titular é
+              Papéis com permissão no condomínio. Administradores auxiliam o síndico; o titular é o
               dono da conta na plataforma.
             </p>
           </header>
@@ -197,7 +187,7 @@
               <h2 class="card__title">Atribuir papel</h2>
               <p class="card__subtitle">
                 Escolha um responsável de unidade (ou o titular) e confirme o papel. Síndico substitui
-                o atual. Opcionalmente pode identificar por e-mail.
+                o atual. Opcionalmente, identifique por e-mail.
               </p>
             </header>
             <form
@@ -207,7 +197,7 @@
               novalidate
             >
               <label class="field">
-                <span class="field__label">Responsável numa unidade</span>
+                <span class="field__label">Responsável em uma unidade</span>
                 <select
                   class="input"
                   [value]="selectedEligibleUserId()"
@@ -221,8 +211,8 @@
                 </select>
                 @if (eligibleAccounts().length === 0) {
                   <span class="field__hint muted"
-                    >Nenhuma conta elegível: associe responsáveis às unidades (com usuário na
-                    ficha).</span
+                    >Nenhuma conta elegível: associe responsáveis às unidades (com usuário no
+                    cadastro).</span
                   >
                 }
               </label>
@@ -281,7 +271,7 @@
           <div class="card card--readonly">
             <p class="readonly-note">
               Apenas o <strong>titular</strong> ou o <strong>síndico</strong> podem alterar papéis. Os
-              restantes perfis de gestão veem esta página em leitura.
+              demais perfis de gestão veem esta página somente para leitura.
             </p>
           </div>
         }

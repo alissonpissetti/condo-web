@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumLibraryApiService,
@@ -22,13 +23,13 @@ import {
 })
 export class PainelBibliotecaDocumentosComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(CondominiumLibraryApiService);
   private readonly planningApi = inject(PlanningApiService);
 
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly docs = signal<CondominiumLibraryDocumentRow[]>([]);
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly removingId = signal<string | null>(null);
@@ -43,7 +44,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -92,7 +93,6 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    this.actionError.set(null);
     this.busy.set(true);
     this.api
       .upload(this.condominiumId, file, this.uploadDisplayName())
@@ -101,17 +101,17 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
           this.busy.set(false);
           this.uploadDisplayName.set('');
           input.value = '';
+          this.flash.success('Documento enviado.');
           this.reloadListAndAudit();
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   protected download(doc: CondominiumLibraryDocumentRow): void {
-    this.actionError.set(null);
     this.busy.set(true);
     this.api.downloadBlob(this.condominiumId, doc.id).subscribe({
       next: (blob) => {
@@ -128,7 +128,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -137,16 +137,16 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     if (!this.canDelete()) return;
     const ok = confirm(`Remover o documento “${doc.originalFilename}”?`);
     if (!ok) return;
-    this.actionError.set(null);
     this.removingId.set(doc.id);
     this.api.remove(this.condominiumId, doc.id).subscribe({
       next: () => {
         this.removingId.set(null);
+        this.flash.success('Documento removido.');
         this.reloadListAndAudit();
       },
       error: (err: HttpErrorResponse) => {
         this.removingId.set(null);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -167,7 +167,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }

@@ -1,147 +1,123 @@
+@use '../financial-extrato-table';
+
 :host {
   display: block;
   width: 100%;
 }
 
-.page {
-  max-width: 52rem;
-  padding: 0 0 2.5rem;
-}
-
-.page__header {
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.page h1 {
-  margin: 0 0 0.35rem;
-  font-size: clamp(1.3rem, 2.2vw, 1.55rem);
-  font-weight: 700;
-}
-
-.page__intro {
+.page__loading {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-.section-title {
-  margin: 1.25rem 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.muted {
-  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .error {
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, #c0392b 12%, var(--surface));
-  border: 1px solid color-mix(in srgb, #c0392b 28%, var(--border));
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--ma-radius);
+  background: color-mix(in srgb, var(--ma-danger) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ma-danger) 28%, var(--border));
   font-size: 0.88rem;
+  line-height: 1.4;
 }
 
-.card {
-  padding: 0.75rem 1rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  margin-bottom: 1rem;
+/* ——— Filtro de período ——— */
+.extrato-filters {
+  margin-bottom: 1.25rem;
 }
 
-.row {
+.extrato-filters__body {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
   align-items: flex-end;
+  gap: 0.75rem 1rem;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+.extrato-filters__field {
+  flex: 1 1 16rem;
+  min-width: min(100%, 14rem);
 }
 
-.grow {
-  flex: 1 1 12rem;
-  min-width: 0;
+.extrato-filters__actions {
+  flex-shrink: 0;
 }
 
-.input {
-  padding: 0.45rem 0.55rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.88rem;
-}
-
-.btn.primary {
-  padding: 0.5rem 0.85rem;
-  border-radius: 0.55rem;
-  font-weight: 600;
-  background: var(--accent);
-  color: var(--accent-contrast, #fff);
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.table-wrap {
-  border: 1px solid var(--border);
-  border-radius: 0.55rem;
-  overflow: hidden;
-  background: var(--surface);
+.extrato-filters__mode {
   margin-bottom: 0.5rem;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.86rem;
+.extrato-filters__period-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
 
-  th,
-  td {
-    padding: 0.45rem 0.6rem;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-  }
-
-  th {
-    background: var(--surface-2);
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .total-row td {
-    font-weight: 700;
-    background: var(--surface-2);
+  .input[type='month'] {
+    flex: 1 1 9.5rem;
+    min-width: min(100%, 9.5rem);
   }
 }
 
-.empty {
+.period-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.period-row .input {
+  flex: 1 1 9.5rem;
+  min-width: min(100%, 9.5rem);
+}
+
+.period-row__sep {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* ——— Blocos conta geral / fundos ——— */
+.stmt-card {
+  margin-bottom: 1.25rem;
+}
+
+.extrato-filters .form-card__title,
+.stmt-card .form-card__title {
+  margin-bottom: 0.1rem;
+}
+
+.extrato-filters .form-card__lede {
+  line-height: 1.3;
+}
+
+.stmt-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.stmt-card__empty {
   margin: 0;
-  padding: 0.65rem;
+  padding: 0.5rem 0;
   color: var(--muted);
   font-size: 0.88rem;
+  line-height: 1.45;
 }
 
-.table tbody tr.row--disabled {
-  opacity: 0.55;
-  filter: grayscale(0.3);
+.stmt-page__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+
+  a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.fund-extrato__table-wrap {
+  margin-bottom: 0;
 }

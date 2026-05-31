@@ -1,0 +1,329 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Contas bancárias</h1>
+  </header>
+
+  @if (loading()) {
+    <p class="muted page__loading">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <div class="stats-row" aria-label="Resumo das contas">
+      <article class="stat-card">
+        <span class="stat-card__label">Contas ativas</span>
+        <strong class="stat-card__value">{{ activeAccountsCount() }}</strong>
+        <span class="stat-card__hint">de {{ accounts().length }} cadastrada(s)</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-card__label">Saldo inicial total</span>
+        <strong
+          class="stat-card__value"
+          [class]="extratoBalanceCssClass(totalSeedCents())"
+          >{{ formatCentsBrl(totalSeedCents()) }}</strong
+        >
+        <span class="stat-card__hint">referência cadastrada (por data)</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-card__label">Saldo atual total</span>
+        @if (totalCurrentCents(); as totalCurrent) {
+          <strong
+            class="stat-card__value"
+            [class]="extratoBalanceCssClass(totalCurrent)"
+            >{{ formatCentsBrl(totalCurrent) }}</strong
+          >
+        } @else {
+          <strong class="stat-card__value stat-card__value--muted">—</strong>
+        }
+        <span class="stat-card__hint">soma no extrato (hoje)</span>
+      </article>
+    </div>
+
+    <section class="form-card bank-form-card">
+      @if (!editingId()) {
+        <button
+          type="button"
+          class="bank-create-toggle"
+          (click)="toggleForm()"
+          [attr.aria-expanded]="formExpanded()"
+          aria-controls="bank-create-panel"
+        >
+          <span class="bank-create-toggle__label">Nova conta bancária</span>
+          <span class="bank-create-toggle__hint" aria-hidden="true">{{
+            formExpanded() ? 'Recolher' : 'Expandir'
+          }}</span>
+        </button>
+      }
+      @if (formExpanded() || editingId()) {
+        <div id="bank-create-panel">
+          <div class="form-card__head">
+            <h2 class="form-card__title">
+              {{ editingId() ? 'Editar conta' : 'Cadastrar conta' }}
+            </h2>
+            <p class="form-card__lede">
+              Informe o saldo conferido na data indicada. No extrato, a soma das contas
+              usa esse valor a partir dessa data; lançamentos anteriores não alteram o
+              saldo da conta.
+            </p>
+          </div>
+
+          <form class="fund-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <div class="form-section">
+              <label class="field field--block">
+                <span class="field__label">Nome / apelido da conta</span>
+                <input
+                  type="text"
+                  class="input input--lg"
+                  formControlName="name"
+                  placeholder="Ex.: Conta corrente, Poupança obras"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
+
+            <div class="form-section">
+              <app-bank-select-field formControlName="bankName">
+                Banco (opcional)
+              </app-bank-select-field>
+            </div>
+
+            <div class="form-section values-grid">
+              <label class="field field--block">
+                <span class="field__label">Data do saldo inicial</span>
+                <input
+                  type="date"
+                  class="input input--lg"
+                  formControlName="initialBalanceOn"
+                  required
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Saldo inicial (R$)</span>
+                <div class="input-money">
+                  <span class="input-money__prefix" aria-hidden="true">R$</span>
+                  <input
+                    type="text"
+                    class="input input--money"
+                    formControlName="initialBalanceReais"
+                    inputmode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+              </label>
+            </div>
+            <p class="form-section__inline-hint form-section__inline-hint--after-grid">
+              Valor em caixa na data acima (pode ser negativo). Movimentos com data
+              anterior não entram no saldo desta conta; os posteriores somam no extrato.
+            </p>
+
+            @if (balancePreviewLoading()) {
+              <p class="balance-preview balance-preview--loading muted">
+                Calculando prévia do saldo…
+              </p>
+            } @else if (balancePreviewError()) {
+              <p class="balance-preview balance-preview--error" role="status">
+                {{ balancePreviewError() }}
+              </p>
+            } @else if (balancePreview()) {
+              @let prev = balancePreview()!;
+              <div class="preview-card balance-preview-card" role="status">
+                <p class="preview-card__eyebrow">Prévia (sem salvar)</p>
+                <p class="preview-card__main">
+                  <span
+                    [ngClass]="
+                      extratoBalanceCssClass(
+                        parseCentsBigint(prev.projectedBalanceCents)
+                      )
+                    "
+                  >
+                    {{ formatCentsBrl(prev.projectedBalanceCents) }}
+                  </span>
+                </p>
+                <p class="balance-preview-card__detail muted">
+                  Saldo ao fim de
+                  <strong>{{ formatDateDdMmYyyy(prev.asOf) }}</strong>
+                  com referência em
+                  <strong>{{ formatDateDdMmYyyy(prev.initialBalanceOn) }}</strong>
+                  ({{ formatCentsBrl(prev.initialBalanceCents) }}).
+                </p>
+                @if (prev.transactionCount > 0) {
+                  <p class="balance-preview-card__detail muted">
+                    Inclui
+                    <strong>{{ prev.transactionCount }}</strong>
+                    {{
+                      prev.transactionCount === 1
+                        ? 'movimento'
+                        : 'movimentos'
+                    }}
+                    nesta conta após essa data
+                    @if (centsIsNonZero(prev.movementsDeltaCents)) {
+                      (<span
+                        [ngClass]="
+                          extratoBalanceCssClass(
+                            parseCentsBigint(prev.movementsDeltaCents)
+                          )
+                        "
+                        >{{ formatCentsBrl(prev.movementsDeltaCents) }}</span
+                      >
+                      líquido).
+                    }
+                  </p>
+                } @else if (editingId()) {
+                  <p class="balance-preview-card__detail muted">
+                    Nenhum movimento nesta conta após a data de referência até
+                    {{ formatDateDdMmYyyy(prev.asOf) }}.
+                  </p>
+                } @else {
+                  <p class="balance-preview-card__detail muted">
+                    Conta nova: após cadastrar, os lançamentos nesta conta passam a
+                    somar a partir da data de referência.
+                  </p>
+                }
+              </div>
+            }
+
+            <div class="form-footer form-footer--split">
+              <button type="button" class="btn btn--ghost" (click)="cancelEdit()">
+                {{ editingId() ? 'Cancelar edição' : 'Cancelar' }}
+              </button>
+              <button type="submit" class="btn btn--submit" [disabled]="saving()">
+                {{
+                  saving()
+                    ? 'Salvando…'
+                    : editingId()
+                      ? 'Salvar alterações'
+                      : 'Cadastrar conta'
+                }}
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+    </section>
+
+    <section class="list-section" aria-labelledby="contas-lista-titulo">
+      <h2 id="contas-lista-titulo" class="list-section__title">Contas cadastradas</h2>
+      <p class="list-section__lede">
+        Use as contas nas transações e no extrato. O <strong>saldo atual</strong> de
+        cada conta entra na soma da conta geral; a <strong>data do saldo inicial</strong>
+        define a partir de quando o valor registrado passa a valer.
+      </p>
+
+      @if (accounts().length === 0) {
+        <div class="account-list account-list--empty">
+          <p class="empty empty--card">
+            Nenhuma conta cadastrada. Clique em «Nova conta bancária» para começar.
+          </p>
+        </div>
+      } @else {
+        <ul class="account-list" role="list">
+          @for (a of accounts(); track a.id) {
+            <li>
+              <article
+                class="account-card"
+                [class.account-card--inactive]="!a.isActive"
+                [class.account-card--editing]="editingId() === a.id"
+              >
+                <div class="account-card__top">
+                  <div class="account-card__identity">
+                    @if (a.bankName) {
+                      <app-bank-brand-mark
+                        class="account-card__mark"
+                        [bankName]="a.bankName"
+                        size="md"
+                      />
+                    }
+                    <div class="account-card__titles">
+                      <h3 class="account-card__name">{{ a.name }}</h3>
+                      @if (a.bankName) {
+                        <p class="account-card__bank">
+                          <span>{{ a.bankName }}</span>
+                          @if (bankForAccount(a); as known) {
+                            <span class="account-card__compe"
+                              >COMPE {{ known.compe }}</span
+                            >
+                          }
+                        </p>
+                      }
+                    </div>
+                  </div>
+                  @if (!a.isActive) {
+                    <span class="account-card__badge account-card__badge--inactive"
+                      >Inativa</span
+                    >
+                  } @else {
+                    <span class="account-card__badge account-card__badge--active"
+                      >Ativa</span
+                    >
+                  }
+                </div>
+
+                <dl class="account-card__meta">
+                  <div class="account-card__kv">
+                    <dt>Data do saldo inicial</dt>
+                    <dd>{{ formatDateDdMmYyyy(a.initialBalanceOn) }}</dd>
+                  </div>
+                  <div class="account-card__kv">
+                    <dt>Saldo inicial</dt>
+                    <dd>
+                      <span
+                        [class]="
+                          extratoBalanceCssClass(
+                            parseCentsBigint(a.initialBalanceCents)
+                          )
+                        "
+                      >
+                        {{ formatCentsBrl(a.initialBalanceCents) }}
+                      </span>
+                    </dd>
+                  </div>
+                  <div class="account-card__kv">
+                    <dt>Saldo atual</dt>
+                    <dd>
+                      @if (a.currentBalanceCents != null) {
+                        <span
+                          [class]="
+                            extratoBalanceCssClass(
+                              parseCentsBigint(a.currentBalanceCents)
+                            )
+                          "
+                        >
+                          {{ formatCentsBrl(a.currentBalanceCents) }}
+                        </span>
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </dd>
+                  </div>
+                </dl>
+
+                <div class="account-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="startEdit(a)"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="toggleActive(a)"
+                  >
+                    {{ a.isActive ? 'Desativar' : 'Ativar' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn danger sm"
+                    (click)="remove(a)"
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </article>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</div>

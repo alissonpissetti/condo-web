@@ -1,10 +1,6 @@
 <div class="page">
   <header class="page__header">
     <h1>Fundos</h1>
-    <p class="page__intro">
-      Defina fundos parcelados (obra, reserva) ou permanentes (taxa contínua), com
-      rateio por unidades ou agrupamentos.
-    </p>
   </header>
 
   @if (loading()) {
@@ -45,9 +41,6 @@
           </div>
 
           <form class="fund-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        @if (formError(); as fe) {
-          <p class="error error--form" role="alert">{{ fe }}</p>
-        }
 
         <div class="form-section">
           <div class="form-section__head">

@@ -46,9 +46,22 @@ Quando o verbo for “persistir escolha” em frases (não só no botão), usar 
 
 - **Sempre** exibir datas ao usuário no formato **dd/mm/aaaa** (ex.: `11/04/2026`).
 - Usar a função compartilhada `formatDateDdMmYyyy` em `src/app/core/date-display.ts` (ou equivalente aprovado) para valores vindos da API em ISO (`YYYY-MM-DD` ou com hora), evitando mostrar `YYYY-MM-DD` em tabelas, cartões ou rótulos.
-- Quando a UI mostrar **data e hora** (ex.: expiração de convite, eventos), usar o formato **`dd/mm/aaaa HH:MM`** em **24 horas** (ex.: `21/04/2026 00:28`), via `formatDateTimeDdMmYyyyHhMm` no mesmo ficheiro. **Não** usar o `DatePipe` com `'short'` ou locale en-US (evita `M/D/yy` e `AM/PM`).
+- Quando a UI mostrar **data e hora** (ex.: expiração de convite, eventos), usar o formato **`dd/mm/aaaa HH:MM`** em **24 horas** (ex.: `21/04/2026 00:28`), via `formatDateTimeDdMmYyyyHhMm` no mesmo arquivo. **Não** usar o `DatePipe` com `'short'` ou locale en-US (evita `M/D/yy` e `AM/PM`).
 - **Valores enviados à API** podem continuar em **ISO** (`YYYY-MM-DD` ou instante completo) quando o contrato do backend assim exigir; as regras acima aplicam-se à **apresentação** na UI.
 - Campos nativos `type="date"` seguem o controle do navegador para edição; o valor em memória pode permanecer ISO; ao mostrar a mesma data fora do input (listas, resumos), preferir **dd/mm/aaaa**.
+
+## Mensagens flash (feedback de ações)
+
+Toda resposta visível a **ações do usuário** (salvar, excluir, validação, erro de API) deve usar o serviço global `FlashMessageService` (`src/app/core/flash-message.service.ts`), exibido no canto da tela pelo `app-flash-host` na raiz da aplicação.
+
+| Tipo | Método | Cor | Uso |
+|------|--------|-----|-----|
+| Sucesso | `flash.success('…')` | Verde | Operação concluída (salvar, atualizar, enviar). |
+| Aviso | `flash.warning('…')` | Amarelo | Validação ou situação que o usuário pode corrigir antes de repetir. |
+| Erro | `flash.error('…')` ou `flash.errorFromHttp(err, '…')` | Vermelho | Falha de API ou bloqueio definitivo. |
+
+- **Não** usar banners locais (`actionError`, `formError` no topo da página) para o mesmo fim; manter só erros de **carregamento da página** (`loadError`) no corpo quando a tela não tem conteúdo.
+- Mensagens curtas em pt-BR; erros HTTP preferir `errorFromHttp` com fallback contextual.
 
 ## Áreas do painel (condomínio)
 

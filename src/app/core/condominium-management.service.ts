@@ -37,6 +37,8 @@ export interface UnitRow {
    * Deve ser o `id` de alguém em `responsiblePeople` quando há vários.
    */
   financialResponsiblePersonId?: string | null;
+  /** Relação carregada na API (PATCH/listagens); usar `id` se o campo acima vier vazio. */
+  financialResponsiblePerson?: UnitPersonRef | null;
   /** Nome resolvido na API (designado, único responsável ou rótulo livre). */
   financialResponsibleName?: string | null;
   /**

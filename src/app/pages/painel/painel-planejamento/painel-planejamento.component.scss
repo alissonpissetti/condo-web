@@ -3,27 +3,6 @@
   width: 100%;
 }
 
-.page {
-  max-width: 36rem;
-  padding: 0 0 2.75rem;
-}
-
-@media (min-width: 640px) {
-  .page {
-    max-width: 48rem;
-  }
-}
-
-.page--poll-detail {
-  max-width: 52rem;
-}
-
-@media (min-width: 720px) {
-  .page--poll-detail {
-    max-width: 56rem;
-  }
-}
-
 .page__header {
   margin-bottom: 1.35rem;
   padding-bottom: 1.1rem;
@@ -524,12 +503,9 @@
 }
 
 .plan-create-panel {
-  padding: 0 1.25rem 1.15rem;
-
   &__lede {
     margin: 0.85rem 0 1rem;
   }
-
 }
 
 .plan-detail-page {
@@ -1001,7 +977,6 @@
 }
 
 .plan-detail__body {
-  padding: 0.35rem 1.25rem 1.35rem;
   display: flex;
   flex-direction: column;
   gap: 0;

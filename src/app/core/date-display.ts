@@ -16,6 +16,32 @@ export function firstDayOfMonthLocalIsoDate(d = new Date()): string {
   return `${y}-${m}-01`;
 }
 
+/** Mês civil local como AAAA-MM (para `<input type="month">`). */
+export function localIsoMonthYm(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+/** Primeiro dia do mês indicado em AAAA-MM. */
+export function firstDayOfMonthFromYm(ym: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym.trim());
+  if (!m) return firstDayOfMonthLocalIsoDate();
+  return `${m[1]}-${m[2]}-01`;
+}
+
+/** Último dia do mês indicado em AAAA-MM. */
+export function lastDayOfMonthFromYm(ym: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym.trim());
+  if (!m) return lastDayOfMonthLocalIsoDate();
+  const y = Number(m[1]);
+  const monthIndex = Number(m[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return lastDayOfMonthLocalIsoDate();
+  const last = new Date(y, monthIndex + 1, 0);
+  const day = String(last.getDate()).padStart(2, '0');
+  return `${y}-${m[2]}-${day}`;
+}
+
 /** Último dia do mês civil local (AAAA-MM-DD). */
 export function lastDayOfMonthLocalIsoDate(d = new Date()): string {
   const y = d.getFullYear();

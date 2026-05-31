@@ -3,11 +3,6 @@
   width: 100%;
 }
 
-.page {
-  max-width: 72rem;
-  padding: 0 0 2.5rem;
-}
-
 .page__header {
   margin-bottom: 1.5rem;
   padding-bottom: 1.25rem;
@@ -27,6 +22,17 @@
   font-size: clamp(1.35rem, 2.5vw, 1.6rem);
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--ma-radius);
+  background: color-mix(in srgb, var(--ma-danger) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ma-danger) 28%, var(--border));
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--text);
 }
 
 .condo-pill {

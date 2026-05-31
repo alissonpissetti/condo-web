@@ -2,10 +2,6 @@
   class="page"
   [class.page--work-detail]="detailWorkId() !== null"
 >
-  @if (actionError(); as ae) {
-    <p class="plan-banner plan-banner--error" role="alert">{{ ae }}</p>
-  }
-
   @if (draftSavedLabel(); as dl) {
     <p class="plan-banner plan-banner--info" role="status">{{ dl }}</p>
   }
@@ -13,11 +9,6 @@
   @if (!detailWorkId()) {
     <header class="page__header">
       <h1>Obras</h1>
-      <p class="page__intro">
-        Cadastre reformas e projetos do condomínio. Para cada obra, registre comentários
-        e orçamentos na linha do tempo, com anexos quando precisar. Os formulários são salvos
-        automaticamente no navegador enquanto você preenche.
-      </p>
     </header>
 
     @if (loadError()) {
@@ -203,11 +194,28 @@
               }
             </div>
             <div class="plan-detail__badges" aria-label="Status da obra">
-              <span
-                class="plan-pill"
-                [ngClass]="workStatusPillClass(selected()!.status)"
-                >{{ statusLabel(selected()!.status) }}</span
-              >
+              @if (canManage()) {
+                <label class="obra-status-field">
+                  <span class="obra-status-field__label">Status</span>
+                  <select
+                    class="obra-status-select"
+                    [ngClass]="workStatusSelectClass(editForm.controls.status.value)"
+                    [formControl]="editForm.controls.status"
+                    (change)="onWorkStatusChange($event)"
+                    [disabled]="busy()"
+                  >
+                    @for (opt of workStatusOptions; track opt.value) {
+                      <option [value]="opt.value">{{ opt.label }}</option>
+                    }
+                  </select>
+                </label>
+              } @else {
+                <span
+                  class="plan-pill"
+                  [ngClass]="workStatusPillClass(selected()!.status)"
+                  >{{ statusLabel(selected()!.status) }}</span
+                >
+              }
             </div>
           </div>
 
@@ -262,18 +270,28 @@
 
             @if (canManage()) {
               <section
-                class="plan-detail__section obras-register"
-                aria-labelledby="obras-register-heading"
+                class="form-card plan-create-card obras-register-card"
+                aria-label="Nova interação na timeline"
               >
-                <header class="obras-register__head">
-                  <h3 class="obras-register__title" id="obras-register-heading">
-                    Registrar na timeline
-                  </h3>
-                  <p class="obras-register__lede">
-                    Rascunho salvo no navegador até você publicar.
-                  </p>
-                </header>
-
+                <button
+                  type="button"
+                  class="plan-create-toggle"
+                  (click)="toggleRegisterExpanded()"
+                  [attr.aria-expanded]="registerExpanded()"
+                  aria-controls="obras-register-panel"
+                >
+                  <span class="plan-create-toggle__label">Nova interação</span>
+                  <span class="plan-create-toggle__hint" aria-hidden="true">{{
+                    registerExpanded() ? 'Recolher' : 'Expandir'
+                  }}</span>
+                </button>
+                @if (registerExpanded()) {
+                  <div id="obras-register-panel" class="plan-create-panel">
+                    <p class="form-card__lede plan-create-panel__lede">
+                      Comentário ou orçamento com anexos. O rascunho fica salvo no
+                      navegador até publicar na linha do tempo.
+                    </p>
+                    <div class="obras-register">
                 <div
                   class="obras-register__type"
                   role="tablist"
@@ -571,6 +589,9 @@
                     </form>
                   }
                 </div>
+                    </div>
+                  </div>
+                }
               </section>
             }
 
@@ -744,7 +765,7 @@
                                           </p>
                                         }
                                         <ul class="obras-tl__media-list">
-                                          @for (att of e.attachments ?? []; track att.id) {
+                                          @for (att of e.attachments; track att.id) {
                                             <li class="obras-tl__media-item">
                                               <app-obras-timeline-attachment-preview
                                                 [condominiumId]="condominiumIdParam()"

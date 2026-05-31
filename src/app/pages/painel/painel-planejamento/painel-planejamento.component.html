@@ -2,18 +2,9 @@
   class="page"
   [class.page--poll-detail]="detailPollId() !== null"
 >
-  @if (actionError(); as ae) {
-    <p class="plan-banner plan-banner--error" role="alert">{{ ae }}</p>
-  }
-
   @if (!detailPollId()) {
     <header class="page__header">
       <h1>Pautas/Atas</h1>
-      <p class="page__intro">
-        Crie assembleias com opções de voto (ou uma pauta só «Ata», sem votação no sistema),
-        descrição em texto formatado e anexos. Encerre, registre a decisão (quando houver
-        votação) ou conclua o registro da ata e gere o PDF.
-      </p>
     </header>
 
     @if (loadError()) {

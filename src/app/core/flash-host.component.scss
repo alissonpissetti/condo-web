@@ -1,0 +1,90 @@
+.flash-stack {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top, 0px));
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  z-index: 11000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  width: min(22rem, calc(100vw - 1.5rem));
+  pointer-events: none;
+}
+
+.flash-msg {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 0.65rem 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  box-shadow:
+    0 4px 14px color-mix(in srgb, #0f172a 12%, transparent),
+    0 1px 0 color-mix(in srgb, var(--border) 80%, transparent);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  animation: flash-enter 0.22s ease-out;
+
+  &--success {
+    background: color-mix(in srgb, #22c55e 14%, var(--surface));
+    border-color: color-mix(in srgb, #16a34a 38%, var(--border));
+  }
+
+  &--warning {
+    background: color-mix(in srgb, #eab308 16%, var(--surface));
+    border-color: color-mix(in srgb, #ca8a04 40%, var(--border));
+  }
+
+  &--error {
+    background: color-mix(in srgb, #ef4444 14%, var(--surface));
+    border-color: color-mix(in srgb, #dc2626 38%, var(--border));
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__close {
+    flex-shrink: 0;
+    margin: -0.15rem -0.05rem 0 0;
+    padding: 0.1rem 0.35rem;
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0.65;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 0.35rem;
+
+    &:hover {
+      opacity: 1;
+      background: color-mix(in srgb, currentColor 8%, transparent);
+    }
+  }
+}
+
+@keyframes flash-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .flash-stack {
+    left: max(0.75rem, env(safe-area-inset-left, 0px));
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    width: auto;
+    align-items: stretch;
+  }
+}
