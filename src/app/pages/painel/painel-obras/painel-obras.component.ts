@@ -4,9 +4,11 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormBuilder,
+  FormsModule,
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
+import { BrMoneyMaskDirective } from '../../../core/br-money-mask.directive';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription, debounceTime, distinctUntilChanged, forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
@@ -22,7 +24,12 @@ import {
   type WorkTimelineEntry,
 } from '../../../core/condominium-works-api.service';
 import { ObrasTimelineAttachmentPreviewComponent } from './obras-timeline-attachment-preview.component';
-import { formatCentsBrl } from '../../../core/money-brl';
+import { ObrasTimelineAttachmentModalHostComponent } from './obras-timeline-attachment-modal-host.component';
+import {
+  centsToReaisInput,
+  formatCentsBrl,
+  parseReaisInputToCents,
+} from '../../../core/money-brl';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 import {
   formatDateDdMmYyyy,
@@ -32,6 +39,7 @@ import {
   localDateKeyFromIso,
 } from '../../../core/date-display';
 import {
+  dateToDatetimeLocalValue,
   formatFilenameRecordedOnHint,
   formatFilenameRecordedOnShort,
   suggestRecordedOnFromFilenames,
@@ -87,9 +95,12 @@ const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
   standalone: true,
   imports: [
     NgClass,
+    FormsModule,
     ReactiveFormsModule,
     RouterLink,
+    BrMoneyMaskDirective,
     ObrasTimelineAttachmentPreviewComponent,
+    ObrasTimelineAttachmentModalHostComponent,
   ],
   templateUrl: './painel-obras.component.html',
   styleUrl: './painel-obras.component.scss',
@@ -146,6 +157,12 @@ export class PainelObrasComponent implements OnInit {
   /** YYYY-MM-DDTHH:mm; vazio = agora no envio */
   protected readonly registerRecordedOn = signal('');
   protected readonly registerRecordedOnTouched = signal(false);
+
+  protected readonly editingTimelineEntryId = signal<string | null>(null);
+  protected readonly timelineEditBody = signal('');
+  protected readonly timelineEditRecordedOn = signal('');
+  protected readonly timelineEditAmountReais = signal('');
+  protected readonly timelineEditSupplierName = signal('');
   protected readonly filenameRecordedOnHint = signal<string | null>(null);
   /** Dias expandidos na timeline (`yyyy-MM-dd`). */
   protected readonly timelineDayExpanded = signal<ReadonlySet<string>>(
@@ -154,10 +171,7 @@ export class PainelObrasComponent implements OnInit {
 
   protected readonly budgetForm = this.fb.nonNullable.group({
     supplierName: ['', [Validators.required, Validators.maxLength(255)]],
-    amountReais: [
-      '',
-      [Validators.required, Validators.pattern(/^\d+([.,]\d{1,2})?$/)],
-    ],
+    amountReais: ['', [Validators.required]],
     validUntil: [''],
     status: this.fb.nonNullable.control<WorkBudgetStatus>('received'),
     notes: [''],
@@ -311,14 +325,48 @@ export class PainelObrasComponent implements OnInit {
     return this.selected()?.costsSummary ?? null;
   }
 
-  protected workCostsTotalLabel(): string {
-    const raw = this.workCostsSummary()?.totalCents ?? '0';
-    const cents = Number(raw);
-    return formatCentsBrl(Number.isFinite(cents) ? cents : 0);
+  protected workCostsForecastLabel(): string {
+    return formatCentsBrl(this.workForecastCentsNumber());
   }
 
   protected workCostsExpenseCount(): number {
     return this.workCostsSummary()?.expenseCount ?? 0;
+  }
+
+  protected workCostsPaidLabel(): string {
+    return formatCentsBrl(this.workPaidCentsNumber());
+  }
+
+  protected workCostsOverdueLabel(): string {
+    return formatCentsBrl(this.workOverdueCentsNumber());
+  }
+
+  protected workCostsFutureLabel(): string {
+    return formatCentsBrl(this.workFutureCentsNumber());
+  }
+
+  protected workForecastBreakdownHint(): string | null {
+    const s = this.workCostsSummary();
+    if (!s || this.workForecastCentsNumber() <= 0) {
+      return null;
+    }
+    if (s.paidCount == null && s.overdueCount == null) {
+      return null;
+    }
+    const parts: string[] = [];
+    const paidCount = s.paidCount ?? 0;
+    const overdueCount = s.overdueCount ?? 0;
+    const futureCount = s.futureCount ?? 0;
+    if (paidCount > 0) {
+      parts.push(`${paidCount} paga${paidCount === 1 ? '' : 's'}`);
+    }
+    if (overdueCount > 0) {
+      parts.push(`${overdueCount} atrasada${overdueCount === 1 ? '' : 's'}`);
+    }
+    if (futureCount > 0) {
+      parts.push(`${futureCount} futura${futureCount === 1 ? '' : 's'}`);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   protected workApprovedBudgetLabel(): string | null {
@@ -333,6 +381,25 @@ export class PainelObrasComponent implements OnInit {
     return this.workCostsSummary()?.budgetCount ?? 0;
   }
 
+  protected workApprovedBudgetCount(): number {
+    return this.workCostsSummary()?.approvedBudgetCount ?? 0;
+  }
+
+  protected workApprovedBudgetHint(): string | null {
+    const s = this.workCostsSummary();
+    if (!s?.approvedBudgetCents) {
+      return null;
+    }
+    const count = s.approvedBudgetCount ?? 0;
+    const suppliers = s.approvedBudgetSuppliers?.trim();
+    if (count > 1) {
+      return suppliers
+        ? `${count} orçamentos aprovados (${suppliers})`
+        : `${count} orçamentos aprovados`;
+    }
+    return suppliers ?? null;
+  }
+
   protected workHasProgressChart(): boolean {
     return this.workApprovedCentsNumber() > 0;
   }
@@ -344,24 +411,86 @@ export class PainelObrasComponent implements OnInit {
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
+  protected workForecastCentsNumber(): number {
+    const s = this.workCostsSummary();
+    const raw = s?.forecastCents ?? s?.totalCents ?? '0';
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   protected workPaidCentsNumber(): number {
-    const raw = this.workCostsSummary()?.totalCents ?? '0';
+    const s = this.workCostsSummary();
+    if (!s) {
+      return 0;
+    }
+    if (s.paidCents != null) {
+      const n = Number(s.paidCents);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    return this.workForecastCentsNumber();
+  }
+
+  protected workOverdueCentsNumber(): number {
+    const raw = this.workCostsSummary()?.overdueCents;
+    if (raw == null) {
+      return 0;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  protected workFutureCentsNumber(): number {
+    const raw = this.workCostsSummary()?.futureCents;
+    if (raw == null) {
+      return 0;
+    }
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
   protected workRemainingCents(): number {
-    return Math.max(0, this.workApprovedCentsNumber() - this.workPaidCentsNumber());
+    return Math.max(
+      0,
+      this.workApprovedCentsNumber() - this.workForecastCentsNumber(),
+    );
   }
 
-  protected workRemainingLabel(): string {
+  protected workExcessCents(): number {
+    return Math.max(
+      0,
+      this.workForecastCentsNumber() - this.workApprovedCentsNumber(),
+    );
+  }
+
+  protected workIsOverBudget(): boolean {
     const approved = this.workApprovedCentsNumber();
-    const paid = this.workPaidCentsNumber();
-    if (approved <= 0) return '—';
-    if (paid >= approved) {
-      return paid > approved ? 'Acima do orçamento' : 'Nada a lançar';
+    return approved > 0 && this.workForecastCentsNumber() > approved;
+  }
+
+  protected workBalanceLabel(): string {
+    const approved = this.workApprovedCentsNumber();
+    const forecast = this.workForecastCentsNumber();
+    if (approved <= 0) {
+      return '—';
+    }
+    if (forecast > approved) {
+      return formatCentsBrl(this.workExcessCents());
+    }
+    if (forecast === approved) {
+      return 'Previsto cobre o orçamento';
     }
     return formatCentsBrl(this.workRemainingCents());
+  }
+
+  protected workBalanceHintTitle(): string {
+    if (this.workIsOverBudget()) {
+      return 'Excedente em relação aos orçamentos aprovados';
+    }
+    return 'Falta para atingir o total aprovado (com lançamentos previstos)';
+  }
+
+  protected workBalanceHintPrefix(): string {
+    return this.workIsOverBudget() ? 'Excedente' : 'Falta';
   }
 
   protected workProgressPercent(): number | null {
@@ -386,18 +515,39 @@ export class PainelObrasComponent implements OnInit {
     return `${filled} ${100 - filled}`;
   }
 
-  protected workStackedPaidWidth(): number {
+  protected workStackWidths(): {
+    paid: number;
+    overdue: number;
+    future: number;
+    remain: number;
+  } {
     const approved = this.workApprovedCentsNumber();
-    if (approved <= 0) return 0;
-    return Math.min(100, (this.workPaidCentsNumber() / approved) * 100);
+    if (approved <= 0) {
+      return { paid: 0, overdue: 0, future: 0, remain: 0 };
+    }
+    const paidP = (this.workPaidCentsNumber() / approved) * 100;
+    const overdueP = (this.workOverdueCentsNumber() / approved) * 100;
+    const futureP = (this.workFutureCentsNumber() / approved) * 100;
+    const used = paidP + overdueP + futureP;
+    if (used >= 100) {
+      const scale = 100 / used;
+      return {
+        paid: paidP * scale,
+        overdue: overdueP * scale,
+        future: futureP * scale,
+        remain: 0,
+      };
+    }
+    return {
+      paid: paidP,
+      overdue: overdueP,
+      future: futureP,
+      remain: Math.max(0, 100 - used),
+    };
   }
 
-  protected workStackedRemainingWidth(): number {
-    return Math.max(0, 100 - this.workStackedPaidWidth());
-  }
-
-  protected isApprovedWorkBudget(budgetId: string): boolean {
-    return this.workCostsSummary()?.approvedBudgetId === budgetId;
+  protected isApprovedWorkBudget(budget: WorkBudget): boolean {
+    return budget.status === 'approved';
   }
 
   protected canApproveWorkBudget(budget: WorkBudget): boolean {
@@ -412,13 +562,11 @@ export class PainelObrasComponent implements OnInit {
     const b = entry.budget;
     const w = this.selected();
     if (!b || !w || !this.canApproveWorkBudget(b) || this.busy()) return;
-    const cur = this.workCostsSummary();
-    let msg =
-      'Aprovar este orçamento como valor de referência (realização) da obra?';
-    if (cur?.approvedBudgetId && cur.approvedBudgetId !== b.id) {
-      msg =
-        `Aprovar «${b.supplierName}»? O orçamento «${cur.approvedBudgetSupplier ?? 'anterior'}» deixará de ser o aprovado.`;
-    }
+    const approvedCount = this.workApprovedBudgetCount();
+    const msg =
+      approvedCount > 0
+        ? `Aprovar «${b.supplierName}»? O valor será somado aos ${approvedCount} orçamento(s) já aprovado(s) da obra.`
+        : 'Aprovar este orçamento? O valor entra na soma de referência (realização) da obra.';
     if (!confirm(msg)) return;
     this.busy.set(true);
     this.api
@@ -624,6 +772,129 @@ export class PainelObrasComponent implements OnInit {
         entry.kind === 'budget' ||
         entry.kind === 'document')
     );
+  }
+
+  protected canEditTimelineEntry(entry: WorkTimelineEntry): boolean {
+    return (
+      this.canManage() &&
+      (entry.kind === 'note' ||
+        entry.kind === 'legal' ||
+        entry.kind === 'budget')
+    );
+  }
+
+  protected isEditingTimelineEntry(entry: WorkTimelineEntry): boolean {
+    return this.editingTimelineEntryId() === entry.id;
+  }
+
+  protected startEditTimelineEntry(entry: WorkTimelineEntry): void {
+    if (!this.canEditTimelineEntry(entry) || this.busy()) return;
+    this.editingTimelineEntryId.set(entry.id);
+    this.timelineEditBody.set((entry.body ?? '').trim());
+    this.timelineEditRecordedOn.set(
+      dateToDatetimeLocalValue(new Date(entry.createdAt)),
+    );
+    if (entry.budget) {
+      this.timelineEditAmountReais.set(
+        centsToReaisInput(entry.budget.amountCents),
+      );
+      this.timelineEditSupplierName.set(entry.budget.supplierName);
+    } else {
+      this.timelineEditAmountReais.set('');
+      this.timelineEditSupplierName.set('');
+    }
+  }
+
+  protected cancelEditTimelineEntry(): void {
+    this.editingTimelineEntryId.set(null);
+    this.timelineEditBody.set('');
+    this.timelineEditRecordedOn.set('');
+    this.timelineEditAmountReais.set('');
+    this.timelineEditSupplierName.set('');
+  }
+
+  protected setTimelineEditRecordedOn(value: string): void {
+    this.timelineEditRecordedOn.set((value ?? '').trim().slice(0, 16));
+  }
+
+  protected timelineEditBodyLabel(entry: WorkTimelineEntry): string {
+    if (entry.kind === 'legal') {
+      return 'Título ou descrição';
+    }
+    return 'Texto';
+  }
+
+  protected saveTimelineEntryEdit(entry: WorkTimelineEntry): void {
+    const w = this.selected();
+    if (!w || !this.isEditingTimelineEntry(entry) || this.busy()) return;
+
+    const payload: {
+      body?: string | null;
+      recordedOn?: string;
+      amountCents?: number;
+      supplierName?: string;
+    } = {};
+
+    const recordedOn = this.timelineEditRecordedOn().trim();
+    const prevRecorded = dateToDatetimeLocalValue(new Date(entry.createdAt));
+    if (recordedOn && recordedOn !== prevRecorded) {
+      payload.recordedOn = recordedOn;
+    }
+
+    if (entry.kind === 'note' || entry.kind === 'legal') {
+      const text = this.timelineEditBody().trim();
+      const prev = (entry.body ?? '').trim();
+      if (text !== prev) {
+        payload.body = text || null;
+      }
+    }
+
+    if (entry.kind === 'budget' && entry.budget) {
+      const parsed = parseReaisInputToCents(this.timelineEditAmountReais());
+      if (parsed === null) {
+        this.flash.warning('Informe um valor válido (ex.: 5.420,00).');
+        return;
+      }
+      const supplier = this.timelineEditSupplierName().trim();
+      if (!supplier) {
+        this.flash.warning('Informe o fornecedor.');
+        return;
+      }
+      const prevCents = Number(entry.budget.amountCents);
+      const prevSupplier = entry.budget.supplierName.trim();
+      if (parsed === prevCents && supplier === prevSupplier && !payload.recordedOn) {
+        this.cancelEditTimelineEntry();
+        return;
+      }
+      payload.amountCents = parsed;
+      payload.supplierName = supplier;
+    }
+
+    if (
+      payload.recordedOn === undefined &&
+      payload.body === undefined &&
+      payload.amountCents === undefined &&
+      payload.supplierName === undefined
+    ) {
+      this.cancelEditTimelineEntry();
+      return;
+    }
+
+    this.busy.set(true);
+    this.api
+      .updateTimelineEntry(this.condominiumId, w.id, entry.id, payload)
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.flash.success('Registro atualizado.');
+          this.cancelEditTimelineEntry();
+          this.loadDetail(w.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível salvar a edição.');
+        },
+      });
   }
 
   protected setStatusFilter(v: string): void {
@@ -846,7 +1117,7 @@ export class PainelObrasComponent implements OnInit {
     const w = this.selected();
     if (!w || this.budgetForm.invalid || this.busy()) return;
     const v = this.budgetForm.getRawValue();
-    const parsed = this.parseReaisToCents(v.amountReais);
+    const parsed = parseReaisInputToCents(v.amountReais);
     if (parsed === null) {
       this.flash.warning('Informe um valor válido.');
       return;
@@ -1279,10 +1550,17 @@ export class PainelObrasComponent implements OnInit {
       ...detail,
       costsSummary: detail.costsSummary ?? {
         totalCents: '0',
+        forecastCents: '0',
         expenseCount: 0,
+        paidCents: '0',
+        paidCount: 0,
+        overdueCents: '0',
+        overdueCount: 0,
+        futureCents: '0',
+        futureCount: 0,
         approvedBudgetCents: null,
-        approvedBudgetId: null,
-        approvedBudgetSupplier: null,
+        approvedBudgetCount: 0,
+        approvedBudgetSuppliers: null,
         budgetCount: 0,
         progressPercent: null,
       },
@@ -1298,6 +1576,7 @@ export class PainelObrasComponent implements OnInit {
   }
 
   private loadDetail(workId: string): void {
+    this.cancelEditTimelineEntry();
     this.detailLoading.set(true);
     this.detailError.set(null);
     forkJoin({
@@ -1332,13 +1611,6 @@ export class PainelObrasComponent implements OnInit {
         this.detailError.set(this.msg(err));
       },
     });
-  }
-
-  private parseReaisToCents(raw: string): number | null {
-    const s = raw.trim().replace(/\./g, '').replace(',', '.');
-    const n = Number(s);
-    if (!Number.isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
   }
 
   private msg(err: HttpErrorResponse): string {

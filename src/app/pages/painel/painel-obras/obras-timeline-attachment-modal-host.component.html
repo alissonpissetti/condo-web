@@ -1,0 +1,132 @@
+@if (shouldShowModal()) {
+  @if (modal.view(); as v) {
+    <div
+      class="obras-att-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="v.filename"
+      (click)="close()"
+    >
+      <div
+        class="obras-att-modal"
+        [class.obras-att-modal--pdf]="v.mediaKind === 'pdf'"
+        [class.obras-att-modal--video]="v.mediaKind === 'video'"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="obras-att-modal__head">
+          <p class="obras-att-modal__title" [title]="v.filename">
+            {{ v.filename }}
+          </p>
+          <div class="obras-att-modal__actions">
+            <button
+              type="button"
+              class="obras-att__dl"
+              title="Baixar"
+              [attr.aria-label]="'Baixar ' + v.filename"
+              [disabled]="v.disabled"
+              (click)="onDownload($event)"
+            >
+              <svg
+                class="obras-att__dl-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3v11" />
+                <path d="M8 10l4 4 4-4" />
+                <path d="M5 20h14" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="obras-att-modal__close"
+              aria-label="Fechar"
+              (click)="close()"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+        <div class="obras-att-modal__body">
+          @if (v.mediaKind === 'pdf') {
+            @if (v.pdfModalLoading) {
+              <p class="obras-att-modal__status muted" aria-live="polite">
+                Carregando PDF…
+              </p>
+            } @else if (v.pdfLoadError) {
+              <div class="obras-att-modal__status">
+                <p class="muted">Não foi possível abrir o PDF no navegador.</p>
+                <button
+                  type="button"
+                  class="btn primary sm"
+                  [disabled]="v.disabled"
+                  (click)="onDownload($event)"
+                >
+                  Baixar arquivo
+                </button>
+              </div>
+            } @else if (previewModalResourceUrl()) {
+              <object
+                class="obras-att-modal__pdf"
+                [data]="previewModalResourceUrl()!"
+                type="application/pdf"
+                [title]="v.filename"
+              >
+                <p class="obras-att-modal__status muted">
+                  Visualização indisponível.
+                  <button
+                    type="button"
+                    class="obras-att__expand linkish"
+                    (click)="onDownload($event)"
+                  >
+                    Baixar PDF
+                  </button>
+                </p>
+              </object>
+            }
+          } @else if (v.mediaKind === 'video') {
+            @if (v.videoModalLoading) {
+              <p class="obras-att-modal__status muted" aria-live="polite">
+                Carregando vídeo…
+              </p>
+            } @else if (v.videoLoadError) {
+              <div class="obras-att-modal__status">
+                <p class="muted">Não foi possível reproduzir este vídeo.</p>
+                <button
+                  type="button"
+                  class="btn primary sm"
+                  [disabled]="v.disabled"
+                  (click)="onDownload($event)"
+                >
+                  Baixar arquivo
+                </button>
+              </div>
+            } @else if (v.objectUrl) {
+              <video
+                #modalVideo
+                class="obras-att-modal__video"
+                [src]="v.objectUrl"
+                controls
+                playsinline
+                preload="auto"
+                [attr.aria-label]="v.filename"
+                (loadeddata)="onModalVideoReady($any($event.target))"
+              ></video>
+            }
+          } @else if (v.mediaKind === 'image' && v.objectUrl) {
+            <img [src]="v.objectUrl" [alt]="v.filename" />
+          }
+        </div>
+        @if (v.sizeLabel) {
+          <footer class="obras-att-modal__foot">
+            <span class="obras-att__size">{{ v.sizeLabel }}</span>
+          </footer>
+        }
+      </div>
+    </div>
+  }
+}

@@ -76,11 +76,19 @@ export interface WorkListItem {
 }
 
 export interface WorkCostsSummary {
+  /** Total previsto (pago + atrasado + futuro). */
   totalCents: string;
+  forecastCents: string;
   expenseCount: number;
+  paidCents: string;
+  paidCount: number;
+  overdueCents: string;
+  overdueCount: number;
+  futureCents: string;
+  futureCount: number;
   approvedBudgetCents: string | null;
-  approvedBudgetId: string | null;
-  approvedBudgetSupplier: string | null;
+  approvedBudgetCount: number;
+  approvedBudgetSuppliers: string | null;
   budgetCount: number;
   progressPercent: number | null;
 }
@@ -117,6 +125,13 @@ export interface UpdateWorkBudgetBody {
   validUntil?: string | null;
   status?: WorkBudgetStatus;
   notes?: string | null;
+}
+
+export interface UpdateTimelineEntryBody {
+  body?: string | null;
+  recordedOn?: string;
+  amountCents?: number;
+  supplierName?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -261,6 +276,18 @@ export class CondominiumWorksApiService {
     return this.http.get(
       `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}/attachments/${attachmentId}/file`,
       { responseType: 'blob' },
+    );
+  }
+
+  updateTimelineEntry(
+    condominiumId: string,
+    workId: string,
+    entryId: string,
+    body: UpdateTimelineEntryBody,
+  ): Observable<WorkTimelineEntry> {
+    return this.http.patch<WorkTimelineEntry>(
+      `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}`,
+      body,
     );
   }
 

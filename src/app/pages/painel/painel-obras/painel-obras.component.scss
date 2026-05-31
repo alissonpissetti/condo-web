@@ -309,6 +309,11 @@
     white-space: normal;
     text-align: right;
     color: color-mix(in srgb, var(--muted) 90%, #64748b);
+
+    &.obras-work-progress__hint--over {
+      color: #b91c1c;
+      font-weight: 700;
+    }
   }
 
   &__chart {
@@ -331,8 +336,32 @@
     height: 100%;
     background: linear-gradient(
       90deg,
-      #ea580c,
-      color-mix(in srgb, #ea580c 80%, #f97316)
+      #047857,
+      color-mix(in srgb, #047857 80%, #10b981)
+    );
+    transition: width 0.35s ease;
+    min-width: 0;
+  }
+
+  &__stack-overdue {
+    display: block;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      #b91c1c,
+      color-mix(in srgb, #b91c1c 75%, #ef4444)
+    );
+    transition: width 0.35s ease;
+    min-width: 0;
+  }
+
+  &__stack-future {
+    display: block;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      #2563eb,
+      color-mix(in srgb, #2563eb 75%, #60a5fa)
     );
     transition: width 0.35s ease;
     min-width: 0;
@@ -372,11 +401,23 @@
     vertical-align: middle;
 
     &--paid {
-      background: #ea580c;
+      background: #047857;
+    }
+
+    &--overdue {
+      background: #b91c1c;
+    }
+
+    &--future {
+      background: #2563eb;
     }
 
     &--remain {
       background: color-mix(in srgb, #94a3b8 55%, var(--border));
+    }
+
+    &--over {
+      background: #ea580c;
     }
   }
 
@@ -686,9 +727,9 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--tl-accent) 8%, transparent);
   overflow: hidden;
 
-  &:has(.obras-tl__remove) .obras-tl__card-head,
-  &:has(.obras-tl__remove) .obras-tl__card-body {
-    padding-right: 2.15rem;
+  &:has(.obras-tl__actions) .obras-tl__card-head,
+  &:has(.obras-tl__actions) .obras-tl__card-body {
+    padding-right: 3.35rem;
   }
 
   &::after {
@@ -876,11 +917,16 @@
   width: 100%;
 }
 
-.obras-tl__remove {
+.obras-tl__actions {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
+  top: 0.3rem;
+  right: 0.3rem;
   z-index: 2;
+  display: flex;
+  gap: 0.1rem;
+}
+
+.obras-tl__action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -894,6 +940,11 @@
   cursor: pointer;
 
   &:hover:not(:disabled) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  }
+
+  &--danger:hover:not(:disabled) {
     color: #a02820;
     background: color-mix(in srgb, #a02820 8%, var(--surface));
   }
@@ -909,10 +960,24 @@
   }
 }
 
-.obras-tl__remove-icon {
+.obras-tl__action-icon {
   display: block;
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.obras-tl__edit-form {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.15rem 0 0.1rem;
+}
+
+.obras-tl__edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
 }
 
 @media (max-width: 480px) {

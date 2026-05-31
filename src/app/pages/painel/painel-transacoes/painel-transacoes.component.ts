@@ -46,6 +46,7 @@ import {
   signedDeltaForTransaction,
 } from '../../../core/financial-extrato-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
+import { BankBrandMarkComponent } from '../../../core/bank-brand-mark.component';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 import {
   clearTxCreateDraft,
@@ -68,7 +69,7 @@ type AllocKind =
 
 @Component({
   selector: 'app-painel-transacoes',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, BankBrandMarkComponent],
   templateUrl: './painel-transacoes.component.html',
   styleUrl: './painel-transacoes.component.scss',
 })

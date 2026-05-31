@@ -602,15 +602,20 @@
                               placeholder="Nome da empresa"
                             />
                           </label>
-                          <label class="field field--block">
+                          <label class="field field--block field--money">
                             <span class="field__label">Valor (R$)</span>
-                            <input
-                              type="text"
-                              class="input plan-create-pair__control"
-                              formControlName="amountReais"
-                              placeholder="0,00"
-                              inputmode="decimal"
-                            />
+                            <div class="input-money">
+                              <span class="input-money__prefix" aria-hidden="true"
+                                >R$</span
+                              >
+                              <input
+                                type="text"
+                                class="input plan-create-pair__control input--money"
+                                formControlName="amountReais"
+                                appBrMoneyMask
+                                placeholder="0,00"
+                              />
+                            </div>
                           </label>
                         </div>
                         <div class="plan-create-pair obras-register__pair-spaced">
@@ -733,29 +738,31 @@
               >
                 <div class="obras-work-progress__grid">
                   <div class="obras-work-progress__cell">
-                    <span class="obras-work-progress__label">Orçamento aprovado</span>
+                    <span class="obras-work-progress__label">Orçamentos aprovados</span>
                     @if (workApprovedBudgetLabel(); as approved) {
                       <strong class="obras-work-progress__value">{{
                         approved
                       }}</strong>
-                      @if (workCostsSummary()?.approvedBudgetSupplier; as sup) {
-                        <span class="obras-work-progress__hint muted">{{ sup }}</span>
+                      @if (workApprovedBudgetHint(); as hint) {
+                        <span class="obras-work-progress__hint muted">{{ hint }}</span>
                       }
                     } @else {
                       <span class="obras-work-progress__value obras-work-progress__value--muted"
                         >Nenhum aprovado</span
                       >
                       <span class="obras-work-progress__hint muted"
-                        >Aprove um orçamento na linha do tempo</span
+                        >Aprove orçamentos na linha do tempo (valores são somados)</span
                       >
                     }
                   </div>
                   <div class="obras-work-progress__cell">
-                    <span class="obras-work-progress__label">Já lançado (pago)</span>
+                    <span class="obras-work-progress__label">Previsto (lançado)</span>
                     <strong class="obras-work-progress__value">{{
-                      workCostsTotalLabel()
+                      workCostsForecastLabel()
                     }}</strong>
-                    @if (workCostsExpenseCount() > 0) {
+                    @if (workForecastBreakdownHint(); as breakdown) {
+                      <span class="obras-work-progress__hint muted">{{ breakdown }}</span>
+                    } @else if (workCostsExpenseCount() > 0) {
                       <span class="obras-work-progress__hint muted"
                         >{{ workCostsExpenseCount() }} despesa{{
                           workCostsExpenseCount() === 1 ? '' : 's'
@@ -773,10 +780,12 @@
                         [attr.aria-label]="
                           'Realização ' +
                           workProgressPercentLabel() +
-                          '; pago ' +
-                          workCostsTotalLabel() +
-                          '; falta ' +
-                          workRemainingLabel()
+                          '; previsto ' +
+                          workCostsForecastLabel() +
+                          '; ' +
+                          workBalanceHintPrefix() +
+                          ' ' +
+                          workBalanceLabel()
                         "
                       >
                         <svg
@@ -802,8 +811,12 @@
                           workProgressPercentLabel()
                         }}</span>
                       </div>
-                      <span class="obras-work-progress__hint obras-work-progress__hint--remain">
-                        Falta {{ workRemainingLabel() }}
+                      <span
+                        class="obras-work-progress__hint obras-work-progress__hint--remain"
+                        [class.obras-work-progress__hint--over]="workIsOverBudget()"
+                        [attr.title]="workBalanceHintTitle()"
+                      >
+                        {{ workBalanceHintPrefix() }} {{ workBalanceLabel() }}
                       </span>
                     } @else {
                       <strong
@@ -823,36 +836,91 @@
                       aria-valuemax="100"
                       [attr.aria-label]="'Progresso de custos ' + workProgressPercentLabel()"
                     >
-                      <span
-                        class="obras-work-progress__stack-paid"
-                        [style.width.%]="workStackedPaidWidth()"
-                        [attr.title]="'Pago: ' + workCostsTotalLabel()"
-                      ></span>
-                      <span
-                        class="obras-work-progress__stack-remain"
-                        [style.width.%]="workStackedRemainingWidth()"
-                        [attr.title]="'Falta: ' + workRemainingLabel()"
-                      ></span>
+                      @if (workStackWidths().paid > 0) {
+                        <span
+                          class="obras-work-progress__stack-paid"
+                          [style.width.%]="workStackWidths().paid"
+                          [attr.title]="'Pago: ' + workCostsPaidLabel()"
+                        ></span>
+                      }
+                      @if (workStackWidths().overdue > 0) {
+                        <span
+                          class="obras-work-progress__stack-overdue"
+                          [style.width.%]="workStackWidths().overdue"
+                          [attr.title]="'Atrasado: ' + workCostsOverdueLabel()"
+                        ></span>
+                      }
+                      @if (workStackWidths().future > 0) {
+                        <span
+                          class="obras-work-progress__stack-future"
+                          [style.width.%]="workStackWidths().future"
+                          [attr.title]="'Futuro: ' + workCostsFutureLabel()"
+                        ></span>
+                      }
+                      @if (workStackWidths().remain > 0) {
+                        <span
+                          class="obras-work-progress__stack-remain"
+                          [style.width.%]="workStackWidths().remain"
+                          [attr.title]="'Falta: ' + workBalanceLabel()"
+                        ></span>
+                      }
                     </div>
                     <ul class="obras-work-progress__legend">
-                      <li>
-                        <span
-                          class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--paid"
-                        ></span>
-                        <span class="obras-work-progress__legend-text"
-                          >Pago <strong>{{ workCostsTotalLabel() }}</strong></span
-                        >
-                      </li>
-                      <li>
-                        <span
-                          class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--remain"
-                        ></span>
-                        <span class="obras-work-progress__legend-text"
-                          >Falta <strong>{{ workRemainingLabel() }}</strong></span
-                        >
-                      </li>
+                      @if (workPaidCentsNumber() > 0) {
+                        <li>
+                          <span
+                            class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--paid"
+                          ></span>
+                          <span class="obras-work-progress__legend-text"
+                            >Pago <strong>{{ workCostsPaidLabel() }}</strong></span
+                          >
+                        </li>
+                      }
+                      @if (workOverdueCentsNumber() > 0) {
+                        <li>
+                          <span
+                            class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--overdue"
+                          ></span>
+                          <span class="obras-work-progress__legend-text"
+                            >Atrasado
+                            <strong>{{ workCostsOverdueLabel() }}</strong></span
+                          >
+                        </li>
+                      }
+                      @if (workFutureCentsNumber() > 0) {
+                        <li>
+                          <span
+                            class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--future"
+                          ></span>
+                          <span class="obras-work-progress__legend-text"
+                            >Futuro
+                            <strong>{{ workCostsFutureLabel() }}</strong></span
+                          >
+                        </li>
+                      }
+                      @if (!workIsOverBudget() && workRemainingCents() > 0) {
+                        <li>
+                          <span
+                            class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--remain"
+                          ></span>
+                          <span class="obras-work-progress__legend-text"
+                            >Falta <strong>{{ workBalanceLabel() }}</strong></span
+                          >
+                        </li>
+                      }
+                      @if (workIsOverBudget()) {
+                        <li>
+                          <span
+                            class="obras-work-progress__legend-swatch obras-work-progress__legend-swatch--over"
+                          ></span>
+                          <span class="obras-work-progress__legend-text"
+                            >Excedente
+                            <strong>{{ workBalanceLabel() }}</strong></span
+                          >
+                        </li>
+                      }
                       <li class="obras-work-progress__legend-total">
-                        Orçamento
+                        Aprovado (total)
                         <strong>{{ workApprovedBudgetLabel() }}</strong>
                       </li>
                     </ul>
@@ -863,8 +931,13 @@
                     {{ workBudgetCount() }} orçamento{{
                       workBudgetCount() === 1 ? '' : 's'
                     }}
-                    cadastrado{{ workBudgetCount() === 1 ? '' : 's' }} — apenas um pode
-                    estar aprovado
+                    cadastrado{{ workBudgetCount() === 1 ? '' : 's' }}
+                    @if (workApprovedBudgetCount() > 0) {
+                      — {{ workApprovedBudgetCount() }} aprovado{{
+                        workApprovedBudgetCount() === 1 ? '' : 's'
+                      }}
+                      (soma {{ workApprovedBudgetLabel() }})
+                    }
                   </p>
                 }
               </div>
@@ -1001,31 +1074,62 @@
                                   [class.obras-tl__card--budget-approved]="
                                     e.kind === 'budget' &&
                                     e.budget &&
-                                    isApprovedWorkBudget(e.budget.id)
+                                    isApprovedWorkBudget(e.budget)
                                   "
                                 >
-                                  @if (canRemoveTimelineEntry(e)) {
-                                    <button
-                                      type="button"
-                                      class="obras-tl__remove"
-                                      [disabled]="busy()"
-                                      title="Remover"
-                                      [attr.aria-label]="
-                                        'Remover ' + timelineKindLabel(e.kind)
-                                      "
-                                      (click)="removeTimelineEntry(e)"
-                                    >
-                                      <svg
-                                        class="obras-tl__remove-icon"
-                                        viewBox="0 0 24 24"
-                                        aria-hidden="true"
-                                      >
-                                        <path
-                                          fill="currentColor"
-                                          d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                                        />
-                                      </svg>
-                                    </button>
+                                  @if (
+                                    !isEditingTimelineEntry(e) &&
+                                    (canEditTimelineEntry(e) ||
+                                      canRemoveTimelineEntry(e))
+                                  ) {
+                                    <div class="obras-tl__actions">
+                                      @if (canEditTimelineEntry(e)) {
+                                        <button
+                                          type="button"
+                                          class="obras-tl__action"
+                                          [disabled]="busy()"
+                                          title="Editar"
+                                          [attr.aria-label]="
+                                            'Editar ' + timelineKindLabel(e.kind)
+                                          "
+                                          (click)="startEditTimelineEntry(e)"
+                                        >
+                                          <svg
+                                            class="obras-tl__action-icon"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path
+                                              fill="currentColor"
+                                              d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                                            />
+                                          </svg>
+                                        </button>
+                                      }
+                                      @if (canRemoveTimelineEntry(e)) {
+                                        <button
+                                          type="button"
+                                          class="obras-tl__action obras-tl__action--danger"
+                                          [disabled]="busy()"
+                                          title="Remover"
+                                          [attr.aria-label]="
+                                            'Remover ' + timelineKindLabel(e.kind)
+                                          "
+                                          (click)="removeTimelineEntry(e)"
+                                        >
+                                          <svg
+                                            class="obras-tl__action-icon"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path
+                                              fill="currentColor"
+                                              d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                            />
+                                          </svg>
+                                        </button>
+                                      }
+                                    </div>
                                   }
                                   <header class="obras-tl__card-head">
                                     <span class="obras-tl__kind">{{
@@ -1045,53 +1149,164 @@
                                   </header>
 
                                   <div class="obras-tl__card-body">
-                                    @if (e.kind === 'budget' && e.budget; as b) {
-                                      <p class="obras-tl__budget-value">
-                                        {{ formatMoney(b.amountCents) }}
-                                      </p>
-                                      <dl class="obras-tl__facts">
-                                        <div>
-                                          <dt>Status</dt>
-                                          <dd>
-                                            <span
-                                              class="plan-pill"
-                                              [ngClass]="budgetStatusPillClass(b.status)"
-                                              >{{ budgetStatusLabel(b.status) }}</span
-                                            >
-                                          </dd>
-                                        </div>
-                                        @if (b.validUntil) {
-                                          <div>
-                                            <dt>Validade</dt>
-                                            <dd>{{ formatDate(b.validUntil) }}</dd>
-                                          </div>
+                                    @if (isEditingTimelineEntry(e)) {
+                                      <form
+                                        class="obras-tl__edit-form"
+                                        (ngSubmit)="saveTimelineEntryEdit(e)"
+                                      >
+                                        <label class="field field--block">
+                                          <span class="field__label">Quando ocorreu</span>
+                                          <input
+                                            type="datetime-local"
+                                            class="input plan-create-competence__input"
+                                            [max]="nowForDatetimeLocal()"
+                                            [value]="timelineEditRecordedOn()"
+                                            [disabled]="busy()"
+                                            (input)="
+                                              setTimelineEditRecordedOn(
+                                                $any($event.target).value
+                                              )
+                                            "
+                                          />
+                                        </label>
+                                        @if (e.kind === 'budget' && e.budget) {
+                                          <label class="field field--block">
+                                            <span class="field__label">Fornecedor</span>
+                                            <input
+                                              type="text"
+                                              class="input"
+                                              [value]="timelineEditSupplierName()"
+                                              [disabled]="busy()"
+                                              (input)="
+                                                timelineEditSupplierName.set(
+                                                  $any($event.target).value
+                                                )
+                                              "
+                                            />
+                                          </label>
+                                          <label class="field field--block field--money">
+                                            <span class="field__label">Valor (R$)</span>
+                                            <div class="input-money">
+                                              <span
+                                                class="input-money__prefix"
+                                                aria-hidden="true"
+                                                >R$</span
+                                              >
+                                              <input
+                                                type="text"
+                                                class="input input--money"
+                                                appBrMoneyMask
+                                                [ngModel]="timelineEditAmountReais()"
+                                                (ngModelChange)="
+                                                  timelineEditAmountReais.set($event)
+                                                "
+                                                [ngModelOptions]="{ standalone: true }"
+                                                [disabled]="busy()"
+                                                placeholder="0,00"
+                                              />
+                                            </div>
+                                          </label>
                                         }
-                                      </dl>
-                                      @if (b.notes) {
-                                        <p
-                                          class="obras-tl__comment obras-tl__comment--secondary"
-                                          >{{ b.notes }}</p
-                                        >
-                                      }
-                                      @if (isApprovedWorkBudget(b.id)) {
-                                        <p class="obras-tl__budget-approved-tag">
-                                          Valor de referência da obra
-                                        </p>
-                                      }
-                                      @if (canApproveWorkBudget(b)) {
-                                        <div class="obras-tl__budget-actions">
+                                        @if (e.kind === 'note' || e.kind === 'legal') {
+                                          <label class="field field--block">
+                                            <span class="field__label">{{
+                                              timelineEditBodyLabel(e)
+                                            }}</span>
+                                            @if (e.kind === 'legal') {
+                                              <input
+                                                type="text"
+                                                class="input"
+                                                [value]="timelineEditBody()"
+                                                [disabled]="busy()"
+                                                placeholder="Ex.: Contrato de obra assinado"
+                                                (input)="
+                                                  timelineEditBody.set(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              />
+                                            } @else {
+                                              <textarea
+                                                class="input"
+                                                rows="3"
+                                                [value]="timelineEditBody()"
+                                                [disabled]="busy()"
+                                                (input)="
+                                                  timelineEditBody.set(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              ></textarea>
+                                            }
+                                          </label>
+                                        }
+                                        <div class="obras-tl__edit-actions">
                                           <button
                                             type="button"
+                                            class="btn ghost sm"
+                                            [disabled]="busy()"
+                                            (click)="cancelEditTimelineEntry()"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            type="submit"
                                             class="btn primary sm"
                                             [disabled]="busy()"
-                                            (click)="approveWorkBudget(e)"
                                           >
-                                            Aprovar orçamento
+                                            Salvar
                                           </button>
                                         </div>
+                                      </form>
+                                    } @else {
+                                      @if (e.kind === 'budget' && e.budget; as b) {
+                                        <p class="obras-tl__budget-value">
+                                          {{ formatMoney(b.amountCents) }}
+                                        </p>
+                                        <dl class="obras-tl__facts">
+                                          <div>
+                                            <dt>Status</dt>
+                                            <dd>
+                                              <span
+                                                class="plan-pill"
+                                                [ngClass]="budgetStatusPillClass(b.status)"
+                                                >{{ budgetStatusLabel(b.status) }}</span
+                                              >
+                                            </dd>
+                                          </div>
+                                          @if (b.validUntil) {
+                                            <div>
+                                              <dt>Validade</dt>
+                                              <dd>{{ formatDate(b.validUntil) }}</dd>
+                                            </div>
+                                          }
+                                        </dl>
+                                        @if (b.notes) {
+                                          <p
+                                            class="obras-tl__comment obras-tl__comment--secondary"
+                                            >{{ b.notes }}</p
+                                          >
+                                        }
+                                      @if (isApprovedWorkBudget(b)) {
+                                        <p class="obras-tl__budget-approved-tag">
+                                          Aprovado — entra na soma da obra
+                                        </p>
                                       }
-                                    } @else if (e.body) {
-                                      <p class="obras-tl__comment">{{ e.body }}</p>
+                                        @if (canApproveWorkBudget(b)) {
+                                          <div class="obras-tl__budget-actions">
+                                            <button
+                                              type="button"
+                                              class="btn primary sm"
+                                              [disabled]="busy()"
+                                              (click)="approveWorkBudget(e)"
+                                            >
+                                              Aprovar orçamento
+                                            </button>
+                                          </div>
+                                        }
+                                      } @else if (e.body) {
+                                        <p class="obras-tl__comment">{{ e.body }}</p>
+                                      }
                                     }
 
                                     @if (attachmentCount(e) > 0) {
@@ -1168,4 +1383,6 @@
       }
     </div>
   }
+
+  <app-obras-timeline-attachment-modal-host />
 </div>

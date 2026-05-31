@@ -1105,9 +1105,23 @@
                 }
               </td>
               <td data-label="Conta" class="tx-table__account">
-                <span class="tx-table__account-name">{{
-                  bankAccountNickname(t)
-                }}</span>
+                <div class="tx-table__account-inner">
+                  @if (t.bankAccount) {
+                    @if (bankLogoName(t); as logoName) {
+                      <app-bank-brand-mark [bankName]="logoName" size="sm" />
+                    }
+                    <div class="tx-table__account-text">
+                      <span class="tx-table__account-name">{{
+                        bankAccountNickname(t)
+                      }}</span>
+                      @if (bankInstitutionSubLabel(t); as sub) {
+                        <span class="tx-table__account-bank">{{ sub }}</span>
+                      }
+                    </div>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </div>
               </td>
               <td
                 data-label="Valor"

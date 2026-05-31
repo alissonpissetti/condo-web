@@ -41,37 +41,31 @@
       <span class="obras-att__hint muted">Carregando…</span>
     </div>
   } @else if (mediaKind() === 'video') {
-    @if (objectUrl()) {
-      <div class="obras-att__video-wrap">
-        <video
-          class="obras-att__video"
-          [src]="objectUrl()!"
-          controls
-          playsinline
-          preload="metadata"
-          [attr.aria-label]="attachment().originalFilename"
-        ></video>
-      </div>
-    } @else {
-      <p class="obras-att__error muted">Não foi possível reproduzir este vídeo.</p>
-    }
-    <footer class="obras-att__foot">
-      <span class="obras-att__name" [title]="attachment().originalFilename">{{
-        attachment().originalFilename
-      }}</span>
-      @if (sizeLabel) {
-        <span class="obras-att__size">{{ sizeLabel }}</span>
-      }
-    </footer>
-  } @else if (mediaKind() === 'image' && objectUrl()) {
     <button
       type="button"
-      class="obras-att__thumb-btn"
+      class="obras-att__thumb-btn obras-att__thumb-btn--video"
+      [class.obras-att__thumb-btn--placeholder]="!hasVideoThumbnail()"
       [disabled]="disabled()"
-      (click)="openImageModal()"
-      [attr.aria-label]="'Ampliar ' + attachment().originalFilename"
+      (click)="openVideoModal()"
+      [attr.aria-label]="'Assistir ' + attachment().originalFilename"
     >
-      <img [src]="objectUrl()!" alt="" loading="lazy" />
+      @if (hasVideoThumbnail()) {
+        <video
+          class="obras-att__thumb-video"
+          [src]="objectUrl()!"
+          muted
+          playsinline
+          preload="metadata"
+          aria-hidden="true"
+        ></video>
+      } @else {
+        <app-obras-attachment-file-icon kind="video" />
+      }
+      <span class="obras-att__play-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="obras-att__play-icon">
+          <path fill="currentColor" d="M8 5v14l11-7z" />
+        </svg>
+      </span>
     </button>
     <div class="obras-att__info">
       <span class="obras-att__name" [title]="attachment().originalFilename">{{
@@ -81,9 +75,85 @@
         type="button"
         class="obras-att__expand linkish"
         [disabled]="disabled()"
-        (click)="openImageModal()"
+        (click)="openVideoModal()"
       >
-        Ampliar
+        Assistir
+      </button>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
+    </div>
+  } @else if (mediaKind() === 'image') {
+    <button
+      type="button"
+      class="obras-att__thumb-btn"
+      [class.obras-att__thumb-btn--placeholder]="!hasImageThumbnail()"
+      [disabled]="disabled()"
+      (click)="openImageModal()"
+      [attr.aria-label]="'Ampliar ' + attachment().originalFilename"
+    >
+      @if (hasImageThumbnail()) {
+        <img
+          [src]="objectUrl()!"
+          alt=""
+          loading="lazy"
+          (error)="onImagePreviewError()"
+        />
+      } @else if (state() === 'loading' || imageModalLoading()) {
+        <span class="obras-att__spinner obras-att__spinner--thumb"></span>
+      } @else {
+        <app-obras-attachment-file-icon kind="image" />
+      }
+    </button>
+    <div class="obras-att__info">
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      <button
+        type="button"
+        class="obras-att__expand linkish"
+        [disabled]="disabled() || state() === 'loading'"
+        (click)="
+          state() === 'error' ? onDownload($event) : openImageModal()
+        "
+      >
+        @if (state() === 'loading' || imageModalLoading()) {
+          Carregando…
+        } @else if (state() === 'error') {
+          Baixar
+        } @else {
+          Ampliar
+        }
+      </button>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
+    </div>
+  } @else if (mediaKind() === 'pdf') {
+    <button
+      type="button"
+      class="obras-att__pdf-btn"
+      [disabled]="disabled()"
+      (click)="openPreviewModal()"
+      [attr.aria-label]="'Visualizar ' + attachment().originalFilename"
+    >
+      <div class="obras-att__lead obras-att__lead--pdf">
+        <div class="obras-att__icon" data-icon="pdf">
+          <app-obras-attachment-file-icon kind="pdf" />
+        </div>
+      </div>
+    </button>
+    <div class="obras-att__info">
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      <button
+        type="button"
+        class="obras-att__expand linkish"
+        [disabled]="disabled()"
+        (click)="openPreviewModal()"
+      >
+        Visualizar PDF
       </button>
       @if (sizeLabel) {
         <span class="obras-att__size">{{ sizeLabel }}</span>
@@ -117,62 +187,3 @@
     </div>
   }
 </article>
-
-@if (imageModalOpen() && objectUrl() && mediaKind() === 'image') {
-  <div
-    class="obras-att-modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    [attr.aria-label]="attachment().originalFilename"
-    (click)="closeImageModal()"
-  >
-    <div class="obras-att-modal" (click)="$event.stopPropagation()">
-      <header class="obras-att-modal__head">
-        <p class="obras-att-modal__title" [title]="attachment().originalFilename">
-          {{ attachment().originalFilename }}
-        </p>
-        <div class="obras-att-modal__actions">
-          <button
-            type="button"
-            class="obras-att__dl"
-            title="Baixar"
-            [attr.aria-label]="'Baixar ' + attachment().originalFilename"
-            [disabled]="disabled()"
-            (click)="onDownload($event)"
-          >
-            <svg
-              class="obras-att__dl-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 3v11" />
-              <path d="M8 10l4 4 4-4" />
-              <path d="M5 20h14" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="obras-att-modal__close"
-            aria-label="Fechar"
-            (click)="closeImageModal()"
-          >
-            ×
-          </button>
-        </div>
-      </header>
-      <div class="obras-att-modal__body">
-        <img [src]="objectUrl()!" [alt]="attachment().originalFilename" />
-      </div>
-      @if (sizeLabel) {
-        <footer class="obras-att-modal__foot">
-          <span class="obras-att__size">{{ sizeLabel }}</span>
-        </footer>
-      }
-    </div>
-  </div>
-}

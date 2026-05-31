@@ -169,11 +169,16 @@
   }
 
   &__account {
+    min-width: 6.5rem;
+    max-width: 10rem;
+    vertical-align: middle;
+  }
+
+  &__account-inner {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    min-width: 6.5rem;
-    max-width: 10rem;
+    min-width: 0;
   }
 
   &__account-text {
