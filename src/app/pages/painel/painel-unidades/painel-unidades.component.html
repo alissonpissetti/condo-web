@@ -501,71 +501,73 @@
                                 }
                               </li>
                             </ul>
-                          } @else if (u.responsibleDisplayName?.trim()) {
-                            <div class="person-list__row">
-                              <span class="person-list__name person-list__name--muted">{{
-                                u.responsibleDisplayName!.trim()
-                              }}</span>
-                              @if (canManageCondominium()) {
-                                <button
-                                  type="button"
-                                  class="person-icon-btn"
-                                  (click)="clearResponsible(g.id, u)"
-                                  [disabled]="busy()"
-                                  title="Remover este nome (responsável sem ficha)"
-                                  aria-label="Remover nome livre do responsável"
-                                >
-                                  <svg
-                                    class="person-icon-btn__svg"
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      fill="currentColor"
-                                      d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                                    />
-                                  </svg>
-                                </button>
-                              }
-                            </div>
                           } @else {
                             <span class="person-cell__empty">—</span>
                           }
                           @if (!unitHasLinkedPerson(u)) {
                             @if (canManageCondominium()) {
-                              <div class="unit-pending-wa">
-                                <span class="unit-pending-wa__label"
-                                  >WhatsApp (referência, sem cadastro)</span
+                              <div class="unit-contact">
+                                <span class="unit-contact__label"
+                                  >Contato (sem convite)</span
                                 >
-                                @if (isEditingUnitPendingWa(u.id)) {
+                                <p class="unit-contact__hint muted">
+                                  Nome e WhatsApp para slips, comunicados e convites
+                                  futuros, enquanto a pessoa não tem conta na unidade.
+                                </p>
+                                @if (isEditingUnitContact(u.id)) {
                                   <div
-                                    class="unit-pending-wa__form"
-                                    [formGroup]="unitPendingWaForm"
+                                    class="unit-contact__form"
+                                    [formGroup]="unitContactForm"
                                   >
-                                    <input
-                                      type="text"
-                                      class="input input--compact"
-                                      formControlName="phone"
-                                      appBrPhoneMask
-                                      [mobileOnly]="true"
-                                      autocomplete="tel-national"
-                                      [disabled]="busy()"
-                                    />
-                                    @if (
-                                      unitPendingWaForm.controls.phone.invalid &&
-                                      unitPendingWaForm.controls.phone.touched
-                                    ) {
-                                      <span class="field-err">{{
-                                        fieldErrorsPt(
-                                          unitPendingWaForm.controls.phone
-                                        )
-                                      }}</span>
-                                    }
-                                    <div class="unit-pending-wa__actions">
+                                    <label class="field field--block">
+                                      <span class="field__label">Nome</span>
+                                      <input
+                                        type="text"
+                                        class="input input--compact"
+                                        formControlName="name"
+                                        autocomplete="name"
+                                        [disabled]="busy()"
+                                      />
+                                      @if (
+                                        unitContactForm.controls.name.invalid &&
+                                        unitContactForm.controls.name.touched
+                                      ) {
+                                        <span class="field-err">{{
+                                          fieldErrorsPt(
+                                            unitContactForm.controls.name
+                                          )
+                                        }}</span>
+                                      }
+                                    </label>
+                                    <label class="field field--block">
+                                      <span class="field__label"
+                                        >Celular / WhatsApp</span
+                                      >
+                                      <input
+                                        type="text"
+                                        class="input input--compact"
+                                        formControlName="phone"
+                                        appBrPhoneMask
+                                        [mobileOnly]="true"
+                                        autocomplete="tel-national"
+                                        [disabled]="busy()"
+                                      />
+                                      @if (
+                                        unitContactForm.controls.phone.invalid &&
+                                        unitContactForm.controls.phone.touched
+                                      ) {
+                                        <span class="field-err">{{
+                                          fieldErrorsPt(
+                                            unitContactForm.controls.phone
+                                          )
+                                        }}</span>
+                                      }
+                                    </label>
+                                    <div class="unit-contact__actions">
                                       <button
                                         type="button"
                                         class="btn sm primary"
-                                        (click)="saveUnitPendingWhatsapp(g.id, u.id)"
+                                        (click)="saveUnitContactReference(g.id, u.id)"
                                         [disabled]="busy()"
                                       >
                                         Gravar
@@ -573,55 +575,73 @@
                                       <button
                                         type="button"
                                         class="btn sm ghost"
-                                        (click)="cancelUnitPendingWa()"
+                                        (click)="cancelUnitContact()"
                                         [disabled]="busy()"
                                       >
                                         Cancelar
                                       </button>
-                                      @if (u.pendingWhatsappPhone) {
+                                      @if (hasUnitContactReference(u)) {
                                         <button
                                           type="button"
                                           class="btn sm ghost"
-                                          (click)="clearUnitPendingWhatsapp(g.id, u)"
+                                          (click)="clearUnitContactReference(g.id, u)"
                                           [disabled]="busy()"
                                         >
-                                          Limpar
+                                          Remover
                                         </button>
                                       }
                                     </div>
                                   </div>
-                                } @else {
-                                  <div class="unit-pending-wa__row">
+                                } @else if (hasUnitContactReference(u)) {
+                                  <div class="unit-contact__row">
+                                    @if (u.responsibleDisplayName?.trim()) {
+                                      <span class="unit-contact__name">{{
+                                        u.responsibleDisplayName!.trim()
+                                      }}</span>
+                                    }
                                     @if (u.pendingWhatsappPhone) {
-                                      <span class="unit-pending-wa__value">{{
+                                      <span class="unit-contact__phone">{{
                                         displayPersonPhone(u.pendingWhatsappPhone)
                                       }}</span>
-                                      <button
-                                        type="button"
-                                        class="btn sm ghost"
-                                        (click)="startEditUnitPendingWa(u)"
-                                        [disabled]="busy()"
-                                      >
-                                        Alterar
-                                      </button>
-                                    } @else {
-                                      <button
-                                        type="button"
-                                        class="btn sm btn--ghost"
-                                        (click)="startEditUnitPendingWa(u)"
-                                        [disabled]="busy()"
-                                      >
-                                        Definir WhatsApp
-                                      </button>
                                     }
+                                    <button
+                                      type="button"
+                                      class="btn sm ghost"
+                                      (click)="startEditUnitContact(u)"
+                                      [disabled]="busy()"
+                                    >
+                                      Alterar
+                                    </button>
                                   </div>
+                                } @else {
+                                  <button
+                                    type="button"
+                                    class="btn sm btn--ghost"
+                                    (click)="startEditUnitContact(u)"
+                                    [disabled]="busy()"
+                                  >
+                                    Cadastrar contato
+                                  </button>
                                 }
                               </div>
-                            } @else if (u.pendingWhatsappPhone) {
-                              <p class="unit-pending-wa unit-pending-wa--readonly muted">
-                                WhatsApp de referência:
-                                {{ displayPersonPhone(u.pendingWhatsappPhone) }}
-                              </p>
+                            } @else if (hasUnitContactReference(u)) {
+                              <div class="unit-contact unit-contact--readonly">
+                                <span class="unit-contact__label muted"
+                                  >Contato (sem convite)</span
+                                >
+                                @if (u.responsibleDisplayName?.trim()) {
+                                  <p class="unit-contact__name">
+                                    {{ u.responsibleDisplayName!.trim() }}
+                                  </p>
+                                }
+                                @if (u.pendingWhatsappPhone) {
+                                  <p class="unit-contact__phone muted">
+                                    {{
+                                      displayPersonPhone(u.pendingWhatsappPhone)
+                                    }}
+                                  </p>
+                                }
+                              </div>
                             }
                           }
                           @if (needsFinancialPrincipalPicker(u)) {

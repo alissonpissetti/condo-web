@@ -6,7 +6,12 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import {
+  FormBuilder,
+  FormsModule,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, Subscription } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
@@ -77,8 +82,9 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     phone: ['', [optionalBrMobilePhoneValidator]],
   });
 
-  protected readonly pendingWaEditUnitId = signal<string | null>(null);
-  protected readonly unitPendingWaForm = this.fb.nonNullable.group({
+  protected readonly unitContactEditId = signal<string | null>(null);
+  protected readonly unitContactForm = this.fb.nonNullable.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
     phone: ['', [optionalBrMobilePhoneValidator]],
   });
 
@@ -565,39 +571,50 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
     );
   }
 
-  protected isEditingUnitPendingWa(unitId: string): boolean {
-    return this.pendingWaEditUnitId() === unitId;
-  }
-
-  protected startEditUnitPendingWa(u: UnitRow): void {
-    if (!this.canManageCondominium()) return;
-    this.pendingWaEditUnitId.set(u.id);
-    const digits = toNationalPhoneDigits(u.pendingWhatsappPhone ?? '');
-    this.unitPendingWaForm.reset({ phone: digits });
-  }
-
-  protected cancelUnitPendingWa(): void {
-    this.pendingWaEditUnitId.set(null);
-    this.unitPendingWaForm.reset({ phone: '' });
-  }
-
-  protected saveUnitPendingWhatsapp(groupingId: string, unitId: string): void {
-    if (!this.canManageCondominium()) return;
-    this.unitPendingWaForm.markAllAsTouched();
-    if (this.unitPendingWaForm.invalid) return;
-    const raw = (this.unitPendingWaForm.getRawValue().phone ?? '').replace(
-      /\D/g,
-      '',
+  protected hasUnitContactReference(u: UnitRow): boolean {
+    return !!(
+      u.responsibleDisplayName?.trim() || u.pendingWhatsappPhone?.trim()
     );
+  }
+
+  protected isEditingUnitContact(unitId: string): boolean {
+    return this.unitContactEditId() === unitId;
+  }
+
+  protected startEditUnitContact(u: UnitRow): void {
+    if (!this.canManageCondominium()) return;
+    this.unitContactEditId.set(u.id);
+    this.unitContactForm.reset({
+      name: u.responsibleDisplayName?.trim() ?? '',
+      phone: toNationalPhoneDigits(u.pendingWhatsappPhone ?? ''),
+    });
+  }
+
+  protected cancelUnitContact(): void {
+    this.unitContactEditId.set(null);
+    this.unitContactForm.reset({ name: '', phone: '' });
+  }
+
+  protected saveUnitContactReference(
+    groupingId: string,
+    unitId: string,
+  ): void {
+    if (!this.canManageCondominium()) return;
+    this.unitContactForm.markAllAsTouched();
+    if (this.unitContactForm.invalid) return;
+    const { name, phone } = this.unitContactForm.getRawValue();
+    const nameTrim = (name ?? '').trim();
+    const raw = (phone ?? '').replace(/\D/g, '');
     this.busy.set(true);
     this.api
       .updateUnit(this.condominiumId, groupingId, unitId, {
+        responsibleDisplayName: nameTrim.length ? nameTrim : null,
         pendingWhatsappPhone: raw.length ? raw : null,
       })
       .subscribe({
         next: () => {
           this.busy.set(false);
-          this.cancelUnitPendingWa();
+          this.cancelUnitContact();
           this.reload();
           this.navData.refresh(this.condominiumId, { force: true });
         },
@@ -608,17 +625,24 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
       });
   }
 
-  protected clearUnitPendingWhatsapp(groupingId: string, u: UnitRow): void {
-    if (!this.canManageCondominium() || !u.pendingWhatsappPhone) return;
+  protected clearUnitContactReference(groupingId: string, u: UnitRow): void {
+    if (!this.canManageCondominium() || !this.hasUnitContactReference(u)) {
+      return;
+    }
+    const ok = confirm(
+      `Remover o contato de referência da unidade «${u.identifier}»?`,
+    );
+    if (!ok) return;
     this.busy.set(true);
     this.api
       .updateUnit(this.condominiumId, groupingId, u.id, {
+        responsibleDisplayName: null,
         pendingWhatsappPhone: null,
       })
       .subscribe({
         next: () => {
           this.busy.set(false);
-          this.cancelUnitPendingWa();
+          this.cancelUnitContact();
           this.reload();
           this.navData.refresh(this.condominiumId, { force: true });
         },

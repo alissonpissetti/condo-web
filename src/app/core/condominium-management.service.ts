@@ -146,6 +146,8 @@ export class CondominiumManagementService {
       floor?: string | null;
       notes?: string | null;
       financialResponsiblePersonId?: string | null;
+      /** Nome para taxas/relatórios quando ainda não há convite aceito. */
+      responsibleDisplayName?: string | null;
       pendingWhatsappPhone?: string | null;
     },
   ): Observable<UnitRow> {

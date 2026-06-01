@@ -572,7 +572,7 @@
   height: 1.125rem;
 }
 
-.unit-pending-wa {
+.unit-contact {
   margin-top: 0.25rem;
   padding: 0.65rem 0.75rem;
   border-radius: var(--ma-radius-sm);
@@ -581,42 +581,63 @@
   font-size: 0.86rem;
 }
 
-.unit-pending-wa__label {
+.unit-contact__label {
   display: block;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
   font-weight: 600;
   font-size: 0.8rem;
   color: var(--text);
 }
 
-.unit-pending-wa__row {
+.unit-contact__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.unit-contact__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 0.6rem;
+  gap: 0.35rem 0.65rem;
 }
 
-.unit-pending-wa__value {
+.unit-contact__name {
+  font-weight: 600;
+}
+
+.unit-contact__phone {
   font-variant-numeric: tabular-nums;
+  color: var(--text-muted, var(--muted));
 }
 
-.unit-pending-wa__form {
+.unit-contact__form {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
-  max-width: 18rem;
+  align-items: stretch;
+  gap: 0.45rem;
+  max-width: 20rem;
 }
 
-.unit-pending-wa__actions {
+.unit-contact__form .field--block {
+  margin: 0;
+}
+
+.unit-contact__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  margin-top: 0.15rem;
 }
 
-.unit-pending-wa--readonly {
+.unit-contact--readonly {
   margin-top: 0.5rem;
   font-size: 0.86rem;
+}
+
+.unit-contact--readonly .unit-contact__name,
+.unit-contact--readonly .unit-contact__phone {
+  margin: 0.15rem 0 0;
 }
 
 /* ——— Adicionar unidade ——— */

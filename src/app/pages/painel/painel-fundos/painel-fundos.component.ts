@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { NgClass } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import type { Observable } from 'rxjs';
 import {
@@ -60,7 +61,7 @@ function addMonthsYm(ym: string, add: number): string {
 
 @Component({
   selector: 'app-painel-fundos',
-  imports: [ReactiveFormsModule],
+  imports: [NgClass, ReactiveFormsModule],
   templateUrl: './painel-fundos.component.html',
   styleUrl: './painel-fundos.component.scss',
 })

@@ -397,6 +397,50 @@
         </div>
       }
     </div>
+
+    @if (condoAccess.canManage()) {
+      <section class="card audit-card" aria-label="Histórico de PDF e WhatsApp">
+        <h2 class="card__title">Histórico de PDF e WhatsApp</h2>
+        <p class="muted small audit-card__lede">
+          Registro de downloads de transparência ou slip por unidade e de envios
+          por WhatsApp nesta competência.
+        </p>
+        @if (slipDeliveryLogLoading()) {
+          <p class="muted">Carregando histórico…</p>
+        } @else if (slipDeliveryLogError()) {
+          <p class="error" role="alert">{{ slipDeliveryLogError() }}</p>
+        } @else if (slipDeliveryLog().length === 0) {
+          <p class="muted">Ainda não há registros para esta competência.</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="table slip-log-table">
+              <thead>
+                <tr>
+                  <th>Data/hora</th>
+                  <th>Ação</th>
+                  <th>Unidade</th>
+                  <th>Detalhe</th>
+                  <th>Usuário</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of slipDeliveryLog(); track row.id) {
+                  <tr>
+                    <td data-label="Data/hora">{{ formatDateTime(row.createdAt) }}</td>
+                    <td data-label="Ação">{{ slipDeliveryActionLabel(row.action) }}</td>
+                    <td data-label="Unidade">{{ row.unitIdentifier?.trim() || '—' }}</td>
+                    <td data-label="Detalhe" class="slip-log-detail">
+                      {{ slipDeliveryDetailLabel(row) }}
+                    </td>
+                    <td data-label="Usuário">{{ row.actorLabel }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
   }
 
   @if (settleTarget(); as target) {

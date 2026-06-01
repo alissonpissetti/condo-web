@@ -19,6 +19,8 @@ import {
   FinancialApiService,
   type CondominiumBankAccount,
   type CondominiumFeeCharge,
+  type CondominiumFeeSlipDeliveryAction,
+  type CondominiumFeeSlipDeliveryLogRow,
   type SendFeeSlipsWhatsappResult,
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
@@ -46,6 +48,12 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   /** Resumo do último envio de slips por WhatsApp (gestão). */
   protected readonly slipWaInfo = signal<string | null>(null);
   protected readonly slipWaBusy = signal(false);
+
+  protected readonly slipDeliveryLog = signal<CondominiumFeeSlipDeliveryLogRow[]>(
+    [],
+  );
+  protected readonly slipDeliveryLogLoading = signal(false);
+  protected readonly slipDeliveryLogError = signal<string | null>(null);
 
   /** Quitação: cobrança alvo do modal, arquivo anexado (opcional) e estado. */
   protected readonly settleTarget = signal<CondominiumFeeCharge | null>(null);
@@ -249,10 +257,92 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       next: (rows) => {
         this.charges.set(rows);
         this.loading.set(false);
+        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
         (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
+      },
+    });
+  }
+
+  protected formatDateTime(value: string): string {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) {
+      return value;
+    }
+    return dt.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    });
+  }
+
+  protected slipDeliveryActionLabel(
+    action: CondominiumFeeSlipDeliveryAction,
+  ): string {
+    switch (action) {
+      case 'pdf_transparency':
+        return 'PDF transparência (condomínio)';
+      case 'pdf_unit_slip':
+        return 'PDF da unidade';
+      case 'whatsapp_sent':
+        return 'WhatsApp enviado';
+      case 'whatsapp_skipped':
+        return 'WhatsApp não enviado';
+      case 'whatsapp_failed':
+        return 'Falha no WhatsApp';
+      default:
+        return action;
+    }
+  }
+
+  protected slipDeliveryDetailLabel(
+    row: CondominiumFeeSlipDeliveryLogRow,
+  ): string {
+    const d = row.detail;
+    if (!d) {
+      return '—';
+    }
+    const reason = d['reason'];
+    if (typeof reason === 'string' && reason.trim()) {
+      return reason.trim();
+    }
+    const err = d['error'];
+    if (typeof err === 'string' && err.trim()) {
+      return err.trim();
+    }
+    const last4 = d['phoneLast4'];
+    if (typeof last4 === 'string' && last4.trim()) {
+      return `Celular ···${last4.trim()}`;
+    }
+    return '—';
+  }
+
+  private loadSlipDeliveryLog(): void {
+    if (!this.condoAccess.canManage()) {
+      this.slipDeliveryLog.set([]);
+      this.slipDeliveryLogError.set(null);
+      return;
+    }
+    const ym = this.competenceYm().trim();
+    if (!ym) {
+      this.slipDeliveryLog.set([]);
+      return;
+    }
+    this.slipDeliveryLogLoading.set(true);
+    this.slipDeliveryLogError.set(null);
+    this.api.listCondominiumFeeSlipDeliveryLog(this.condoId, ym).subscribe({
+      next: (rows) => {
+        this.slipDeliveryLog.set(rows);
+        this.slipDeliveryLogLoading.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.slipDeliveryLogLoading.set(false);
+        this.slipDeliveryLogError.set(this.msg(err));
       },
     });
   }
@@ -609,6 +699,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         a.download = `transparencia-condominial-${ym}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
+        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.actionBusy.set(false);
@@ -622,9 +713,9 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   }
 
   /**
-   * PDF específico da unidade: 1ª página é o slip de pagamento (valor devido,
-   * chave PIX e QR Code); páginas seguintes são o extrato financeiro do período
-   * (contas bancárias, conta geral e fundos cadastrados).
+   * PDF da unidade: capa slip PIX (quando houver taxa em aberto); folha de
+   * administração e agrupamentos; extrato financeiro do período; extrato de
+   * despesas e taxa por agrupamento (unidade só em bloco próprio se valor diferente).
    */
   downloadUnitSlipPdf(c: CondominiumFeeCharge): void {
     const ym = this.competenceYm().trim();
@@ -647,6 +738,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
           a.download = `taxa-${ym}-${unitTag}.pdf`;
           a.click();
           URL.revokeObjectURL(url);
+          this.loadSlipDeliveryLog();
         },
         error: (err: HttpErrorResponse) => {
           this.actionBusy.set(false);
@@ -782,6 +874,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         next: (r) => {
           this.slipWaBusy.set(false);
           this.slipWaInfo.set(this.formatSlipWaResult(r));
+          this.loadSlipDeliveryLog();
           if (unitIds?.length) {
             this.clearSelection();
           }

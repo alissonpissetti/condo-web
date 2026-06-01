@@ -31,6 +31,7 @@ import {
   parseReaisInputToCents,
 } from '../../../core/money-brl';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
+import { workTimelineTransactionPayBadge } from '../../../core/work-timeline-transaction-pay.util';
 import {
   formatDateDdMmYyyy,
   formatDateTimeDdMmYyyyHhMm,
@@ -762,6 +763,12 @@ export class PainelObrasComponent implements OnInit {
     if (status === 'paid') return 'Quitada';
     if (status === 'cancelled') return 'Cancelada';
     return 'Aguardando';
+  }
+
+  protected workTimelineTxPayBadge(
+    tx: WorkTimelineEntry['transaction'],
+  ) {
+    return workTimelineTransactionPayBadge(tx);
   }
 
   protected canRemoveTimelineEntry(entry: WorkTimelineEntry): boolean {

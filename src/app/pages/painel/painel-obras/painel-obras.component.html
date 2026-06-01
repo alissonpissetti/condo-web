@@ -1149,9 +1149,22 @@
                                     </div>
                                   }
                                   <header class="obras-tl__card-head">
-                                    <span class="obras-tl__kind">{{
-                                      timelineKindLabel(e.kind)
-                                    }}</span>
+                                    <div class="obras-tl__card-head-tags">
+                                      <span class="obras-tl__kind">{{
+                                        timelineKindLabel(e.kind)
+                                      }}</span>
+                                      @if (
+                                        e.kind === 'transaction' &&
+                                        workTimelineTxPayBadge(e.transaction);
+                                        as payBadge
+                                      ) {
+                                        <span
+                                          class="obras-tl__pay-badge"
+                                          [attr.data-pay-badge]="payBadge.variant"
+                                          >{{ payBadge.label }}</span
+                                        >
+                                      }
+                                    </div>
                                     <div class="obras-tl__card-intro">
                                       @if (
                                         e.kind === 'budget' && timelineEntryTitle(e);

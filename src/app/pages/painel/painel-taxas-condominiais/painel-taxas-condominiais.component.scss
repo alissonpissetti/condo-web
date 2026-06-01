@@ -3,6 +3,30 @@
   width: 100%;
 }
 
+.audit-card {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--surface);
+
+  &__lede {
+    margin: 0 0 0.85rem;
+  }
+}
+
+.card__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.slip-log-detail {
+  max-width: 28rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 /* ========================================================== */
 /* Header + toolbar                                             */
 /* ========================================================== */

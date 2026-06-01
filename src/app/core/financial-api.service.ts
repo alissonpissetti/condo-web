@@ -192,6 +192,26 @@ export interface SendFeeSlipsWhatsappResult {
   failures: { unitId: string; unitIdentifier: string; error: string }[];
 }
 
+export type CondominiumFeeSlipDeliveryAction =
+  | 'pdf_transparency'
+  | 'pdf_unit_slip'
+  | 'whatsapp_sent'
+  | 'whatsapp_skipped'
+  | 'whatsapp_failed';
+
+export interface CondominiumFeeSlipDeliveryLogRow {
+  id: string;
+  competenceYm: string;
+  chargeId: string | null;
+  unitId: string | null;
+  unitIdentifier: string | null;
+  action: CondominiumFeeSlipDeliveryAction;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+  actorUserId: string;
+  actorLabel: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinancialApiService {
   private readonly http = inject(HttpClient);
@@ -689,6 +709,17 @@ export class FinancialApiService {
     return this.http.post<SendFeeSlipsWhatsappResult>(
       `${this.base(condoId)}/condominium-fees/send-slips-whatsapp`,
       body,
+    );
+  }
+
+  listCondominiumFeeSlipDeliveryLog(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<CondominiumFeeSlipDeliveryLogRow[]> {
+    const params = new HttpParams().set('competenceYm', competenceYm);
+    return this.http.get<CondominiumFeeSlipDeliveryLogRow[]>(
+      `${this.base(condoId)}/condominium-fees/slip-delivery-log`,
+      { params },
     );
   }
 }
