@@ -699,7 +699,7 @@ export class FinancialApiService {
   }
 
   /**
-   * Envia por WhatsApp o PDF slip/capa PIX + relatório para unidades em aberto.
+   * Envia por WhatsApp o PDF slip (grava no armazenamento e usa link público).
    * Sem `unitIds`, todas as unidades com cobrança em aberto na competência.
    */
   sendCondominiumFeeSlipsWhatsapp(

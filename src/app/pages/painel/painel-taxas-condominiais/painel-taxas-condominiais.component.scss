@@ -1,6 +1,8 @@
 :host {
   display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .audit-card {
@@ -9,9 +11,17 @@
   border: 1px solid var(--border);
   border-radius: var(--radius, 10px);
   background: var(--surface);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
 
   &__lede {
     margin: 0 0 0.85rem;
+  }
+
+  .table-wrap {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -983,6 +993,73 @@
     border: 1px dashed var(--border);
     border-radius: 0.75rem;
     background: var(--surface);
+  }
+
+  /* Histórico PDF / WhatsApp — tabela → cards empilhados */
+  .audit-card {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .slip-log-table {
+    display: block;
+    font-size: 0.88rem;
+
+    thead {
+      display: none;
+    }
+
+    tbody,
+    tr {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    tbody tr {
+      padding: 0.75rem 0.85rem;
+      margin-bottom: 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    tbody tr:hover {
+      background: var(--surface);
+    }
+
+    td {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      padding: 0.45rem 0;
+      border-bottom: 0;
+      text-align: left;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+
+      &::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.18rem;
+      }
+
+      & + td {
+        margin-top: 0.15rem;
+        padding-top: 0.5rem;
+        border-top: 1px dashed color-mix(in srgb, var(--border) 75%, transparent);
+      }
+    }
+
+    .slip-log-detail {
+      max-width: none;
+      font-size: 0.86rem;
+    }
   }
 }
 

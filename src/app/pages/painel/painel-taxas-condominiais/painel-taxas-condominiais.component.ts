@@ -319,6 +319,10 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     if (typeof last4 === 'string' && last4.trim()) {
       return `Celular ···${last4.trim()}`;
     }
+    const storageKey = d['storageKey'];
+    if (typeof storageKey === 'string' && storageKey.trim()) {
+      return storageKey.trim();
+    }
     return '—';
   }
 
