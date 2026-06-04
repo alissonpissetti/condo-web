@@ -158,10 +158,37 @@
   text-align: right;
 }
 
+.td-name {
+  min-width: 12rem;
+}
+
+.td-name__label {
+  word-break: break-word;
+}
+
+.rename-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 14rem;
+}
+
+.rename-row__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rename-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .td-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .icon-btn {

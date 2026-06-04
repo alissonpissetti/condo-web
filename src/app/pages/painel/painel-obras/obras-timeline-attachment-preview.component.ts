@@ -1,5 +1,7 @@
 import {
+  AfterViewInit,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
   inject,
@@ -19,6 +21,12 @@ import type { WorkTimelineAttachment } from '../../../core/condominium-works-api
 import { ObrasAttachmentFileIconComponent } from './obras-attachment-file-icon.component';
 import { ObrasAttachmentPreviewModalService } from './obras-attachment-preview-modal.service';
 
+type PreviewState =
+  | AttachmentMediaKind
+  | 'loading'
+  | 'error'
+  | 'idle';
+
 @Component({
   selector: 'app-obras-timeline-attachment-preview',
   standalone: true,
@@ -27,7 +35,7 @@ import { ObrasAttachmentPreviewModalService } from './obras-attachment-preview-m
   styleUrl: './obras-timeline-attachment-preview.component.scss',
 })
 export class ObrasTimelineAttachmentPreviewComponent
-  implements OnInit, OnDestroy
+  implements OnInit, AfterViewInit, OnDestroy
 {
   readonly condominiumId = input.required<string>();
   readonly workId = input.required<string>();
@@ -39,13 +47,14 @@ export class ObrasTimelineAttachmentPreviewComponent
 
   private readonly api = inject(CondominiumWorksApiService);
   private readonly modalSvc = inject(ObrasAttachmentPreviewModalService);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private blobUrl: string | null = null;
+  private loadStarted = false;
+  private observer?: IntersectionObserver;
 
   private readonly modalOwnerKey = `${Math.random().toString(36).slice(2)}`;
 
-  protected readonly state = signal<
-    AttachmentMediaKind | 'loading' | 'error'
-  >('loading');
+  protected readonly state = signal<PreviewState>('idle');
   protected readonly objectUrl = signal<string | null>(null);
   protected readonly mediaKind = signal<AttachmentMediaKind>('file');
   protected readonly iconKind = signal<AttachmentFileIconKind>('file');
@@ -66,9 +75,59 @@ export class ObrasTimelineAttachmentPreviewComponent
     const kind = attachmentMediaKind(att);
     this.mediaKind.set(kind);
     this.iconKind.set(attachmentFileIconKind(att));
-
     if (kind === 'pdf') {
       this.state.set('pdf');
+      return;
+    }
+    if (kind === 'file') {
+      this.state.set('file');
+      return;
+    }
+    this.state.set('idle');
+  }
+
+  ngAfterViewInit(): void {
+    if (!this.shouldDeferNetworkLoad()) {
+      this.startMediaLoad();
+      return;
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      this.startMediaLoad();
+      return;
+    }
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          this.observer?.disconnect();
+          this.observer = undefined;
+          this.startMediaLoad();
+        }
+      },
+      { rootMargin: '200px 0px', threshold: 0.01 },
+    );
+    this.observer.observe(this.host.nativeElement);
+  }
+
+  ngOnDestroy(): void {
+    this.observer?.disconnect();
+    this.closePreviewModal();
+    this.revoke();
+  }
+
+  private shouldDeferNetworkLoad(): boolean {
+    const kind = this.mediaKind();
+    return kind === 'image' || kind === 'video' || kind === 'audio';
+  }
+
+  private startMediaLoad(): void {
+    if (this.loadStarted) {
+      return;
+    }
+    this.loadStarted = true;
+    const att = this.attachment();
+    const kind = this.mediaKind();
+
+    if (kind === 'pdf') {
       return;
     }
 
@@ -106,11 +165,6 @@ export class ObrasTimelineAttachmentPreviewComponent
     this.state.set('file');
   }
 
-  ngOnDestroy(): void {
-    this.closePreviewModal();
-    this.revoke();
-  }
-
   protected canOpenPreviewModal(): boolean {
     const kind = this.mediaKind();
     if (kind === 'image') {
@@ -118,6 +172,7 @@ export class ObrasTimelineAttachmentPreviewComponent
         !!this.objectUrl() &&
         this.state() !== 'loading' &&
         this.state() !== 'error' &&
+        this.state() !== 'idle' &&
         !this.imageModalLoading()
       );
     }
@@ -143,6 +198,9 @@ export class ObrasTimelineAttachmentPreviewComponent
   protected openVideoModal(): void {
     if (this.mediaKind() !== 'video' || this.disabled()) {
       return;
+    }
+    if (this.state() === 'idle') {
+      this.startMediaLoad();
     }
     if (this.videoModalLoading()) {
       return;
@@ -244,6 +302,9 @@ export class ObrasTimelineAttachmentPreviewComponent
     if (this.mediaKind() !== 'image' || this.disabled()) {
       return;
     }
+    if (this.state() === 'idle') {
+      this.startMediaLoad();
+    }
     if (this.objectUrl()) {
       this.showPreviewModal();
       return;
@@ -278,6 +339,9 @@ export class ObrasTimelineAttachmentPreviewComponent
 
   protected onDownload(ev: Event): void {
     ev.stopPropagation();
+    if (this.state() === 'idle') {
+      this.startMediaLoad();
+    }
     if (
       this.mediaKind() === 'pdf' ||
       this.mediaKind() === 'video' ||
@@ -333,7 +397,6 @@ export class ObrasTimelineAttachmentPreviewComponent
         },
         error: () => {
           this.state.set('error');
-          this.iconKind.set('file');
           hooks?.onError?.();
         },
       });
@@ -341,8 +404,9 @@ export class ObrasTimelineAttachmentPreviewComponent
 
   private loadMediaBlob(
     att: WorkTimelineAttachment,
-    kind: AttachmentMediaKind,
+    kind: 'audio',
   ): void {
+    this.state.set('loading');
     this.api
       .downloadTimelineAttachmentBlob(
         this.condominiumId(),
@@ -353,36 +417,15 @@ export class ObrasTimelineAttachmentPreviewComponent
       .subscribe({
         next: (blob) => {
           this.revoke();
-          this.blobUrl = this.createObjectUrl(blob, att.mimeType);
+          const mime =
+            att.mimeType ??
+            (kind === 'audio' ? 'audio/mpeg' : 'application/octet-stream');
+          this.blobUrl = this.createObjectUrl(blob, mime);
           this.objectUrl.set(this.blobUrl);
           this.state.set(kind);
         },
         error: () => {
           this.state.set('error');
-          this.iconKind.set('file');
-        },
-      });
-  }
-
-  private loadVideoBlob(hooks: { onOk: () => void; onError: () => void }): void {
-    const att = this.attachment();
-    this.api
-      .downloadTimelineAttachmentBlob(
-        this.condominiumId(),
-        this.workId(),
-        this.entryId(),
-        att.id,
-      )
-      .subscribe({
-        next: (blob) => {
-          this.revoke();
-          this.blobUrl = this.createObjectUrl(blob, att.mimeType ?? 'video/mp4');
-          this.objectUrl.set(this.blobUrl);
-          this.state.set('video');
-          hooks.onOk();
-        },
-        error: () => {
-          hooks.onError();
         },
       });
   }
@@ -401,20 +444,46 @@ export class ObrasTimelineAttachmentPreviewComponent
           this.revoke();
           this.blobUrl = this.createObjectUrl(blob, 'application/pdf');
           this.objectUrl.set(this.blobUrl);
-          this.state.set('pdf');
           hooks.onOk();
         },
-        error: () => {
-          hooks.onError();
-        },
+        error: () => hooks.onError(),
       });
+  }
+
+  private loadVideoBlob(hooks: { onOk: () => void; onError: () => void }): void {
+    const att = this.attachment();
+    this.api
+      .downloadTimelineAttachmentBlob(
+        this.condominiumId(),
+        this.workId(),
+        this.entryId(),
+        att.id,
+      )
+      .subscribe({
+        next: (blob) => {
+          this.revoke();
+          this.blobUrl = this.createObjectUrl(blob, att.mimeType ?? 'video/mp4');
+          this.objectUrl.set(this.blobUrl);
+          hooks.onOk();
+        },
+        error: () => hooks.onError(),
+      });
+  }
+
+  private createObjectUrl(blob: Blob, fallbackMime: string): string {
+    const type =
+      blob.type && blob.type !== 'application/octet-stream'
+        ? blob.type
+        : fallbackMime;
+    return URL.createObjectURL(
+      blob.type === type ? blob : new Blob([blob], { type }),
+    );
   }
 
   private triggerBlobDownload(url: string, filename: string): void {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
-    a.rel = 'noopener noreferrer';
     a.click();
   }
 
@@ -423,14 +492,5 @@ export class ObrasTimelineAttachmentPreviewComponent
       URL.revokeObjectURL(this.blobUrl);
       this.blobUrl = null;
     }
-    this.objectUrl.set(null);
-  }
-
-  private createObjectUrl(blob: Blob, mimeType: string | null | undefined): string {
-    const fallback = (mimeType ?? '').split(';')[0]?.trim() || 'application/octet-stream';
-    if (!blob.type && fallback) {
-      return URL.createObjectURL(new Blob([blob], { type: fallback }));
-    }
-    return URL.createObjectURL(blob);
   }
 }

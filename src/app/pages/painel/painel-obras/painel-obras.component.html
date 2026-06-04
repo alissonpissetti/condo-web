@@ -30,48 +30,73 @@
               }}</span>
             </button>
             @if (createExpanded()) {
-              <div id="obras-create-panel" class="plan-create-panel">
-                <p class="form-card__lede plan-create-panel__lede">
-                  Informe título, status e descrição. Ao criar, você será levado ao
-                  detalhe da obra para registrar a timeline.
-                </p>
+              <div id="obras-create-panel" class="plan-create-panel obras-create-panel">
                 <form
-                  class="fund-form"
+                  class="fund-form obras-create-form"
                   [formGroup]="createForm"
                   (ngSubmit)="submitCreate()"
+                  novalidate
                 >
                   <div class="form-section">
+                    <div class="form-section__head">
+                      <span class="form-section__step" aria-hidden="true">1</span>
+                      <div>
+                        <h3 class="form-section__title">Identificação</h3>
+                        <p class="form-section__hint">
+                          Título na lista; ao criar, você abre o detalhe para registrar a
+                          timeline.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="obras-create-ident">
+                      <label class="field field--block obras-create-ident__title">
+                        <span class="field__label">Título</span>
+                        <input
+                          type="text"
+                          class="input input--lg"
+                          formControlName="title"
+                          maxlength="512"
+                          placeholder="Ex.: Reforma do hall, Pintura da fachada"
+                          autocomplete="off"
+                        />
+                      </label>
+                      <label class="field field--block obras-create-ident__status">
+                        <span class="field__label">Status inicial</span>
+                        <select class="input" formControlName="status">
+                          <option value="planned">Planejada</option>
+                          <option value="in_progress">Em andamento</option>
+                          <option value="completed">Concluída</option>
+                          <option value="cancelled">Cancelada</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-section">
+                    <div class="form-section__head">
+                      <span class="form-section__step" aria-hidden="true">2</span>
+                      <div>
+                        <h3 class="form-section__title">Descrição</h3>
+                        <p class="form-section__hint">
+                          Opcional. Contexto para síndico e moradores no detalhe da obra.
+                        </p>
+                      </div>
+                    </div>
                     <label class="field field--block">
-                      <span class="field__label">Título</span>
-                      <input
-                        type="text"
-                        class="input"
-                        formControlName="title"
-                        maxlength="512"
-                      />
-                    </label>
-                    <label class="field field--block">
-                      <span class="field__label">Descrição (opcional)</span>
+                      <span class="field__label">Descrição</span>
                       <textarea
-                        class="input"
+                        class="input obras-create-description"
                         rows="3"
                         formControlName="description"
+                        placeholder="Ex.: Escopo previsto, fornecedor, prazo estimado…"
                       ></textarea>
                     </label>
-                    <label class="field field--block">
-                      <span class="field__label">Status</span>
-                      <select class="input" formControlName="status">
-                        <option value="planned">Planejada</option>
-                        <option value="in_progress">Em andamento</option>
-                        <option value="completed">Concluída</option>
-                        <option value="cancelled">Cancelada</option>
-                      </select>
-                    </label>
                   </div>
-                  <div class="form-section plan-submit-wrap">
+
+                  <div class="form-section plan-submit-wrap obras-create-footer">
                     <button
                       type="submit"
-                      class="btn btn--submit"
+                      class="btn primary"
                       [disabled]="createForm.invalid || busy()"
                     >
                       {{ busy() ? 'Salvando…' : 'Criar obra' }}
@@ -104,7 +129,7 @@
 
           @if (listLoading()) {
             <p class="muted plan-list-card__loading">Carregando…</p>
-          } @else if (filteredWorks().length === 0) {
+          } @else if (!listHasVisibleWorks()) {
             <div class="plan-list-body">
               <div class="plan-list-empty" role="status">
                 <p class="plan-list-empty__title">Nenhuma obra neste filtro</p>
@@ -114,34 +139,204 @@
               </div>
             </div>
           } @else {
-            <div class="plan-list-body">
-              <ul class="plan-poll-list">
-                @for (w of filteredWorks(); track w.id) {
-                  <li class="plan-poll-list__row">
-                    <a
-                      class="plan-poll-tile"
-                      [routerLink]="[
-                        '/painel/condominio',
-                        condominiumIdParam(),
-                        'obras',
-                        w.id,
-                      ]"
+            <div class="plan-list-body obras-list-sections">
+              @if (showActiveSection()) {
+                <section class="list-section" aria-labelledby="obras-section-active">
+                  <h3 id="obras-section-active" class="list-section__title">
+                    Próximas obras
+                  </h3>
+                  @if (canReorderQueue()) {
+                    <p class="list-section__lede">
+                      Arraste pelo ícone no card para definir a ordem de execução.
+                    </p>
+                  } @else if (canManage() && statusFilter() !== 'all') {
+                    <p class="list-section__lede">
+                      Use o filtro «Todas» para reordenar a fila.
+                    </p>
+                  }
+                  @if (displayActiveWorks().length === 0) {
+                    <p class="obras-list-section__empty muted" role="status">
+                      Nenhuma obra planejada ou em andamento.
+                    </p>
+                  } @else {
+                    <ul
+                      class="plan-poll-list obras-queue-list"
+                      cdkDropList
+                      [cdkDropListDisabled]="!canReorderQueue()"
+                      (cdkDropListDropped)="onQueueDropped($event)"
                     >
-                      <span class="plan-poll-tile__title">{{ w.title }}</span>
-                      <span class="plan-poll-tile__meta">
-                        <span class="plan-pill" [ngClass]="workStatusPillClass(w.status)">{{
-                          statusLabel(w.status)
-                        }}</span>
-                      </span>
-                      @if (w.lastActivityAt) {
-                        <span class="plan-poll-tile__competence muted"
-                          >Última atividade: {{ formatDateTime(w.lastActivityAt) }}</span
+                      @for (w of displayActiveWorks(); track w.id; let i = $index) {
+                        <li
+                          class="plan-poll-list__row obras-list-row"
+                          cdkDrag
+                          [cdkDragDisabled]="!canReorderQueue()"
                         >
+                          <div
+                            class="plan-poll-tile obras-work-tile"
+                            [class.obras-work-tile--reorderable]="canReorderQueue()"
+                          >
+                            @if (canReorderQueue()) {
+                              <button
+                                type="button"
+                                class="obras-work-tile__drag"
+                                cdkDragHandle
+                                aria-label="Arrastar para reordenar"
+                              >
+                                <svg
+                                  class="obras-work-tile__drag-icon"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <circle cx="9" cy="7" r="1.35" />
+                                  <circle cx="15" cy="7" r="1.35" />
+                                  <circle cx="9" cy="12" r="1.35" />
+                                  <circle cx="15" cy="12" r="1.35" />
+                                  <circle cx="9" cy="17" r="1.35" />
+                                  <circle cx="15" cy="17" r="1.35" />
+                                </svg>
+                              </button>
+                            }
+                            <a
+                              class="obras-work-tile__link"
+                              [routerLink]="[
+                                '/painel/condominio',
+                                condominiumIdParam(),
+                                'obras',
+                                w.id,
+                              ]"
+                            >
+                              @if (showExecutionOrder()) {
+                                <span
+                                  class="obras-work-tile__order"
+                                  [class.obras-work-tile__order--lead]="i === 0"
+                                  [attr.aria-label]="
+                                    (i + 1) +
+                                    'ª na ordem de execução' +
+                                    (i === 0 ? ', próxima a executar' : '')
+                                  "
+                                >
+                                  <span class="obras-work-tile__order-inner">
+                                    <span class="obras-work-tile__order-num">{{
+                                      i + 1
+                                    }}</span>
+                                    <span
+                                      class="obras-work-tile__order-suffix"
+                                      aria-hidden="true"
+                                      >º</span
+                                    >
+                                  </span>
+                                  @if (i === 0) {
+                                    <span
+                                      class="obras-work-tile__order-caption"
+                                      aria-hidden="true"
+                                      >Próxima</span
+                                    >
+                                  }
+                                </span>
+                              }
+                              <span class="obras-work-tile__body">
+                                <span class="plan-poll-tile__title">{{ w.title }}</span>
+                                <span class="plan-poll-tile__meta">
+                                  <span
+                                    class="plan-pill"
+                                    [ngClass]="workStatusPillClass(w.status)"
+                                    >{{ statusLabel(w.status) }}</span
+                                  >
+                                </span>
+                                @if (w.lastActivityAt) {
+                                  <span class="plan-poll-tile__competence muted"
+                                    >Última atividade:
+                                    {{ formatDateTime(w.lastActivityAt) }}</span
+                                  >
+                                }
+                              </span>
+                            </a>
+                          </div>
+                        </li>
                       }
-                    </a>
-                  </li>
-                }
-              </ul>
+                    </ul>
+                  }
+                </section>
+              }
+
+              @if (showCompletedSection() && displayCompletedWorks().length > 0) {
+                <section class="list-section" aria-labelledby="obras-section-completed">
+                  <h3 id="obras-section-completed" class="list-section__title">
+                    Concluídas
+                  </h3>
+                  <ul class="plan-poll-list">
+                    @for (w of displayCompletedWorks(); track w.id) {
+                      <li class="plan-poll-list__row obras-list-row">
+                        <a
+                          class="plan-poll-tile"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'obras',
+                            w.id,
+                          ]"
+                        >
+                          <span class="plan-poll-tile__title">{{ w.title }}</span>
+                          <span class="plan-poll-tile__meta">
+                            <span
+                              class="plan-pill"
+                              [ngClass]="workStatusPillClass(w.status)"
+                              >{{ statusLabel(w.status) }}</span
+                            >
+                          </span>
+                          @if (w.lastActivityAt) {
+                            <span class="plan-poll-tile__competence muted"
+                              >Última atividade:
+                              {{ formatDateTime(w.lastActivityAt) }}</span
+                            >
+                          }
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+
+              @if (showCancelledSection() && displayCancelledWorks().length > 0) {
+                <section class="list-section" aria-labelledby="obras-section-cancelled">
+                  <h3 id="obras-section-cancelled" class="list-section__title">
+                    Canceladas
+                  </h3>
+                  <ul class="plan-poll-list">
+                    @for (w of displayCancelledWorks(); track w.id) {
+                      <li
+                        class="plan-poll-list__row obras-list-row obras-list-row--cancelled"
+                      >
+                        <a
+                          class="plan-poll-tile obras-work-tile--cancelled"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'obras',
+                            w.id,
+                          ]"
+                        >
+                          <span class="plan-poll-tile__title">{{ w.title }}</span>
+                          <span class="plan-poll-tile__meta">
+                            <span
+                              class="plan-pill"
+                              [ngClass]="workStatusPillClass(w.status)"
+                              >{{ statusLabel(w.status) }}</span
+                            >
+                          </span>
+                          @if (w.lastActivityAt) {
+                            <span class="plan-poll-tile__competence muted"
+                              >Última atividade:
+                              {{ formatDateTime(w.lastActivityAt) }}</span
+                            >
+                          }
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
             </div>
           }
         </section>

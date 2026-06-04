@@ -21,6 +21,8 @@ export interface CondominiumLibraryDocumentRow {
   uploadedByUserId: string | null;
   uploadedByDisplayName: string;
   createdAt: string;
+  /** Link público no storage (Nextcloud); quando ausente, use download via API. */
+  fileUrl: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -63,6 +65,26 @@ export class CondominiumLibraryApiService {
     return this.http.get(
       `${this.base}/condominiums/${condominiumId}/library-documents/${documentId}/file`,
       { responseType: 'blob' },
+    );
+  }
+
+  rename(
+    condominiumId: string,
+    documentId: string,
+    displayName: string,
+  ): Observable<CondominiumLibraryDocumentRow> {
+    return this.http.patch<CondominiumLibraryDocumentRow>(
+      `${this.base}/condominiums/${condominiumId}/library-documents/${documentId}`,
+      { displayName },
+    );
+  }
+
+  resolveShareUrl(
+    condominiumId: string,
+    documentId: string,
+  ): Observable<{ fileUrl: string | null }> {
+    return this.http.get<{ fileUrl: string | null }>(
+      `${this.base}/condominiums/${condominiumId}/library-documents/${documentId}/share-url`,
     );
   }
 

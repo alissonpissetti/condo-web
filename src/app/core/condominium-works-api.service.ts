@@ -70,9 +70,15 @@ export interface WorkListItem {
   title: string;
   description: string | null;
   status: WorkStatus;
+  /** Ordem na fila de execução (planejada / em andamento). */
+  queueOrder: number;
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string | null;
+}
+
+export interface ReorderWorksQueueBody {
+  workIds: string[];
 }
 
 export interface WorkCostsSummary {
@@ -145,9 +151,28 @@ export class CondominiumWorksApiService {
     );
   }
 
-  getOne(condominiumId: string, workId: string): Observable<WorkDetail> {
+  reorderQueue(
+    condominiumId: string,
+    body: ReorderWorksQueueBody,
+  ): Observable<WorkListItem[]> {
+    return this.http.patch<WorkListItem[]>(
+      `${this.base}/condominiums/${condominiumId}/works/queue-order`,
+      body,
+    );
+  }
+
+  getOne(
+    condominiumId: string,
+    workId: string,
+    options?: { includeFileUrls?: boolean },
+  ): Observable<WorkDetail> {
+    const params: Record<string, string> = {};
+    if (options?.includeFileUrls) {
+      params['includeFileUrls'] = 'true';
+    }
     return this.http.get<WorkDetail>(
       `${this.base}/condominiums/${condominiumId}/works/${workId}`,
+      { params },
     );
   }
 

@@ -5,6 +5,7 @@
   [class.obras-att--audio]="mediaKind() === 'audio' && state() !== 'loading'"
   [class.obras-att--pdf]="mediaKind() === 'pdf' && state() !== 'loading'"
   [class.obras-att--loading]="state() === 'loading'"
+  [class.obras-att--idle]="state() === 'idle'"
   [attr.data-kind]="mediaKind()"
 >
   @if (state() !== 'loading') {
@@ -45,12 +46,12 @@
     <button
       type="button"
       class="obras-att__thumb-btn obras-att__thumb-btn--video"
-      [class.obras-att__thumb-btn--placeholder]="!hasVideoThumbnail()"
+      [class.obras-att__thumb-btn--placeholder]="!hasVideoThumbnail() || state() === 'idle'"
       [disabled]="disabled()"
       (click)="openVideoModal()"
       [attr.aria-label]="'Assistir ' + attachment().originalFilename"
     >
-      @if (hasVideoThumbnail()) {
+      @if (hasVideoThumbnail() && state() !== 'idle') {
         <video
           class="obras-att__thumb-video"
           [src]="objectUrl()!"
@@ -88,12 +89,12 @@
     <button
       type="button"
       class="obras-att__thumb-btn"
-      [class.obras-att__thumb-btn--placeholder]="!hasImageThumbnail()"
+      [class.obras-att__thumb-btn--placeholder]="!hasImageThumbnail() || state() === 'idle'"
       [disabled]="disabled()"
       (click)="openImageModal()"
       [attr.aria-label]="'Ampliar ' + attachment().originalFilename"
     >
-      @if (hasImageThumbnail()) {
+      @if (hasImageThumbnail() && state() !== 'idle') {
         <img
           [src]="objectUrl()!"
           alt=""

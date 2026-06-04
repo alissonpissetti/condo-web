@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { NgClass } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -10,7 +11,7 @@ import {
 } from '@angular/forms';
 import { BrMoneyMaskDirective } from '../../../core/br-money-mask.directive';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subscription, debounceTime, distinctUntilChanged, forkJoin } from 'rxjs';
+import { Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
@@ -95,6 +96,7 @@ const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
   selector: 'app-painel-obras',
   standalone: true,
   imports: [
+    DragDropModule,
     NgClass,
     FormsModule,
     ReactiveFormsModule,
@@ -130,6 +132,7 @@ export class PainelObrasComponent implements OnInit {
   protected readonly editingWork = signal(false);
   protected readonly registerTab = signal<ObrasRegisterTab>('note');
   protected readonly statusFilter = signal<WorkStatus | 'all'>('all');
+  protected readonly queueReorderBusy = signal(false);
   protected readonly draftSavedAt = signal<number | null>(null);
 
   protected readonly createForm = this.fb.nonNullable.group({
@@ -252,11 +255,115 @@ export class PainelObrasComponent implements OnInit {
     return a !== null && condoAccessAllowsManagement(a);
   }
 
-  protected filteredWorks(): WorkListItem[] {
+  protected showActiveSection(): boolean {
     const f = this.statusFilter();
-    const all = this.works();
-    if (f === 'all') return all;
-    return all.filter((w) => w.status === f);
+    return f === 'all' || f === 'planned' || f === 'in_progress';
+  }
+
+  protected showCompletedSection(): boolean {
+    const f = this.statusFilter();
+    return f === 'all' || f === 'completed';
+  }
+
+  protected showCancelledSection(): boolean {
+    const f = this.statusFilter();
+    return f === 'all' || f === 'cancelled';
+  }
+
+  protected listHasVisibleWorks(): boolean {
+    return (
+      this.displayActiveWorks().length > 0 ||
+      this.displayCompletedWorks().length > 0 ||
+      this.displayCancelledWorks().length > 0
+    );
+  }
+
+  protected displayActiveWorks(): WorkListItem[] {
+    const f = this.statusFilter();
+    let items = this.works().filter(
+      (w) => w.status === 'planned' || w.status === 'in_progress',
+    );
+    items = [...items].sort(
+      (a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0),
+    );
+    if (f === 'planned') {
+      return items.filter((w) => w.status === 'planned');
+    }
+    if (f === 'in_progress') {
+      return items.filter((w) => w.status === 'in_progress');
+    }
+    return items;
+  }
+
+  protected displayCompletedWorks(): WorkListItem[] {
+    return this.works()
+      .filter((w) => w.status === 'completed')
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  }
+
+  protected displayCancelledWorks(): WorkListItem[] {
+    return this.works()
+      .filter((w) => w.status === 'cancelled')
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  }
+
+  protected canReorderQueue(): boolean {
+    return (
+      this.canManage() &&
+      this.statusFilter() === 'all' &&
+      !this.queueReorderBusy() &&
+      this.displayActiveWorks().length > 1
+    );
+  }
+
+  /** Badge 1, 2, 3… na fila de execução (planejadas / em andamento). */
+  protected showExecutionOrder(): boolean {
+    return this.displayActiveWorks().length > 0;
+  }
+
+  protected onQueueDropped(event: CdkDragDrop<WorkListItem>): void {
+    if (!this.canReorderQueue()) {
+      return;
+    }
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const items = [...this.displayActiveWorks()];
+    moveItemInArray(items, event.previousIndex, event.currentIndex);
+    this.persistQueueOrder(items);
+  }
+
+  private persistQueueOrder(orderedActive: WorkListItem[]): void {
+    const workIds = orderedActive.map((w) => w.id);
+    const orderById = new Map(workIds.map((id, i) => [id, i]));
+    this.works.update((list) =>
+      list.map((w) =>
+        orderById.has(w.id)
+          ? { ...w, queueOrder: orderById.get(w.id)! }
+          : w,
+      ),
+    );
+    this.queueReorderBusy.set(true);
+    this.api.reorderQueue(this.condominiumId, { workIds }).subscribe({
+      next: (rows) => {
+        this.works.set(rows);
+        this.queueReorderBusy.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.queueReorderBusy.set(false);
+        this.reloadList();
+        this.flash.errorFromHttp(
+          err,
+          'Não foi possível salvar a ordem das obras.',
+        );
+      },
+    });
   }
 
   protected statusLabel(s: WorkStatus): string {
@@ -1586,13 +1693,9 @@ export class PainelObrasComponent implements OnInit {
     this.cancelEditTimelineEntry();
     this.detailLoading.set(true);
     this.detailError.set(null);
-    forkJoin({
-      detail: this.api.getOne(this.condominiumId, workId),
-      list: this.api.list(this.condominiumId),
-    }).subscribe({
-      next: ({ detail, list }) => {
+    this.api.getOne(this.condominiumId, workId).subscribe({
+      next: (detail) => {
         this.applyWorkDetail(detail);
-        this.works.set(list);
         this.editForm.patchValue(
           {
             title: detail.title,
@@ -1611,7 +1714,6 @@ export class PainelObrasComponent implements OnInit {
         this.editingWork.set(false);
         this.registerExpanded.set(false);
         this.detailLoading.set(false);
-        this.listLoading.set(false);
       },
       error: (err: HttpErrorResponse) => {
         this.detailLoading.set(false);
