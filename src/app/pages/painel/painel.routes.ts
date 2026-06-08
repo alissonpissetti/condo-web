@@ -169,6 +169,18 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/fornecedores',
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('works'),
+        ],
+        loadComponent: () =>
+          import('./painel-fornecedores/painel-fornecedores.component').then(
+            (m) => m.PainelFornecedoresComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/obras/:workId',
         canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
         loadComponent: () =>

@@ -779,64 +779,128 @@
                         </label>
                       </div>
 
+                      <div
+                        class="obras-register__type obras-register__type--sub"
+                        role="tablist"
+                        aria-label="Tipo de orçamento"
+                      >
+                        <button
+                          type="button"
+                          role="tab"
+                          class="obras-register__type-btn"
+                          [attr.aria-selected]="isBudgetScheduleMode()"
+                          [class.obras-register__type-btn--active]="isBudgetScheduleMode()"
+                          (click)="setBudgetRegisterMode('schedule')"
+                        >
+                          Agendar visita
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          class="obras-register__type-btn"
+                          [attr.aria-selected]="!isBudgetScheduleMode()"
+                          [class.obras-register__type-btn--active]="!isBudgetScheduleMode()"
+                          (click)="setBudgetRegisterMode('received')"
+                        >
+                          Já tenho o orçamento
+                        </button>
+                      </div>
+
                       <div class="form-section">
                         <div class="form-section__head">
                           <span class="form-section__step" aria-hidden="true">1</span>
                           <div>
-                            <h4 class="form-section__title">Dados do orçamento</h4>
-                            <p class="form-section__hint">Fornecedor, valor e situação.</p>
+                            <h4 class="form-section__title">
+                              @if (isBudgetScheduleMode()) {
+                                Agendar visita do fornecedor
+                              } @else {
+                                Orçamento recebido
+                              }
+                            </h4>
+                            <p class="form-section__hint">
+                              @if (isBudgetScheduleMode()) {
+                                Status «Aguardando orçamento». Depois da visita, registre o
+                                valor e anexe a proposta na linha do tempo.
+                              } @else {
+                                Informe valor e anexe a proposta para entrar em análise.
+                              }
+                            </p>
                           </div>
                         </div>
-                        <div class="plan-create-pair">
-                          <label class="field field--block">
-                            <span class="field__label">Fornecedor</span>
+                        <label class="field field--block">
+                          <span class="field__label">Fornecedor</span>
+                          <select
+                            class="input plan-create-pair__control"
+                            formControlName="supplierId"
+                            (change)="
+                              onBudgetSupplierIdChange($any($event.target).value)
+                            "
+                          >
+                            <option value="">— Digitar nome manualmente —</option>
+                            @for (s of suppliers(); track s.id) {
+                              <option [value]="s.id">{{ supplierOptionLabel(s) }}</option>
+                            }
+                          </select>
+                          @if (!budgetForm.controls.supplierId.value) {
                             <input
                               type="text"
                               class="input plan-create-pair__control"
                               formControlName="supplierName"
                               placeholder="Nome da empresa"
                             />
-                          </label>
-                          <label class="field field--block field--money">
-                            <span class="field__label">Valor (R$)</span>
-                            <div class="input-money">
-                              <span class="input-money__prefix" aria-hidden="true"
-                                >R$</span
-                              >
-                              <input
-                                type="text"
-                                class="input plan-create-pair__control input--money"
-                                formControlName="amountReais"
-                                appBrMoneyMask
-                                placeholder="0,00"
-                              />
-                            </div>
-                          </label>
-                        </div>
-                        <div class="plan-create-pair obras-register__pair-spaced">
-                          <label class="field field--block">
-                            <span class="field__label">Validade</span>
+                          } @else if (selectedBudgetSupplier()) {
+                            <p class="muted small form-section__inline-hint">
+                              {{ budgetSupplierContactHint() }}
+                            </p>
+                          }
+                          <p class="muted small form-section__inline-hint">
+                            <a
+                              [routerLink]="[
+                                '/painel/condominio',
+                                condominiumIdParam(),
+                                'fornecedores',
+                              ]"
+                              >Gerenciar fornecedores</a
+                            >
+                          </p>
+                        </label>
+                        @if (isBudgetScheduleMode()) {
+                          <label class="field field--block obras-register__pair-spaced">
+                            <span class="field__label">Visita agendada para</span>
                             <input
-                              type="date"
+                              type="datetime-local"
                               class="input plan-create-pair__control"
-                              formControlName="validUntil"
+                              formControlName="scheduledAt"
                             />
+                            <span class="field__hint muted">Opcional.</span>
                           </label>
-                          <label class="field field--block">
-                            <span class="field__label">Status</span>
-                            <select
-                              class="input plan-create-pair__control"
-                              formControlName="status"
-                            >
-                              <option value="received">Recebido</option>
-                              <option value="under_review">Em análise</option>
-                              <option value="rejected">Rejeitado</option>
-                            </select>
-                            <span class="field__hint muted"
-                              >Aprovação na linha do tempo (um orçamento por obra)</span
-                            >
-                          </label>
-                        </div>
+                        } @else {
+                          <div class="plan-create-pair obras-register__pair-spaced">
+                            <label class="field field--block field--money">
+                              <span class="field__label">Valor (R$)</span>
+                              <div class="input-money">
+                                <span class="input-money__prefix" aria-hidden="true"
+                                  >R$</span
+                                >
+                                <input
+                                  type="text"
+                                  class="input plan-create-pair__control input--money"
+                                  formControlName="amountReais"
+                                  appBrMoneyMask
+                                  placeholder="0,00"
+                                />
+                              </div>
+                            </label>
+                            <label class="field field--block">
+                              <span class="field__label">Validade</span>
+                              <input
+                                type="date"
+                                class="input plan-create-pair__control"
+                                formControlName="validUntil"
+                              />
+                            </label>
+                          </div>
+                        }
                         <label class="field field--block obras-register__pair-spaced">
                           <span class="field__label">Observações</span>
                           <textarea
@@ -848,61 +912,63 @@
                         </label>
                       </div>
 
-                      <div class="form-section">
-                        <div class="form-section__head">
-                          <span class="form-section__step" aria-hidden="true">2</span>
-                          <div>
-                            <h4 class="form-section__title">Anexos</h4>
-                            <p class="form-section__hint">
-                              PDF da proposta, planilha, foto do serviço…
-                            </p>
+                      @if (!isBudgetScheduleMode()) {
+                        <div class="form-section">
+                          <div class="form-section__head">
+                            <span class="form-section__step" aria-hidden="true">2</span>
+                            <div>
+                              <h4 class="form-section__title">Anexos</h4>
+                              <p class="form-section__hint">
+                                PDF da proposta, planilha, foto do serviço…
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <div class="receipt-field">
-                          <input
-                            #budgetFileInput
-                            type="file"
-                            class="receipt-field__input"
-                            multiple
-                            [disabled]="busy()"
-                            (change)="onBudgetFilesSelected($event)"
-                          />
-                          <div class="receipt-field__box">
-                            <button
-                              type="button"
-                              class="btn btn--ghost sm"
+                          <div class="receipt-field">
+                            <input
+                              #budgetFileInput
+                              type="file"
+                              class="receipt-field__input"
+                              multiple
                               [disabled]="busy()"
-                              (click)="budgetFileInput.click()"
-                            >
-                              Escolher arquivos…
-                            </button>
-                            <span class="receipt-field__name"
-                              >Fotos, vídeos, áudio, PDF e qualquer formato — 100 MB
-                              por arquivo.</span
-                            >
+                              (change)="onBudgetFilesSelected($event)"
+                            />
+                            <div class="receipt-field__box">
+                              <button
+                                type="button"
+                                class="btn btn--ghost sm"
+                                [disabled]="busy()"
+                                (click)="budgetFileInput.click()"
+                              >
+                                Escolher arquivos…
+                              </button>
+                              <span class="receipt-field__name"
+                                >Obrigatório ao registrar orçamento recebido — 100 MB por
+                                arquivo.</span
+                              >
+                            </div>
+                            @if (budgetPendingFiles().length > 0) {
+                              <ul class="obras-file-chips" aria-label="Arquivos selecionados">
+                                @for (f of budgetPendingFiles(); track $index) {
+                                  <li class="obras-file-chips__item">
+                                    <span class="obras-file-chips__name">{{ f.name }}</span>
+                                    @if (filenameDateChip(f); as when) {
+                                      <span class="obras-file-chips__when">{{ when }}</span>
+                                    }
+                                    <button
+                                      type="button"
+                                      class="btn btn--ghost sm"
+                                      [disabled]="busy()"
+                                      (click)="removeBudgetPendingFile($index)"
+                                    >
+                                      Remover
+                                    </button>
+                                  </li>
+                                }
+                              </ul>
+                            }
                           </div>
-                          @if (budgetPendingFiles().length > 0) {
-                            <ul class="obras-file-chips" aria-label="Arquivos selecionados">
-                              @for (f of budgetPendingFiles(); track $index) {
-                                <li class="obras-file-chips__item">
-                                  <span class="obras-file-chips__name">{{ f.name }}</span>
-                                  @if (filenameDateChip(f); as when) {
-                                    <span class="obras-file-chips__when">{{ when }}</span>
-                                  }
-                                  <button
-                                    type="button"
-                                    class="btn btn--ghost sm"
-                                    [disabled]="busy()"
-                                    (click)="removeBudgetPendingFile($index)"
-                                  >
-                                    Remover
-                                  </button>
-                                </li>
-                              }
-                            </ul>
-                          }
                         </div>
-                      </div>
+                      }
 
                       <div class="obras-register__actions">
                         <button
@@ -910,7 +976,13 @@
                           class="btn primary"
                           [disabled]="budgetForm.invalid || busy()"
                         >
-                          {{ busy() ? 'Salvando…' : 'Registrar orçamento' }}
+                          @if (busy()) {
+                            Salvando…
+                          } @else if (isBudgetScheduleMode()) {
+                            Agendar visita
+                          } @else {
+                            Registrar orçamento
+                          }
                         </button>
                       </div>
                     </form>
@@ -1379,57 +1451,127 @@
                                         class="obras-tl__edit-form"
                                         (ngSubmit)="saveTimelineEntryEdit(e)"
                                       >
-                                        <label class="field field--block">
-                                          <span class="field__label">Quando ocorreu</span>
-                                          <input
-                                            type="datetime-local"
-                                            class="input plan-create-competence__input"
-                                            [max]="nowForDatetimeLocal()"
-                                            [value]="timelineEditRecordedOn()"
-                                            [disabled]="busy()"
-                                            (input)="
-                                              setTimelineEditRecordedOn(
-                                                $any($event.target).value
-                                              )
-                                            "
-                                          />
-                                        </label>
-                                        @if (e.kind === 'budget' && e.budget) {
+                                        @if (e.kind === 'budget' && e.budget; as editBudget) {
+                                          <div class="obras-tl__edit-budget-row">
+                                            <label class="field field--block obras-tl__edit-budget-cell">
+                                              <span class="field__label">Quando ocorreu</span>
+                                              <input
+                                                type="datetime-local"
+                                                class="input"
+                                                [max]="nowForDatetimeLocal()"
+                                                [value]="timelineEditRecordedOn()"
+                                                [disabled]="busy()"
+                                                (input)="
+                                                  setTimelineEditRecordedOn(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              />
+                                            </label>
+                                            <label
+                                              class="field field--block obras-tl__edit-budget-cell obras-tl__edit-budget-cell--supplier"
+                                            >
+                                              <span class="field__label">Fornecedor</span>
+                                              <select
+                                                class="input"
+                                                [value]="timelineEditSupplierId()"
+                                                [disabled]="busy()"
+                                                (change)="
+                                                  onTimelineEditSupplierIdChange(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              >
+                                                <option value=""
+                                                  >— Digitar nome manualmente —</option
+                                                >
+                                                @for (s of suppliers(); track s.id) {
+                                                  <option [value]="s.id">{{
+                                                    supplierOptionLabel(s)
+                                                  }}</option>
+                                                }
+                                              </select>
+                                              @if (!timelineEditSupplierId()) {
+                                                <input
+                                                  type="text"
+                                                  class="input"
+                                                  [value]="timelineEditSupplierName()"
+                                                  [disabled]="busy()"
+                                                  placeholder="Nome da empresa"
+                                                  (input)="
+                                                    timelineEditSupplierName.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                />
+                                              } @else {
+                                                @if (timelineEditSupplierContactHint(); as hint) {
+                                                  <p
+                                                    class="muted small form-section__inline-hint"
+                                                    >{{ hint }}</p
+                                                  >
+                                                }
+                                              }
+                                            </label>
+                                            @if (editBudget.status === 'awaiting_budget') {
+                                              <label class="field field--block obras-tl__edit-budget-cell">
+                                                <span class="field__label"
+                                                  >Visita agendada para</span
+                                                >
+                                                <input
+                                                  type="datetime-local"
+                                                  class="input"
+                                                  [value]="timelineEditScheduledAt()"
+                                                  [disabled]="busy()"
+                                                  (input)="
+                                                    timelineEditScheduledAt.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                />
+                                              </label>
+                                            } @else {
+                                              <label
+                                                class="field field--block field--money obras-tl__edit-budget-cell"
+                                              >
+                                                <span class="field__label">Valor (R$)</span>
+                                                <div class="input-money">
+                                                  <span
+                                                    class="input-money__prefix"
+                                                    aria-hidden="true"
+                                                    >R$</span
+                                                  >
+                                                  <input
+                                                    type="text"
+                                                    class="input input--money"
+                                                    appBrMoneyMask
+                                                    [ngModel]="timelineEditAmountReais()"
+                                                    (ngModelChange)="
+                                                      timelineEditAmountReais.set($event)
+                                                    "
+                                                    [ngModelOptions]="{ standalone: true }"
+                                                    [disabled]="busy()"
+                                                    placeholder="0,00"
+                                                  />
+                                                </div>
+                                              </label>
+                                            }
+                                          </div>
+                                        } @else {
                                           <label class="field field--block">
-                                            <span class="field__label">Fornecedor</span>
+                                            <span class="field__label">Quando ocorreu</span>
                                             <input
-                                              type="text"
-                                              class="input"
-                                              [value]="timelineEditSupplierName()"
+                                              type="datetime-local"
+                                              class="input plan-create-competence__input"
+                                              [max]="nowForDatetimeLocal()"
+                                              [value]="timelineEditRecordedOn()"
                                               [disabled]="busy()"
                                               (input)="
-                                                timelineEditSupplierName.set(
+                                                setTimelineEditRecordedOn(
                                                   $any($event.target).value
                                                 )
                                               "
                                             />
-                                          </label>
-                                          <label class="field field--block field--money">
-                                            <span class="field__label">Valor (R$)</span>
-                                            <div class="input-money">
-                                              <span
-                                                class="input-money__prefix"
-                                                aria-hidden="true"
-                                                >R$</span
-                                              >
-                                              <input
-                                                type="text"
-                                                class="input input--money"
-                                                appBrMoneyMask
-                                                [ngModel]="timelineEditAmountReais()"
-                                                (ngModelChange)="
-                                                  timelineEditAmountReais.set($event)
-                                                "
-                                                [ngModelOptions]="{ standalone: true }"
-                                                [disabled]="busy()"
-                                                placeholder="0,00"
-                                              />
-                                            </div>
                                           </label>
                                         }
                                         @if (e.kind === 'note' || e.kind === 'legal') {
@@ -1485,49 +1627,176 @@
                                       </form>
                                     } @else {
                                       @if (e.kind === 'budget' && e.budget; as b) {
-                                        <p class="obras-tl__budget-value">
-                                          {{ formatMoney(b.amountCents) }}
-                                        </p>
-                                        <dl class="obras-tl__facts">
-                                          <div>
-                                            <dt>Status</dt>
-                                            <dd>
-                                              <span
-                                                class="plan-pill"
-                                                [ngClass]="budgetStatusPillClass(b.status)"
-                                                >{{ budgetStatusLabel(b.status) }}</span
+                                        @if (isReceivingBudget(e)) {
+                                          <form
+                                            class="obras-tl__receive-form"
+                                            (ngSubmit)="submitReceiveWorkBudget(e)"
+                                          >
+                                            <p class="obras-tl__receive-lede muted small">
+                                              Informe o valor e anexe a proposta para colocar em
+                                              análise.
+                                            </p>
+                                            <label class="field field--block field--money">
+                                              <span class="field__label">Valor (R$)</span>
+                                              <div class="input-money">
+                                                <span class="input-money__prefix" aria-hidden="true"
+                                                  >R$</span
+                                                >
+                                                <input
+                                                  type="text"
+                                                  class="input input--money"
+                                                  appBrMoneyMask
+                                                  placeholder="0,00"
+                                                  [value]="receiveBudgetAmountReais()"
+                                                  [disabled]="busy()"
+                                                  (input)="
+                                                    receiveBudgetAmountReais.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                />
+                                              </div>
+                                            </label>
+                                            <label class="field field--block">
+                                              <span class="field__label">Validade</span>
+                                              <input
+                                                type="date"
+                                                class="input"
+                                                [value]="receiveBudgetValidUntil()"
+                                                [disabled]="busy()"
+                                                (input)="
+                                                  receiveBudgetValidUntil.set(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              />
+                                            </label>
+                                            <div class="receipt-field">
+                                              <input
+                                                #receiveBudgetFileInput
+                                                type="file"
+                                                class="receipt-field__input"
+                                                multiple
+                                                [disabled]="busy()"
+                                                (change)="onReceiveBudgetFilesSelected($event)"
+                                              />
+                                              <div class="receipt-field__box">
+                                                <button
+                                                  type="button"
+                                                  class="btn btn--ghost sm"
+                                                  [disabled]="busy()"
+                                                  (click)="receiveBudgetFileInput.click()"
+                                                >
+                                                  Anexar orçamento…
+                                                </button>
+                                              </div>
+                                              @if (receiveBudgetFiles().length > 0) {
+                                                <ul
+                                                  class="obras-file-chips"
+                                                  aria-label="Arquivos selecionados"
+                                                >
+                                                  @for (
+                                                    f of receiveBudgetFiles();
+                                                    track $index
+                                                  ) {
+                                                    <li class="obras-file-chips__item">
+                                                      <span class="obras-file-chips__name">{{
+                                                        f.name
+                                                      }}</span>
+                                                      <button
+                                                        type="button"
+                                                        class="btn btn--ghost sm"
+                                                        [disabled]="busy()"
+                                                        (click)="removeReceiveBudgetFile($index)"
+                                                      >
+                                                        Remover
+                                                      </button>
+                                                    </li>
+                                                  }
+                                                </ul>
+                                              }
+                                            </div>
+                                            <div class="obras-tl__edit-actions">
+                                              <button
+                                                type="button"
+                                                class="btn ghost sm"
+                                                [disabled]="busy()"
+                                                (click)="cancelReceiveWorkBudget()"
                                               >
-                                            </dd>
-                                          </div>
-                                          @if (b.validUntil) {
+                                                Cancelar
+                                              </button>
+                                              <button
+                                                type="submit"
+                                                class="btn primary sm"
+                                                [disabled]="busy()"
+                                              >
+                                                Registrar para análise
+                                              </button>
+                                            </div>
+                                          </form>
+                                        } @else {
+                                          <p class="obras-tl__budget-value">
+                                            {{ budgetAmountLabel(b.amountCents, b.status) }}
+                                          </p>
+                                          <dl class="obras-tl__facts">
                                             <div>
-                                              <dt>Validade</dt>
-                                              <dd>{{ formatDate(b.validUntil) }}</dd>
+                                              <dt>Status</dt>
+                                              <dd>
+                                                <span
+                                                  class="plan-pill"
+                                                  [ngClass]="budgetStatusPillClass(b.status)"
+                                                  >{{ budgetStatusLabel(b.status) }}</span
+                                                >
+                                              </dd>
+                                            </div>
+                                            @if (b.validUntil) {
+                                              <div>
+                                                <dt>Validade</dt>
+                                                <dd>{{ formatDate(b.validUntil) }}</dd>
+                                              </div>
+                                            }
+                                            @if (b.scheduledAt) {
+                                              <div>
+                                                <dt>Visita agendada</dt>
+                                                <dd>{{ formatDateTime(b.scheduledAt) }}</dd>
+                                              </div>
+                                            }
+                                          </dl>
+                                          @if (b.notes) {
+                                            <p
+                                              class="obras-tl__comment obras-tl__comment--secondary"
+                                              >{{ b.notes }}</p
+                                            >
+                                          }
+                                          @if (isApprovedWorkBudget(b)) {
+                                            <p class="obras-tl__budget-approved-tag">
+                                              Aprovado — entra na soma da obra
+                                            </p>
+                                          }
+                                          @if (canReceiveWorkBudget(b)) {
+                                            <div class="obras-tl__budget-actions">
+                                              <button
+                                                type="button"
+                                                class="btn primary sm"
+                                                [disabled]="busy()"
+                                                (click)="startReceiveWorkBudget(e)"
+                                              >
+                                                Registrar orçamento recebido
+                                              </button>
                                             </div>
                                           }
-                                        </dl>
-                                        @if (b.notes) {
-                                          <p
-                                            class="obras-tl__comment obras-tl__comment--secondary"
-                                            >{{ b.notes }}</p
-                                          >
-                                        }
-                                      @if (isApprovedWorkBudget(b)) {
-                                        <p class="obras-tl__budget-approved-tag">
-                                          Aprovado — entra na soma da obra
-                                        </p>
-                                      }
-                                        @if (canApproveWorkBudget(b)) {
-                                          <div class="obras-tl__budget-actions">
-                                            <button
-                                              type="button"
-                                              class="btn primary sm"
-                                              [disabled]="busy()"
-                                              (click)="approveWorkBudget(e)"
-                                            >
-                                              Aprovar orçamento
-                                            </button>
-                                          </div>
+                                          @if (canApproveWorkBudget(b)) {
+                                            <div class="obras-tl__budget-actions">
+                                              <button
+                                                type="button"
+                                                class="btn primary sm"
+                                                [disabled]="busy()"
+                                                (click)="approveWorkBudget(e)"
+                                              >
+                                                Aprovar orçamento
+                                              </button>
+                                            </div>
+                                          }
                                         }
                                       } @else if (e.body) {
                                         <p class="obras-tl__comment">{{ e.body }}</p>

@@ -7,6 +7,8 @@ export function transactionKindLabelPt(kind: string): string {
       return 'Investimento';
     case 'income':
       return 'Receita';
+    case 'yield':
+      return 'Rendimento';
     default:
       return kind;
   }

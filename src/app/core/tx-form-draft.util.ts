@@ -9,7 +9,7 @@ export type TxCreateDraftAllocKind =
 
 export type TxCreateDraft = {
   formExpanded?: boolean;
-  txKind: 'expense' | 'income' | 'investment';
+  txKind: 'expense' | 'income' | 'investment' | 'yield';
   entryMode: 'single' | 'recurring' | 'transfer';
   transferFromBankAccountId: string;
   transferToBankAccountId: string;

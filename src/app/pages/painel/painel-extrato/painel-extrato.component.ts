@@ -7,7 +7,7 @@ import { FlashMessageService } from '../../../core/flash-message.service';
 import { CondominiumAccessStore } from '../../../core/condominium-access.store';
 import {
   extratoBalanceCssClass,
-  extratoDeltaCssClass,
+  movementAmountCssClass,
   formatCompetenceYmPt,
   movementDescriptionForDisplay,
   feePaymentStatusLabelPt,
@@ -52,7 +52,7 @@ export class PainelExtratoComponent implements OnInit {
   protected readonly movementKindDataAttr = movementKindDataAttr;
   protected readonly feePaymentStatusLabelPt = feePaymentStatusLabelPt;
   protected readonly formatCompetenceYmPt = formatCompetenceYmPt;
-  protected readonly extratoDeltaCssClass = extratoDeltaCssClass;
+  protected readonly movementAmountCssClass = movementAmountCssClass;
   protected readonly extratoBalanceCssClass = extratoBalanceCssClass;
   protected readonly parseCentsBigint = parseCentsBigint;
   protected readonly movementDescriptionForDisplay = movementDescriptionForDisplay;

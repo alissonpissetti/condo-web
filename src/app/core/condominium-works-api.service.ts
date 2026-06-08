@@ -1,7 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { sortSupplierCategories } from './supplier-category-display';
 
 export type WorkStatus =
   | 'planned'
@@ -10,6 +11,7 @@ export type WorkStatus =
   | 'cancelled';
 
 export type WorkBudgetStatus =
+  | 'awaiting_budget'
   | 'received'
   | 'under_review'
   | 'approved'
@@ -41,11 +43,62 @@ export interface WorkTimelineAttachment {
   fileUrl?: string | null;
 }
 
+export interface CondominiumSupplierCategory {
+  id: string;
+  condominiumId: string;
+  name: string;
+  isGlobal: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CondominiumSupplier {
+  id: string;
+  condominiumId: string;
+  name: string;
+  contactName: string | null;
+  phone: string | null;
+  pixKey: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryIsGlobal: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSupplierBody {
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  pixKey?: string | null;
+  categoryId?: string | null;
+  newCategoryName?: string | null;
+}
+
+export interface UpdateSupplierBody {
+  name?: string;
+  contactName?: string | null;
+  phone?: string | null;
+  pixKey?: string | null;
+  categoryId?: string | null;
+  newCategoryName?: string | null;
+}
+
+export interface CreateSupplierCategoryBody {
+  name: string;
+}
+
+export interface UpdateSupplierCategoryBody {
+  name: string;
+}
+
 export interface WorkBudget {
   id: string;
+  supplierId: string | null;
   supplierName: string;
   amountCents: number;
   validUntil: string | null;
+  scheduledAt: string | null;
   status: WorkBudgetStatus;
   notes: string | null;
   createdAt: string;
@@ -117,18 +170,22 @@ export interface UpdateWorkBody {
 }
 
 export interface CreateWorkBudgetBody {
-  supplierName: string;
-  amountCents: number;
+  supplierId?: string;
+  supplierName?: string;
+  amountCents?: number;
   validUntil?: string;
+  scheduledAt?: string;
   status?: WorkBudgetStatus;
   notes?: string;
   recordedOn?: string;
 }
 
 export interface UpdateWorkBudgetBody {
+  supplierId?: string | null;
   supplierName?: string;
   amountCents?: number;
   validUntil?: string | null;
+  scheduledAt?: string | null;
   status?: WorkBudgetStatus;
   notes?: string | null;
 }
@@ -137,13 +194,88 @@ export interface UpdateTimelineEntryBody {
   body?: string | null;
   recordedOn?: string;
   amountCents?: number;
+  supplierId?: string | null;
   supplierName?: string;
+  scheduledAt?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
 export class CondominiumWorksApiService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiUrl;
+
+  listSuppliers(condominiumId: string): Observable<CondominiumSupplier[]> {
+    return this.http.get<CondominiumSupplier[]>(
+      `${this.base}/condominiums/${condominiumId}/suppliers`,
+    );
+  }
+
+  createSupplier(
+    condominiumId: string,
+    body: CreateSupplierBody,
+  ): Observable<CondominiumSupplier> {
+    return this.http.post<CondominiumSupplier>(
+      `${this.base}/condominiums/${condominiumId}/suppliers`,
+      body,
+    );
+  }
+
+  updateSupplier(
+    condominiumId: string,
+    supplierId: string,
+    body: UpdateSupplierBody,
+  ): Observable<CondominiumSupplier> {
+    return this.http.patch<CondominiumSupplier>(
+      `${this.base}/condominiums/${condominiumId}/suppliers/${supplierId}`,
+      body,
+    );
+  }
+
+  deleteSupplier(condominiumId: string, supplierId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/condominiums/${condominiumId}/suppliers/${supplierId}`,
+    );
+  }
+
+  listSupplierCategories(
+    condominiumId: string,
+  ): Observable<CondominiumSupplierCategory[]> {
+    return this.http
+      .get<CondominiumSupplierCategory[]>(
+        `${this.base}/condominiums/${condominiumId}/supplier-categories`,
+      )
+      .pipe(map((rows) => sortSupplierCategories(rows)));
+  }
+
+  createSupplierCategory(
+    condominiumId: string,
+    body: CreateSupplierCategoryBody,
+  ): Observable<CondominiumSupplierCategory> {
+    return this.http.post<CondominiumSupplierCategory>(
+      `${this.base}/condominiums/${condominiumId}/supplier-categories`,
+      body,
+    );
+  }
+
+  updateSupplierCategory(
+    condominiumId: string,
+    categoryId: string,
+    body: UpdateSupplierCategoryBody,
+  ): Observable<CondominiumSupplierCategory> {
+    return this.http.patch<CondominiumSupplierCategory>(
+      `${this.base}/condominiums/${condominiumId}/supplier-categories/${categoryId}`,
+      body,
+    );
+  }
+
+  deleteSupplierCategory(
+    condominiumId: string,
+    categoryId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/condominiums/${condominiumId}/supplier-categories/${categoryId}`,
+    );
+  }
 
   list(condominiumId: string): Observable<WorkListItem[]> {
     return this.http.get<WorkListItem[]>(
@@ -257,10 +389,20 @@ export class CondominiumWorksApiService {
     files: File[] = [],
   ): Observable<WorkTimelineEntry> {
     const fd = new FormData();
-    fd.append('supplierName', payload.supplierName);
-    fd.append('amountCents', String(payload.amountCents));
+    if (payload.supplierId?.trim()) {
+      fd.append('supplierId', payload.supplierId.trim());
+    }
+    if (payload.supplierName?.trim()) {
+      fd.append('supplierName', payload.supplierName.trim());
+    }
+    if (payload.amountCents !== undefined) {
+      fd.append('amountCents', String(payload.amountCents));
+    }
     if (payload.validUntil) {
       fd.append('validUntil', payload.validUntil);
+    }
+    if (payload.scheduledAt) {
+      fd.append('scheduledAt', payload.scheduledAt);
     }
     if (payload.status) {
       fd.append('status', payload.status);
@@ -289,6 +431,22 @@ export class CondominiumWorksApiService {
     return this.http.patch<WorkBudget>(
       `${this.base}/condominiums/${condominiumId}/works/${workId}/budgets/${budgetId}`,
       body,
+    );
+  }
+
+  addTimelineEntryAttachments(
+    condominiumId: string,
+    workId: string,
+    entryId: string,
+    files: File[],
+  ): Observable<WorkTimelineEntry> {
+    const fd = new FormData();
+    for (const file of files) {
+      fd.append('files', file, file.name);
+    }
+    return this.http.post<WorkTimelineEntry>(
+      `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}/attachments`,
+      fd,
     );
   }
 

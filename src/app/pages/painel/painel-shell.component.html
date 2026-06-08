@@ -491,7 +491,7 @@
                 <a
                   [routerLink]="['/painel/condominio', condoId, 'planejamento']"
                   routerLinkActive="active"
-                  [routerLinkActiveOptions]="{ exact: true }"
+                  [routerLinkActiveOptions]="{ exact: false }"
                   >Pautas/Atas</a
                 >
               }
@@ -527,6 +527,11 @@
                   routerLinkActive="active"
                   [routerLinkActiveOptions]="{ exact: false }"
                   >Obras</a
+                >
+                <a
+                  [routerLink]="['/painel/condominio', condoId, 'fornecedores']"
+                  routerLinkActive="active"
+                  >Fornecedores</a
                 >
               }
 

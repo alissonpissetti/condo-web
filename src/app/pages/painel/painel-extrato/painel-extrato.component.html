@@ -227,7 +227,7 @@
                       <td class="fund-extrato-table__desc">{{ movementTitle(row) }}</td>
                       <td
                         class="num fund-extrato-table__amt"
-                        [ngClass]="extratoDeltaCssClass(parseCentsBigint(row.signedDeltaCents))"
+                        [ngClass]="movementAmountCssClass(row.kind, row.signedDeltaCents)"
                       >
                         {{ formatCentsBrl(row.signedDeltaCents) }}
                       </td>
@@ -399,7 +399,7 @@
                       <td class="fund-extrato-table__desc">{{ movementTitle(row) }}</td>
                       <td
                         class="num fund-extrato-table__amt"
-                        [ngClass]="extratoDeltaCssClass(parseCentsBigint(row.signedDeltaCents))"
+                        [ngClass]="movementAmountCssClass(row.kind, row.signedDeltaCents)"
                       >
                         {{ formatCentsBrl(row.signedDeltaCents) }}
                       </td>

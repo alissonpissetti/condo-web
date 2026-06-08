@@ -1601,6 +1601,27 @@
   padding: 0.15rem 0 0.1rem;
 }
 
+.obras-tl__edit-budget-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.obras-tl__edit-budget-cell {
+  min-width: 0;
+
+  .input,
+  .input-money {
+    width: 100%;
+    max-width: none;
+  }
+}
+
 .obras-tl__edit-actions {
   display: flex;
   flex-wrap: wrap;

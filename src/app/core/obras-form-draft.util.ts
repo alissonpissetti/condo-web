@@ -24,9 +24,12 @@ export type ObrasNoteDraft = { body: string };
 export type ObrasLegalDraft = { body: string };
 
 export type ObrasBudgetDraft = {
+  registerMode?: 'schedule' | 'received';
+  supplierId?: string;
   supplierName: string;
   amountReais: string;
   validUntil: string;
+  scheduledAt?: string;
   status: WorkBudgetStatus;
   notes: string;
 };

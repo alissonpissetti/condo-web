@@ -44,7 +44,7 @@ export interface FinancialTransaction {
   id: string;
   condominiumId: string;
   fundId: string | null;
-  kind: 'expense' | 'income' | 'investment';
+  kind: 'expense' | 'income' | 'investment' | 'yield';
   amountCents: string;
   occurredOn: string;
   title: string;
@@ -361,7 +361,7 @@ export class FinancialApiService {
   createTransaction(
     condoId: string,
     body: {
-      kind: 'expense' | 'income' | 'investment';
+      kind: 'expense' | 'income' | 'investment' | 'yield';
       amountCents: number;
       occurredOn: string;
       title: string;
@@ -396,7 +396,7 @@ export class FinancialApiService {
     condoId: string,
     txId: string,
     body: Partial<{
-      kind: 'expense' | 'income' | 'investment';
+      kind: 'expense' | 'income' | 'investment' | 'yield';
       amountCents: number;
       occurredOn: string;
       title: string;
@@ -454,7 +454,7 @@ export class FinancialApiService {
     condoId: string,
     seriesId: string,
     body: {
-      kind?: 'expense' | 'income' | 'investment';
+      kind?: 'expense' | 'income' | 'investment' | 'yield';
       titleBase?: string;
       description?: string | null;
       fundId?: string | null;

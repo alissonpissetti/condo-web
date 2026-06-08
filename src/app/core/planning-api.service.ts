@@ -38,11 +38,52 @@ export interface GovernanceEligibleAccount {
 export type PollStatus = 'draft' | 'open' | 'closed' | 'decided';
 export type AssemblyType = 'ordinary' | 'election' | 'ata';
 
+export interface VotableUnit {
+  id: string;
+  identifier: string;
+  responsibleName: string | null;
+}
+
+export interface PollAiDraftQuestion {
+  title: string;
+  allowMultiple: boolean;
+  options: string[];
+}
+
+export interface AiMergeMeetingMinutesVoteResult {
+  unitIdentifier: string;
+  ok: boolean;
+  message?: string;
+}
+
+export interface AiMergeMeetingMinutesResult {
+  body: string;
+  votesApplied?: AiMergeMeetingMinutesVoteResult[];
+}
+
+export interface PollAiDraftResult {
+  title: string;
+  body: string | null;
+  assemblyType: AssemblyType;
+  questions: PollAiDraftQuestion[];
+}
+
 export interface PlanningPollOption {
   id: string;
   pollId: string;
+  questionId?: string;
   label: string;
   sortOrder: number;
+}
+
+export interface PlanningPollQuestion {
+  id: string;
+  pollId: string;
+  title: string;
+  sortOrder: number;
+  allowMultiple: boolean;
+  decidedOptionId: string | null;
+  options?: PlanningPollOption[];
 }
 
 export interface PlanningPollAttachment {
@@ -62,6 +103,8 @@ export interface PlanningPoll {
   condominiumId: string;
   title: string;
   body: string | null;
+  /** Rascunho da ata final (modo reunião); `body` permanece como pauta original. */
+  minutesBody?: string | null;
   /** Data civil de competência (AAAA-MM-DD). */
   competenceDate?: string;
   opensAt: string;
@@ -72,6 +115,9 @@ export interface PlanningPoll {
   allowMultiple?: boolean;
   decidedOptionId: string | null;
   createdByUserId: string;
+  /** Deliberações / votações desta pauta. */
+  questions?: PlanningPollQuestion[];
+  /** Legado (primeira deliberação); preferir `questions`. */
   options?: PlanningPollOption[];
   attachments?: PlanningPollAttachment[];
   createdAt: string;
@@ -95,11 +141,28 @@ export interface PollUnitVoteRow {
   choices: { id: string; label: string }[];
 }
 
+export interface PollQuestionResults {
+  questionId: string;
+  title: string;
+  allowMultiple: boolean;
+  decidedOptionId: string | null;
+  options: { id: string; label: string; votes: number }[];
+  unitsVoted: number;
+  totalOptionSelections: number;
+  votesByUnit?: PollUnitVoteRow[];
+}
+
 export interface PollResults {
   pollId: string;
   status: PollStatus;
   allowMultiple?: boolean;
-  options: { id: string; label: string; votes: number }[];
+  questions: PollQuestionResults[];
+  options: {
+    id: string;
+    label: string;
+    votes: number;
+    questionId?: string | null;
+  }[];
   /** Unidades distintas que submeteram voto. */
   unitsVoted: number;
   /** Soma das marcações em todas as opções (≥ unidades se multi). */
@@ -255,8 +318,8 @@ export class PlanningApiService {
 
   myVotableUnits(
     condominiumId: string,
-  ): Observable<{ id: string; identifier: string }[]> {
-    return this.http.get<{ id: string; identifier: string }[]>(
+  ): Observable<VotableUnit[]> {
+    return this.http.get<VotableUnit[]>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/my-units`,
     );
   }
@@ -271,11 +334,37 @@ export class PlanningApiService {
       closesAt: string;
       assemblyType: AssemblyType;
       allowMultiple?: boolean;
-      options: { label: string }[];
+      questions?: {
+        title: string;
+        allowMultiple?: boolean;
+        options: { label: string }[];
+      }[];
+      options?: { label: string }[];
     },
   ): Observable<PlanningPoll> {
     return this.http.post<PlanningPoll>(
       `${this.base}/condominiums/${condominiumId}/planning/polls`,
+      body,
+    );
+  }
+
+  draftPollWithAi(
+    condominiumId: string,
+    body: { brief: string; assemblyType?: AssemblyType },
+  ): Observable<PollAiDraftResult> {
+    return this.http.post<PollAiDraftResult>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/ai-draft`,
+      body,
+    );
+  }
+
+  mergeMeetingMinutesNote(
+    condominiumId: string,
+    pollId: string,
+    body: { note: string; currentBodyHtml?: string },
+  ): Observable<AiMergeMeetingMinutesResult> {
+    return this.http.post<AiMergeMeetingMinutesResult>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/meeting-minutes/merge-note`,
       body,
     );
   }
@@ -307,11 +396,11 @@ export class PlanningApiService {
   decidePoll(
     condominiumId: string,
     pollId: string,
-    optionId: string,
+    body: { questionId: string; optionId: string },
   ): Observable<PlanningPoll> {
     return this.http.post<PlanningPoll>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/decide`,
-      { optionId },
+      body,
     );
   }
 
@@ -331,12 +420,18 @@ export class PlanningApiService {
     pollId: string,
     patch: {
       body?: string;
+      minutesBody?: string;
       title?: string;
       competenceDate?: string;
       opensAt?: string;
       closesAt?: string;
       assemblyType?: AssemblyType;
       allowMultiple?: boolean;
+      questions?: {
+        title: string;
+        allowMultiple?: boolean;
+        options: { label: string }[];
+      }[];
       options?: { label: string }[];
     },
   ): Observable<PlanningPoll> {
@@ -402,6 +497,16 @@ export class PlanningApiService {
   ): Observable<CondominiumDocumentRow> {
     return this.http.post<CondominiumDocumentRow>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/minutes/draft`,
+      {},
+    );
+  }
+
+  generateAttendanceSheet(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<CondominiumDocumentRow> {
+    return this.http.post<CondominiumDocumentRow>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/attendance-sheet`,
       {},
     );
   }

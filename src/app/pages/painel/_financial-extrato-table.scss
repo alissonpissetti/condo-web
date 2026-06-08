@@ -84,6 +84,11 @@
       background: color-mix(in srgb, #8b5cf6 12%, transparent);
     }
 
+    &[data-kind='yield'] {
+      color: #1d4ed8;
+      background: color-mix(in srgb, #3b82f6 12%, transparent);
+    }
+
     &[data-kind='fee_payment'] {
       color: #0369a1;
       background: color-mix(in srgb, #0ea5e9 14%, transparent);
@@ -137,6 +142,10 @@
 
   &__amt--out {
     color: #b91c1c;
+  }
+
+  &__amt--yield {
+    color: #1d4ed8;
   }
 
   &__amt--zero {

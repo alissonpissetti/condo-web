@@ -11,12 +11,13 @@ import {
 } from '@angular/forms';
 import { BrMoneyMaskDirective } from '../../../core/br-money-mask.directive';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
+import { Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumWorksApiService,
+  type CondominiumSupplier,
   type WorkBudget,
   type WorkBudgetStatus,
   type WorkDetail,
@@ -24,6 +25,7 @@ import {
   type WorkStatus,
   type WorkTimelineEntry,
 } from '../../../core/condominium-works-api.service';
+import { supplierSelectLabel } from '../../../core/supplier-display';
 import { ObrasTimelineAttachmentPreviewComponent } from './obras-timeline-attachment-preview.component';
 import { ObrasTimelineAttachmentModalHostComponent } from './obras-timeline-attachment-modal-host.component';
 import {
@@ -86,6 +88,7 @@ const WORK_STATUS_OPTIONS: { value: WorkStatus; label: string }[] = (
 ).map((value) => ({ value, label: STATUS_LABELS[value] }));
 
 const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
+  awaiting_budget: 'Aguardando orçamento',
   received: 'Recebido',
   under_review: 'Em análise',
   approved: 'Aprovado',
@@ -119,6 +122,7 @@ export class PainelObrasComponent implements OnInit {
 
   protected readonly works = signal<WorkListItem[]>([]);
   protected readonly selected = signal<WorkDetail | null>(null);
+  protected readonly suppliers = signal<CondominiumSupplier[]>([]);
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly loadError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -166,7 +170,13 @@ export class PainelObrasComponent implements OnInit {
   protected readonly timelineEditBody = signal('');
   protected readonly timelineEditRecordedOn = signal('');
   protected readonly timelineEditAmountReais = signal('');
+  protected readonly timelineEditSupplierId = signal('');
   protected readonly timelineEditSupplierName = signal('');
+  protected readonly timelineEditScheduledAt = signal('');
+  protected readonly receivingBudgetEntryId = signal<string | null>(null);
+  protected readonly receiveBudgetAmountReais = signal('');
+  protected readonly receiveBudgetValidUntil = signal('');
+  protected readonly receiveBudgetFiles = signal<File[]>([]);
   protected readonly filenameRecordedOnHint = signal<string | null>(null);
   /** Dias expandidos na timeline (`yyyy-MM-dd`). */
   protected readonly timelineDayExpanded = signal<ReadonlySet<string>>(
@@ -174,10 +184,13 @@ export class PainelObrasComponent implements OnInit {
   );
 
   protected readonly budgetForm = this.fb.nonNullable.group({
-    supplierName: ['', [Validators.required, Validators.maxLength(255)]],
-    amountReais: ['', [Validators.required]],
+    registerMode: this.fb.nonNullable.control<'schedule' | 'received'>('schedule'),
+    supplierId: [''],
+    supplierName: ['', [Validators.maxLength(255)]],
+    amountReais: [''],
     validUntil: [''],
-    status: this.fb.nonNullable.control<WorkBudgetStatus>('received'),
+    scheduledAt: [''],
+    status: this.fb.nonNullable.control<WorkBudgetStatus>('awaiting_budget'),
     notes: [''],
   });
 
@@ -194,6 +207,7 @@ export class PainelObrasComponent implements OnInit {
       return;
     }
     this.condominiumId = id;
+    this.loadSuppliers();
     this.restoreListUiDraft();
     this.wireCreateDraft();
 
@@ -225,6 +239,98 @@ export class PainelObrasComponent implements OnInit {
 
   protected condominiumIdParam(): string {
     return this.condominiumId;
+  }
+
+  private loadSuppliers(): void {
+    if (!this.condominiumId) {
+      return;
+    }
+    this.api.listSuppliers(this.condominiumId).subscribe({
+      next: (rows) => this.suppliers.set(rows),
+      error: () => this.suppliers.set([]),
+    });
+  }
+
+  protected selectedBudgetSupplier(): CondominiumSupplier | null {
+    const id = this.budgetForm.controls.supplierId.value.trim();
+    if (!id) {
+      return null;
+    }
+    return this.suppliers().find((s) => s.id === id) ?? null;
+  }
+
+  protected budgetSupplierContactHint(): string | null {
+    const supplier = this.selectedBudgetSupplier();
+    if (!supplier) {
+      return null;
+    }
+    const parts: string[] = [];
+    if (supplier.contactName?.trim()) {
+      parts.push(`Contato: ${supplier.contactName.trim()}`);
+    }
+    if (supplier.phone?.trim()) {
+      parts.push(`Tel.: ${supplier.phone.trim()}`);
+    }
+    if (supplier.pixKey?.trim()) {
+      parts.push(`Pix: ${supplier.pixKey.trim()}`);
+    }
+    return parts.length > 0
+      ? parts.join(' · ')
+      : 'Sem contato, telefone ou Pix no cadastro.';
+  }
+
+  protected supplierOptionLabel(supplier: CondominiumSupplier): string {
+    return supplierSelectLabel(supplier);
+  }
+
+  protected onBudgetSupplierIdChange(raw: string): void {
+    const id = (raw ?? '').trim();
+    this.budgetForm.controls.supplierId.setValue(id);
+    if (id) {
+      const supplier = this.suppliers().find((s) => s.id === id);
+      if (supplier) {
+        this.budgetForm.controls.supplierName.setValue(supplier.name);
+      }
+    }
+  }
+
+  protected selectedTimelineEditSupplier(): CondominiumSupplier | null {
+    const id = this.timelineEditSupplierId().trim();
+    if (!id) {
+      return null;
+    }
+    return this.suppliers().find((s) => s.id === id) ?? null;
+  }
+
+  protected timelineEditSupplierContactHint(): string | null {
+    const supplier = this.selectedTimelineEditSupplier();
+    if (!supplier) {
+      return null;
+    }
+    const parts: string[] = [];
+    if (supplier.contactName?.trim()) {
+      parts.push(`Contato: ${supplier.contactName.trim()}`);
+    }
+    if (supplier.phone?.trim()) {
+      parts.push(`Tel.: ${supplier.phone.trim()}`);
+    }
+    if (supplier.pixKey?.trim()) {
+      parts.push(`Pix: ${supplier.pixKey.trim()}`);
+    }
+    return parts.length ? parts.join(' · ') : null;
+  }
+
+  protected onTimelineEditSupplierIdChange(raw: string): void {
+    const id = (raw ?? '').trim();
+    this.timelineEditSupplierId.set(id);
+    if (id) {
+      const supplier = this.suppliers().find((s) => s.id === id);
+      if (supplier) {
+        this.timelineEditSupplierName.set(supplier.name);
+      }
+    } else {
+      this.timelineEditSupplierName.set('');
+    }
   }
 
   /** Valor máximo para input datetime-local (agora, fuso local). */
@@ -416,8 +522,118 @@ export class PainelObrasComponent implements OnInit {
   protected budgetStatusPillClass(s: WorkBudgetStatus): string {
     if (s === 'approved') return 'plan-pill--decided';
     if (s === 'rejected') return 'plan-pill--closed';
-    if (s === 'under_review') return 'plan-pill--open';
+    if (s === 'under_review' || s === 'received') return 'plan-pill--open';
+    if (s === 'awaiting_budget') return 'plan-pill--draft';
     return 'plan-pill--draft';
+  }
+
+  protected isBudgetScheduleMode(): boolean {
+    return this.budgetForm.controls.registerMode.value === 'schedule';
+  }
+
+  protected setBudgetRegisterMode(mode: 'schedule' | 'received'): void {
+    this.budgetForm.controls.registerMode.setValue(mode);
+    if (mode === 'schedule') {
+      this.budgetPendingFiles.set([]);
+    }
+  }
+
+  protected budgetAmountLabel(cents: number, status: WorkBudgetStatus): string {
+    if (status === 'awaiting_budget' || cents <= 0) {
+      return 'A definir';
+    }
+    return this.formatMoney(cents);
+  }
+
+  protected canReceiveWorkBudget(budget: WorkBudget): boolean {
+    return this.canManage() && budget.status === 'awaiting_budget';
+  }
+
+  protected isReceivingBudget(entry: WorkTimelineEntry): boolean {
+    return this.receivingBudgetEntryId() === entry.id;
+  }
+
+  protected startReceiveWorkBudget(entry: WorkTimelineEntry): void {
+    if (!entry.budget || !this.canReceiveWorkBudget(entry.budget) || this.busy()) {
+      return;
+    }
+    this.cancelEditTimelineEntry();
+    this.receivingBudgetEntryId.set(entry.id);
+    this.receiveBudgetAmountReais.set('');
+    this.receiveBudgetValidUntil.set(entry.budget.validUntil?.slice(0, 10) ?? '');
+    this.receiveBudgetFiles.set([]);
+  }
+
+  protected cancelReceiveWorkBudget(): void {
+    this.receivingBudgetEntryId.set(null);
+    this.receiveBudgetAmountReais.set('');
+    this.receiveBudgetValidUntil.set('');
+    this.receiveBudgetFiles.set([]);
+  }
+
+  protected onReceiveBudgetFilesSelected(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const picked = input.files;
+    if (!picked?.length) return;
+    this.receiveBudgetFiles.set([
+      ...this.receiveBudgetFiles(),
+      ...Array.from(picked),
+    ]);
+    input.value = '';
+  }
+
+  protected removeReceiveBudgetFile(index: number): void {
+    const list = [...this.receiveBudgetFiles()];
+    list.splice(index, 1);
+    this.receiveBudgetFiles.set(list);
+  }
+
+  protected submitReceiveWorkBudget(entry: WorkTimelineEntry): void {
+    const w = this.selected();
+    const b = entry.budget;
+    if (!w || !b || !this.isReceivingBudget(entry) || this.busy()) return;
+
+    const parsed = parseReaisInputToCents(this.receiveBudgetAmountReais());
+    if (parsed === null || parsed <= 0) {
+      this.flash.warning('Informe o valor do orçamento recebido.');
+      return;
+    }
+    const files = this.receiveBudgetFiles();
+    if (files.length < 1) {
+      this.flash.warning('Anexe o orçamento (PDF, foto ou planilha).');
+      return;
+    }
+
+    const validUntil = this.receiveBudgetValidUntil().trim() || undefined;
+    this.busy.set(true);
+    this.api
+      .updateBudget(this.condominiumId, w.id, b.id, {
+        amountCents: parsed,
+        validUntil: validUntil ?? null,
+        status: 'under_review',
+      })
+      .pipe(
+        switchMap(() =>
+          this.api.addTimelineEntryAttachments(
+            this.condominiumId,
+            w.id,
+            entry.id,
+            files,
+          ),
+        ),
+      )
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.cancelReceiveWorkBudget();
+          this.flash.success('Orçamento registrado para análise.');
+          this.loadDetail(w.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível registrar o orçamento.');
+        },
+      });
   }
 
   protected formatDate(iso: string | null): string {
@@ -662,7 +878,8 @@ export class PainelObrasComponent implements OnInit {
     return (
       this.canManage() &&
       budget.status !== 'approved' &&
-      budget.status !== 'rejected'
+      budget.status !== 'rejected' &&
+      budget.status !== 'awaiting_budget'
     );
   }
 
@@ -903,6 +1120,7 @@ export class PainelObrasComponent implements OnInit {
 
   protected startEditTimelineEntry(entry: WorkTimelineEntry): void {
     if (!this.canEditTimelineEntry(entry) || this.busy()) return;
+    this.cancelReceiveWorkBudget();
     this.editingTimelineEntryId.set(entry.id);
     this.timelineEditBody.set((entry.body ?? '').trim());
     this.timelineEditRecordedOn.set(
@@ -912,10 +1130,20 @@ export class PainelObrasComponent implements OnInit {
       this.timelineEditAmountReais.set(
         centsToReaisInput(entry.budget.amountCents),
       );
-      this.timelineEditSupplierName.set(entry.budget.supplierName);
+      this.timelineEditSupplierId.set(entry.budget.supplierId ?? '');
+      this.timelineEditSupplierName.set(
+        entry.budget.supplierId ? '' : entry.budget.supplierName,
+      );
+      this.timelineEditScheduledAt.set(
+        entry.budget.scheduledAt
+          ? dateToDatetimeLocalValue(new Date(entry.budget.scheduledAt))
+          : '',
+      );
     } else {
       this.timelineEditAmountReais.set('');
+      this.timelineEditSupplierId.set('');
       this.timelineEditSupplierName.set('');
+      this.timelineEditScheduledAt.set('');
     }
   }
 
@@ -924,7 +1152,9 @@ export class PainelObrasComponent implements OnInit {
     this.timelineEditBody.set('');
     this.timelineEditRecordedOn.set('');
     this.timelineEditAmountReais.set('');
+    this.timelineEditSupplierId.set('');
     this.timelineEditSupplierName.set('');
+    this.timelineEditScheduledAt.set('');
   }
 
   protected setTimelineEditRecordedOn(value: string): void {
@@ -946,7 +1176,9 @@ export class PainelObrasComponent implements OnInit {
       body?: string | null;
       recordedOn?: string;
       amountCents?: number;
+      supplierId?: string | null;
       supplierName?: string;
+      scheduledAt?: string | null;
     } = {};
 
     const recordedOn = this.timelineEditRecordedOn().trim();
@@ -964,31 +1196,52 @@ export class PainelObrasComponent implements OnInit {
     }
 
     if (entry.kind === 'budget' && entry.budget) {
-      const parsed = parseReaisInputToCents(this.timelineEditAmountReais());
-      if (parsed === null) {
-        this.flash.warning('Informe um valor válido (ex.: 5.420,00).');
+      const b = entry.budget;
+      const supplierId = this.timelineEditSupplierId().trim();
+      const supplierName = this.timelineEditSupplierName().trim();
+      if (!supplierId && !supplierName) {
+        this.flash.warning('Selecione um fornecedor cadastrado ou informe o nome.');
         return;
       }
-      const supplier = this.timelineEditSupplierName().trim();
-      if (!supplier) {
-        this.flash.warning('Informe o fornecedor.');
-        return;
+
+      const prevSupplierId = (b.supplierId ?? '').trim();
+      if (supplierId) {
+        if (supplierId !== prevSupplierId) {
+          payload.supplierId = supplierId;
+        }
+      } else if (supplierName !== b.supplierName.trim()) {
+        payload.supplierId = null;
+        payload.supplierName = supplierName;
       }
-      const prevCents = Number(entry.budget.amountCents);
-      const prevSupplier = entry.budget.supplierName.trim();
-      if (parsed === prevCents && supplier === prevSupplier && !payload.recordedOn) {
-        this.cancelEditTimelineEntry();
-        return;
+
+      const scheduledAt = this.timelineEditScheduledAt().trim();
+      const prevScheduled = b.scheduledAt
+        ? dateToDatetimeLocalValue(new Date(b.scheduledAt))
+        : '';
+      if (scheduledAt !== prevScheduled) {
+        payload.scheduledAt = scheduledAt || null;
       }
-      payload.amountCents = parsed;
-      payload.supplierName = supplier;
+
+      if (b.status !== 'awaiting_budget') {
+        const parsed = parseReaisInputToCents(this.timelineEditAmountReais());
+        if (parsed === null) {
+          this.flash.warning('Informe um valor válido (ex.: 5.420,00).');
+          return;
+        }
+        const prevCents = Number(b.amountCents);
+        if (parsed !== prevCents) {
+          payload.amountCents = parsed;
+        }
+      }
     }
 
     if (
       payload.recordedOn === undefined &&
       payload.body === undefined &&
       payload.amountCents === undefined &&
-      payload.supplierName === undefined
+      payload.supplierId === undefined &&
+      payload.supplierName === undefined &&
+      payload.scheduledAt === undefined
     ) {
       this.cancelEditTimelineEntry();
       return;
@@ -1002,6 +1255,9 @@ export class PainelObrasComponent implements OnInit {
           this.busy.set(false);
           this.flash.success('Registro atualizado.');
           this.cancelEditTimelineEntry();
+          if (entry.kind === 'budget') {
+            this.loadSuppliers();
+          }
           this.loadDetail(w.id);
         },
         error: (err: HttpErrorResponse) => {
@@ -1231,22 +1487,56 @@ export class PainelObrasComponent implements OnInit {
     const w = this.selected();
     if (!w || this.budgetForm.invalid || this.busy()) return;
     const v = this.budgetForm.getRawValue();
-    const parsed = parseReaisInputToCents(v.amountReais);
-    if (parsed === null) {
-      this.flash.warning('Informe um valor válido.');
+    const supplierId = v.supplierId.trim();
+    const supplierName = v.supplierName.trim();
+    if (!supplierId && !supplierName) {
+      this.flash.warning('Selecione um fornecedor cadastrado ou informe o nome.');
       return;
     }
+
+    const scheduleMode = v.registerMode === 'schedule';
     const files = this.budgetPendingFiles();
+    let amountCents: number | undefined;
+    let status: WorkBudgetStatus;
+    let validUntil: string | undefined;
+
+    if (scheduleMode) {
+      if (files.length > 0) {
+        this.flash.warning(
+          'Anexe o orçamento na linha do tempo depois da visita do fornecedor.',
+        );
+        return;
+      }
+      status = 'awaiting_budget';
+      amountCents = 0;
+      validUntil = undefined;
+    } else {
+      const parsed = parseReaisInputToCents(v.amountReais);
+      if (parsed === null || parsed <= 0) {
+        this.flash.warning('Informe o valor do orçamento recebido.');
+        return;
+      }
+      if (files.length < 1) {
+        this.flash.warning('Anexe o orçamento (PDF, foto ou planilha).');
+        return;
+      }
+      amountCents = parsed;
+      status = 'under_review';
+      validUntil = v.validUntil.trim() || undefined;
+    }
+
     this.busy.set(true);
     this.api
       .addBudget(
         this.condominiumId,
         w.id,
         {
-          supplierName: v.supplierName.trim(),
-          amountCents: parsed,
-          validUntil: v.validUntil.trim() || undefined,
-          status: v.status,
+          supplierId: supplierId || undefined,
+          supplierName: supplierId ? undefined : supplierName,
+          amountCents,
+          validUntil,
+          scheduledAt: v.scheduledAt.trim() || undefined,
+          status,
           notes: v.notes.trim() || undefined,
           recordedOn: this.recordedOnForApi(),
         },
@@ -1263,13 +1553,17 @@ export class PainelObrasComponent implements OnInit {
           this.resetRecordedOnAfterSubmit();
           this.persistDetailUiDraft();
           this.budgetForm.reset({
+            registerMode: 'schedule',
+            supplierId: '',
             supplierName: '',
             amountReais: '',
             validUntil: '',
-            status: 'received',
+            scheduledAt: '',
+            status: 'awaiting_budget',
             notes: '',
           });
           this.registerExpanded.set(false);
+          this.loadSuppliers();
           this.loadDetail(w.id);
         },
         error: (err: HttpErrorResponse) => {
@@ -1695,6 +1989,7 @@ export class PainelObrasComponent implements OnInit {
     this.detailError.set(null);
     this.api.getOne(this.condominiumId, workId).subscribe({
       next: (detail) => {
+        this.loadSuppliers();
         this.applyWorkDetail(detail);
         this.editForm.patchValue(
           {

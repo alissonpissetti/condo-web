@@ -1,0 +1,482 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Fornecedores</h1>
+  </header>
+
+  @if (loading()) {
+    <p class="muted page__loading">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else {
+    <section class="form-card supplier-form-card">
+      @if (!editingId()) {
+        <button
+          type="button"
+          class="supplier-create-toggle"
+          (click)="toggleForm()"
+          [attr.aria-expanded]="formExpanded()"
+          aria-controls="supplier-create-panel"
+        >
+          <span class="supplier-create-toggle__label">Novo fornecedor</span>
+          <span class="supplier-create-toggle__hint" aria-hidden="true">{{
+            formExpanded() ? 'Recolher' : 'Expandir'
+          }}</span>
+        </button>
+      }
+      @if (formExpanded() || editingId()) {
+        <div id="supplier-create-panel">
+          <div class="form-card__head supplier-form__head">
+            <div class="supplier-form__head-main">
+              <h2 class="form-card__title">
+                {{ editingId() ? 'Editar fornecedor' : 'Cadastrar fornecedor' }}
+              </h2>
+              <p class="form-card__lede supplier-form__lede">
+                Usado em <a [routerLink]="['/painel/condominio', condoId, 'obras']">Obras</a>.
+                Só o nome da empresa é obrigatório.
+              </p>
+            </div>
+            @if (editingId()) {
+              <button
+                type="button"
+                class="btn btn--ghost sm supplier-form__head-close"
+                (click)="cancelEdit()"
+              >
+                Fechar
+              </button>
+            }
+          </div>
+          <form
+            class="fund-form supplier-form"
+            [formGroup]="form"
+            (ngSubmit)="submit()"
+            novalidate
+          >
+            <div class="supplier-form__grid">
+              <label class="field field--block">
+                <span class="field__label"
+                  >Nome da empresa <span class="field__required" aria-hidden="true"
+                    >*</span
+                  ></span
+                >
+                <input
+                  type="text"
+                  class="input supplier-form__control"
+                  formControlName="name"
+                  placeholder="Ex.: Construtora ABC"
+                  autocomplete="organization"
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Nome do contato</span>
+                <input
+                  type="text"
+                  class="input supplier-form__control"
+                  formControlName="contactName"
+                  placeholder="Ex.: João Silva"
+                  autocomplete="name"
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Telefone</span>
+                <input
+                  type="tel"
+                  class="input supplier-form__control"
+                  formControlName="phone"
+                  appBrPhoneMask
+                  placeholder="(11) 98765-4321"
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Chave Pix</span>
+                <input
+                  type="text"
+                  class="input supplier-form__control"
+                  formControlName="pixKey"
+                  placeholder="CPF, CNPJ, e-mail, telefone ou aleatória"
+                  autocomplete="off"
+                />
+              </label>
+              <div class="field field--block supplier-form__category">
+                <div class="supplier-form__category-head">
+                  <span class="field__label">Categoria</span>
+                  <div
+                    class="supplier-form__category-switch"
+                    role="tablist"
+                    aria-label="Modo de categoria"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      class="supplier-form__category-switch-btn"
+                      [class.is-active]="!useNewCategory()"
+                      [attr.aria-selected]="!useNewCategory()"
+                      (click)="setCategoryMode('existing')"
+                    >
+                      Lista
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      class="supplier-form__category-switch-btn"
+                      [class.is-active]="useNewCategory()"
+                      [attr.aria-selected]="useNewCategory()"
+                      (click)="setCategoryMode('new')"
+                    >
+                      Nova
+                    </button>
+                  </div>
+                </div>
+                @if (useNewCategory()) {
+                  <input
+                    type="text"
+                    class="input supplier-form__control"
+                    formControlName="newCategoryName"
+                    placeholder="Nome da nova categoria"
+                    autocomplete="off"
+                  />
+                } @else {
+                  <select class="input supplier-form__control" formControlName="categoryId">
+                    <option value="">Sem categoria</option>
+                    @for (c of sortedCategories(); track c.id) {
+                      <option [value]="c.id">
+                        {{ c.name }}{{ c.isGlobal ? ' (padrão)' : '' }}
+                      </option>
+                    }
+                  </select>
+                }
+                <a class="supplier-form__category-link" href="#categorias"
+                  >Gerenciar categorias</a
+                >
+              </div>
+            </div>
+
+            <div class="supplier-form__footer">
+              <button type="button" class="btn btn--ghost" (click)="cancelEdit()">
+                {{ editingId() ? 'Cancelar edição' : 'Cancelar' }}
+              </button>
+              <button
+                type="submit"
+                class="btn primary"
+                [disabled]="form.invalid || saving()"
+              >
+                {{
+                  saving()
+                    ? 'Salvando…'
+                    : editingId()
+                      ? 'Salvar alterações'
+                      : 'Cadastrar fornecedor'
+                }}
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+    </section>
+
+    <section class="list-section" aria-labelledby="suppliers-list-title">
+      <h2 id="suppliers-list-title" class="list-section__title">Cadastrados</h2>
+      <p class="list-section__lede">
+        @if (hasSupplierFilters()) {
+          {{ filteredSuppliers().length }} de {{ suppliers().length }} fornecedor{{
+            suppliers().length === 1 ? '' : 'es'
+          }}
+          na lista filtrada.
+        } @else {
+          {{ suppliers().length }} fornecedor{{ suppliers().length === 1 ? '' : 'es' }}.
+        }
+        Use em
+        <a [routerLink]="['/painel/condominio', condoId, 'obras']">Obras</a>
+        ao registrar orçamentos.
+      </p>
+
+      @if (suppliers().length === 0) {
+        <p class="empty empty--card">Nenhum fornecedor cadastrado.</p>
+      } @else {
+        <section class="supplier-filters" role="search" aria-label="Filtrar fornecedores">
+          <div class="supplier-filters__row">
+            <label class="supplier-filters__search">
+              <span class="sr-only">Buscar por nome ou telefone</span>
+              <input
+                type="search"
+                class="input supplier-filters__input"
+                [value]="supplierSearchTerm()"
+                (input)="setSupplierSearchTerm($any($event.target).value)"
+                placeholder="Empresa, contato ou telefone…"
+                autocomplete="off"
+              />
+            </label>
+            <details class="supplier-filters__dropdown">
+              <summary class="supplier-filters__trigger">
+                Categorias
+                @if (supplierCategoryFilterIds().size > 0) {
+                  <span class="supplier-filters__badge">{{
+                    supplierCategoryFilterIds().size
+                  }}</span>
+                }
+              </summary>
+              <div
+                class="supplier-filters__panel"
+                role="group"
+                aria-label="Filtrar por categoria"
+              >
+                <label class="supplier-filters__option">
+                  <input
+                    type="checkbox"
+                    [checked]="isSupplierCategoryFilterActive(noCategoryFilterId)"
+                    (change)="toggleSupplierCategoryFilter(noCategoryFilterId)"
+                  />
+                  <span>Sem categoria</span>
+                </label>
+                @for (c of sortedCategories(); track c.id) {
+                  <label class="supplier-filters__option">
+                    <input
+                      type="checkbox"
+                      [checked]="isSupplierCategoryFilterActive(c.id)"
+                      (change)="toggleSupplierCategoryFilter(c.id)"
+                    />
+                    <span>{{ c.name }}</span>
+                    @if (c.isGlobal) {
+                      <span class="supplier-filters__option-tag">Padrão</span>
+                    }
+                  </label>
+                }
+              </div>
+            </details>
+            @if (hasSupplierFilters()) {
+              <button
+                type="button"
+                class="btn btn--ghost sm supplier-filters__clear"
+                (click)="clearSupplierFilters()"
+              >
+                Limpar
+              </button>
+            }
+          </div>
+        </section>
+
+        @if (filteredSuppliers().length === 0) {
+          <p class="empty empty--card">
+            Nenhum fornecedor corresponde aos filtros aplicados.
+          </p>
+        } @else {
+        <div class="supplier-table-wrap">
+          <table class="supplier-table">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Contato</th>
+                <th>Categoria</th>
+                <th>Telefone</th>
+                <th>Pix</th>
+                <th class="supplier-table__th-actions">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of filteredSuppliers(); track s.id) {
+                <tr [class.supplier-table__row--editing]="editingId() === s.id">
+                  <td data-label="Empresa">{{ s.name }}</td>
+                  <td data-label="Contato">{{ s.contactName || '—' }}</td>
+                  <td data-label="Categoria">
+                    @if (s.categoryName) {
+                      <span
+                        class="category-pill"
+                        [class.category-pill--global]="s.categoryIsGlobal"
+                      >
+                        {{ s.categoryName }}
+                      </span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td data-label="Telefone">
+                    @if (hasSupplierPhone(s.phone)) {
+                      <span class="phone-cell">
+                        <span class="phone-cell__number">{{
+                          displaySupplierPhone(s.phone)
+                        }}</span>
+                        @if (supplierWhatsAppUrl(s); as waUrl) {
+                          <a
+                            class="whatsapp-link"
+                            [href]="waUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            [attr.aria-label]="
+                              'Abrir WhatsApp com ' + s.name
+                            "
+                            [title]="'Conversar no WhatsApp com ' + s.name"
+                          >
+                            <svg
+                              class="whatsapp-link__icon"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fill="currentColor"
+                                d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
+                              />
+                            </svg>
+                          </a>
+                        }
+                      </span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td data-label="Pix">{{ s.pixKey || '—' }}</td>
+                  <td class="supplier-table__actions" data-label="Ações">
+                    <button
+                      type="button"
+                      class="btn btn--ghost sm"
+                      (click)="startEdit(s)"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      class="btn danger sm"
+                      (click)="remove(s)"
+                    >
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        }
+      }
+    </section>
+
+    <section
+      id="categorias"
+      class="list-section list-section--categories"
+      aria-labelledby="categories-list-title"
+    >
+      <h2 id="categories-list-title" class="list-section__title">Categorias</h2>
+      <p class="list-section__lede">
+        Categorias <strong>padrão</strong> valem para todos os condomínios. Você também
+        pode criar categorias exclusivas deste condomínio — no cadastro do fornecedor ou
+        abaixo.
+      </p>
+
+      <section class="form-card category-form-card">
+        @if (!editingCategoryId()) {
+          <button
+            type="button"
+            class="supplier-create-toggle"
+            (click)="toggleCategoryForm()"
+            [attr.aria-expanded]="categoryFormExpanded()"
+            aria-controls="category-create-panel"
+          >
+            <span class="supplier-create-toggle__label">Nova categoria do condomínio</span>
+            <span class="supplier-create-toggle__hint" aria-hidden="true">{{
+              categoryFormExpanded() ? 'Recolher' : 'Expandir'
+            }}</span>
+          </button>
+        }
+        @if (categoryFormExpanded() || editingCategoryId()) {
+          <div id="category-create-panel">
+            <div class="form-card__head">
+              <h3 class="form-card__title">
+                {{
+                  editingCategoryId()
+                    ? 'Editar categoria'
+                    : 'Cadastrar categoria do condomínio'
+                }}
+              </h3>
+            </div>
+            <form
+              class="fund-form"
+              [formGroup]="categoryForm"
+              (ngSubmit)="submitCategory()"
+              novalidate
+            >
+              <div class="form-section">
+                <label class="field field--block">
+                  <span class="field__label">Nome</span>
+                  <input
+                    type="text"
+                    class="input input--lg"
+                    formControlName="name"
+                    placeholder="Ex.: Impermeabilização"
+                    autocomplete="off"
+                  />
+                </label>
+              </div>
+              <div class="form-footer form-footer--split">
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  (click)="cancelCategoryEdit()"
+                >
+                  {{ editingCategoryId() ? 'Cancelar edição' : 'Cancelar' }}
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn--submit"
+                  [disabled]="categoryForm.invalid || categorySaving()"
+                >
+                  {{
+                    categorySaving()
+                      ? 'Salvando…'
+                      : editingCategoryId()
+                        ? 'Salvar categoria'
+                        : 'Cadastrar categoria'
+                  }}
+                </button>
+              </div>
+            </form>
+          </div>
+        }
+      </section>
+
+      <div class="supplier-table-wrap">
+        <table class="supplier-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Escopo</th>
+              <th class="supplier-table__th-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of sortedCategories(); track c.id) {
+              <tr [class.supplier-table__row--editing]="editingCategoryId() === c.id">
+                <td data-label="Nome">{{ c.name }}</td>
+                <td data-label="Escopo">
+                  <span
+                    class="category-pill"
+                    [class.category-pill--global]="c.isGlobal"
+                  >
+                    {{ categoryScopeLabel(c) }}
+                  </span>
+                </td>
+                <td class="supplier-table__actions" data-label="Ações">
+                  @if (!c.isGlobal) {
+                    <button
+                      type="button"
+                      class="btn btn--ghost sm"
+                      (click)="startCategoryEdit(c)"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      class="btn danger sm"
+                      (click)="removeCategory(c)"
+                    >
+                      Excluir
+                    </button>
+                  } @else {
+                    <span class="muted category-table__locked">Somente leitura</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

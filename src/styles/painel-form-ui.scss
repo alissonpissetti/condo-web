@@ -26,12 +26,18 @@ $form-card-gap-after-head: 1rem;
 .form-card__head {
   padding: 0.75rem $form-card-pad-inline 0.85rem;
   margin: 0 0 $form-card-gap-after-head;
-  background: linear-gradient(
-    180deg,
-    var(--ma-primary-soft) 0%,
-    var(--surface) 100%
-  );
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+/* Painel expandido abaixo de «Novo …»: mesmo fundo do card, sem faixa colorida */
+.form-card
+  > :is([class*='-create-toggle'], .plan-create-toggle)
+  + :is([id], [class])
+  > .form-card__head:first-child {
+  margin-bottom: 0.35rem;
+  padding-top: 0.85rem;
+  border-bottom: none;
 }
 
 /* Corpo padrão e blocos logo abaixo do cabeçalho (filtros, listas, extrato, etc.) */
@@ -128,6 +134,14 @@ $form-card-gap-after-head: 1rem;
 
 .mode-tabs--3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mode-tabs--4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .mode-tabs--sub {

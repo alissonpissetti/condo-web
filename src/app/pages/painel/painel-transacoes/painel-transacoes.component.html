@@ -216,12 +216,13 @@
             <div>
               <h3 class="form-section__title">Tipo</h3>
               <p class="form-section__hint">
-                Despesa e investimento repartem entre unidades; receita pode não repartir.
+                Despesa e investimento repartem entre unidades; receita pode não repartir;
+                rendimento só altera o saldo da conta bancária.
               </p>
             </div>
           </div>
           <div
-            class="mode-tabs mode-tabs--3"
+            class="mode-tabs mode-tabs--4"
             role="tablist"
             aria-label="Tipo de transação"
           >
@@ -258,9 +259,21 @@
               <span class="mode-tab__name">Investimento</span>
               <span class="mode-tab__desc">Capital aplicado</span>
             </button>
+            <button
+              type="button"
+              class="mode-tab"
+              role="tab"
+              [attr.aria-selected]="txKind() === 'yield'"
+              [class.mode-tab--active]="txKind() === 'yield'"
+              (click)="onTxKindChange('yield')"
+            >
+              <span class="mode-tab__name">Rendimento</span>
+              <span class="mode-tab__desc">Retorno de aplicação</span>
+            </button>
           </div>
         </div>
 
+        @if (txKind() !== 'yield') {
         <div class="form-section form-section--alloc">
           <div class="form-section__head">
             <span class="form-section__step" aria-hidden="true">3</span>
@@ -360,10 +373,13 @@
             </div>
           }
         </div>
+        }
 
         <div class="form-section">
           <div class="form-section__head">
-            <span class="form-section__step" aria-hidden="true">4</span>
+            <span class="form-section__step" aria-hidden="true">{{
+              txKind() === 'yield' ? 3 : 4
+            }}</span>
             <div>
               <h3 class="form-section__title">Valores e competência</h3>
               <p class="form-section__hint">
@@ -566,19 +582,21 @@
                 (input)="occurredOn.set($any($event.target).value)"
               />
             </label>
-            <label class="field field--block">
-              <span class="field__label">Fundo (opcional)</span>
-              <select
-                class="input input--lg"
-                [value]="fundIdForm()"
-                (change)="fundIdForm.set($any($event.target).value)"
-              >
-                <option value="">—</option>
-                @for (f of funds(); track f.id) {
-                  <option [value]="f.id">{{ f.name }}</option>
-                }
-              </select>
-            </label>
+            @if (txKind() !== 'yield') {
+              <label class="field field--block">
+                <span class="field__label">Fundo (opcional)</span>
+                <select
+                  class="input input--lg"
+                  [value]="fundIdForm()"
+                  (change)="fundIdForm.set($any($event.target).value)"
+                >
+                  <option value="">—</option>
+                  @for (f of funds(); track f.id) {
+                    <option [value]="f.id">{{ f.name }}</option>
+                  }
+                </select>
+              </label>
+            }
             <label class="field field--block">
               <span class="field__label">Conta bancária</span>
               <select
@@ -595,23 +613,28 @@
                 }
               </select>
             </label>
-            <label class="field field--block">
-              <span class="field__label">Obra (opcional)</span>
-              <select
-                class="input input--lg"
-                [value]="workIdForm()"
-                (change)="workIdForm.set($any($event.target).value)"
-                [disabled]="entryMode() === 'transfer'"
-              >
-                <option value="">— Nenhuma —</option>
-                @for (w of works(); track w.id) {
-                  <option [value]="w.id">{{ w.title }}</option>
-                }
-              </select>
-              <span class="muted small form-section__inline-hint">
-                O lançamento aparece na linha do tempo da obra.
-              </span>
-            </label>
+            @if (txKind() === 'yield' && fundLaunchHint()) {
+              <p class="form-section__inline-hint">{{ fundLaunchHint() }}</p>
+            }
+            @if (txKind() !== 'yield') {
+              <label class="field field--block">
+                <span class="field__label">Obra (opcional)</span>
+                <select
+                  class="input input--lg"
+                  [value]="workIdForm()"
+                  (change)="workIdForm.set($any($event.target).value)"
+                  [disabled]="entryMode() === 'transfer'"
+                >
+                  <option value="">— Nenhuma —</option>
+                  @for (w of works(); track w.id) {
+                    <option [value]="w.id">{{ w.title }}</option>
+                  }
+                </select>
+                <span class="muted small form-section__inline-hint">
+                  O lançamento aparece na linha do tempo da obra.
+                </span>
+              </label>
+            }
           </div>
 
           @if (
@@ -1202,7 +1225,7 @@
               <td
                 data-label="Valor"
                 class="num"
-                [class]="extratoDeltaCssClass(signedDeltaForTransaction(t))"
+                [class]="transactionAmountCssClass(t)"
               >
                 {{ formatTransactionAmount(t) }}
               </td>

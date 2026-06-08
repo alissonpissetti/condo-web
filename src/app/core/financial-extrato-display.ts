@@ -6,7 +6,7 @@ export function signedDeltaCentsForKind(
   amountCents: string | number | bigint,
 ): bigint {
   const amount = BigInt(String(amountCents));
-  if (kind === 'income') {
+  if (kind === 'income' || kind === 'yield') {
     return amount;
   }
   if (kind === 'expense' || kind === 'investment') {
@@ -31,6 +31,27 @@ export function extratoDeltaCssClass(cents: bigint): string {
   return 'fund-extrato-table__amt--zero';
 }
 
+/** Cor do valor na lista/extrato; rendimento usa azul (badge igual ao investimento). */
+export function movementAmountCssClass(
+  kind: string,
+  signedDeltaCents: string | number | bigint,
+): string {
+  if (kind === 'yield') {
+    return 'fund-extrato-table__amt--yield';
+  }
+  const cents =
+    typeof signedDeltaCents === 'bigint'
+      ? signedDeltaCents
+      : parseCentsBigint(signedDeltaCents);
+  return extratoDeltaCssClass(cents);
+}
+
+export function transactionAmountCssClass(
+  t: Pick<FinancialTransaction, 'kind' | 'amountCents'>,
+): string {
+  return movementAmountCssClass(t.kind, signedDeltaForTransaction(t));
+}
+
 export function extratoBalanceCssClass(cents: bigint): string {
   if (cents < 0n) {
     return 'fund-extrato-table__balance--neg';
@@ -42,9 +63,15 @@ export function extratoBalanceCssClass(cents: bigint): string {
 }
 
 export function parseCentsBigint(
-  cents: string | number | null | undefined,
+  cents: string | number | bigint | null | undefined,
 ): bigint {
-  if (cents == null || cents === '') {
+  if (cents == null) {
+    return 0n;
+  }
+  if (typeof cents === 'bigint') {
+    return cents;
+  }
+  if (cents === '') {
     return 0n;
   }
   try {
@@ -62,6 +89,8 @@ export function transactionKindLabelPt(kind: string): string {
       return 'Despesa';
     case 'investment':
       return 'Aplicação';
+    case 'yield':
+      return 'Rendimento';
     default:
       return kind;
   }

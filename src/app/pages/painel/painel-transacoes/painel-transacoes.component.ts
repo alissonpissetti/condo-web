@@ -41,9 +41,9 @@ import {
 } from '../../../core/date-display';
 import {
   extratoBalanceCssClass,
-  extratoDeltaCssClass,
   parseCentsBigint,
   signedDeltaForTransaction,
+  transactionAmountCssClass,
 } from '../../../core/financial-extrato-display';
 import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
 import { BankBrandMarkComponent } from '../../../core/bank-brand-mark.component';
@@ -58,7 +58,7 @@ import {
   type TxCreateDraftAllocKind,
 } from '../../../core/tx-form-draft.util';
 
-type TxKind = 'expense' | 'income' | 'investment';
+type TxKind = 'expense' | 'income' | 'investment' | 'yield';
 
 type AllocKind =
   | 'all_units_equal'
@@ -83,10 +83,10 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
   protected readonly transactionKindLabelPt = transactionKindLabelPt;
-  protected readonly extratoDeltaCssClass = extratoDeltaCssClass;
   protected readonly extratoBalanceCssClass = extratoBalanceCssClass;
   protected readonly parseCentsBigint = parseCentsBigint;
   protected readonly signedDeltaForTransaction = signedDeltaForTransaction;
+  protected readonly transactionAmountCssClass = transactionAmountCssClass;
 
   protected readonly transactions = signal<FinancialTransaction[]>([]);
   protected readonly works = signal<WorkListItem[]>([]);
@@ -146,6 +146,12 @@ export class PainelTransacoesComponent implements OnInit {
       return (
         'Com fundo + Despesa/Aplicação: o saldo do fundo desce. Não entra na taxa condominial. ' +
         'Se o valor deveria aumentar o fundo, troque o tipo para Receita.'
+      );
+    }
+    if (k === 'yield') {
+      return (
+        'Rendimento aumenta apenas o saldo da conta bancária selecionada. ' +
+        'Não altera fundos, taxa condominial nem rateio entre unidades.'
       );
     }
     return null;
@@ -1097,6 +1103,12 @@ export class PainelTransacoesComponent implements OnInit {
   onTxKindChange(v: string): void {
     const k = v as TxKind;
     this.txKind.set(k);
+    if (k === 'yield') {
+      this.allocKind.set('none');
+      this.fundIdForm.set('');
+      this.workIdForm.set('');
+      return;
+    }
     if (
       (k === 'expense' || k === 'investment') &&
       this.allocKind() === 'none'
@@ -1333,23 +1345,32 @@ export class PainelTransacoesComponent implements OnInit {
     );
     this.titleTx.set(t.title);
     this.descriptionTx.set(t.description ?? '');
-    this.fundIdForm.set(t.fundId ?? '');
-    this.workIdForm.set(t.workId ?? '');
     this.bankAccountIdForm.set(
       t.bankAccountId ?? t.bankAccount?.id ?? this.primaryBankAccountId() ?? '',
     );
-    const r = t.allocationRule;
-    if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
-    else if (r.kind === 'none') this.allocKind.set('none');
-    else if (r.kind === 'unit_ids') {
-      this.allocKind.set('unit_ids');
-      this.selectedUnitIds.set([...r.unitIds].sort());
-    } else if (r.kind === 'grouping_ids') {
-      this.allocKind.set('grouping_ids');
-      this.selectedGroupingIds.set([...r.groupingIds].sort());
-    } else if (r.kind === 'all_units_except') {
-      this.allocKind.set('all_units_except');
-      this.excludeUnitIds.set([...r.excludeUnitIds].sort());
+    if (t.kind === 'yield') {
+      this.allocKind.set('none');
+      this.fundIdForm.set('');
+      this.workIdForm.set('');
+      this.selectedUnitIds.set([]);
+      this.selectedGroupingIds.set([]);
+      this.excludeUnitIds.set([]);
+    } else {
+      this.fundIdForm.set(t.fundId ?? '');
+      this.workIdForm.set(t.workId ?? '');
+      const r = t.allocationRule;
+      if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
+      else if (r.kind === 'none') this.allocKind.set('none');
+      else if (r.kind === 'unit_ids') {
+        this.allocKind.set('unit_ids');
+        this.selectedUnitIds.set([...r.unitIds].sort());
+      } else if (r.kind === 'grouping_ids') {
+        this.allocKind.set('grouping_ids');
+        this.selectedGroupingIds.set([...r.groupingIds].sort());
+      } else if (r.kind === 'all_units_except') {
+        this.allocKind.set('all_units_except');
+        this.excludeUnitIds.set([...r.excludeUnitIds].sort());
+      }
     }
     this.pendingDocumentFiles.set([]);
     this.editingDocumentKeys.set(this.documentKeysFromTx(t));
@@ -1572,13 +1593,17 @@ export class PainelTransacoesComponent implements OnInit {
       return;
     }
     let rule: AllocationRule;
-    try {
-      rule = this.buildRule();
-    } catch (e) {
-      this.flash.warning(
-        e instanceof Error ? e.message : 'Regra de rateio inválida.',
-      );
-      return;
+    if (this.txKind() === 'yield') {
+      rule = { kind: 'none' };
+    } else {
+      try {
+        rule = this.buildRule();
+      } catch (e) {
+        this.flash.warning(
+          e instanceof Error ? e.message : 'Regra de rateio inválida.',
+        );
+        return;
+      }
     }
     if (
       (this.txKind() === 'expense' || this.txKind() === 'investment') &&
@@ -1673,13 +1698,14 @@ export class PainelTransacoesComponent implements OnInit {
             ];
             const receiptKey = uploads.receiptUpload?.receiptStorageKey;
           if (editSeriesId) {
+            const isYield = this.txKind() === 'yield';
             const patch: Parameters<
               FinancialApiService['updateRecurringSeries']
             >[2] = {
               kind: this.txKind(),
               titleBase: title,
               description: this.descriptionTx().trim() || null,
-              fundId: this.fundIdForm() || null,
+              fundId: isYield ? null : this.fundIdForm() || null,
               bankAccountId,
               allocationRule: rule,
             };
@@ -1701,20 +1727,21 @@ export class PainelTransacoesComponent implements OnInit {
           }
           if (editId) {
             const ar = this.amountReais();
+            const isYield = this.txKind() === 'yield';
             const baseBody = {
               kind: this.txKind(),
               amountCents: reaisToCents(ar),
               occurredOn: this.occurredOn(),
               title,
               description: this.descriptionTx().trim() || null,
-              fundId: this.fundIdForm() || null,
+              fundId: isYield ? null : this.fundIdForm() || null,
               bankAccountId,
               allocationRule: rule,
             };
             const patch: Parameters<
               FinancialApiService['updateTransaction']
             >[2] = { ...baseBody };
-            patch.workId = this.resolveWorkIdForPayload();
+            patch.workId = isYield ? null : this.resolveWorkIdForPayload();
             patch.documentStorageKeys = finalDocumentKeys;
             if (receiptKey) {
               patch.receiptStorageKey = receiptKey;
@@ -1740,6 +1767,7 @@ export class PainelTransacoesComponent implements OnInit {
             );
           }
           const ar = this.amountReais();
+          const isYield = this.txKind() === 'yield';
           const createBody: Parameters<
             FinancialApiService['createTransaction']
           >[1] = {
@@ -1748,10 +1776,10 @@ export class PainelTransacoesComponent implements OnInit {
             occurredOn: this.occurredOn(),
             title,
             description: this.descriptionTx().trim() || null,
-            fundId: this.fundIdForm() || null,
+            fundId: isYield ? null : this.fundIdForm() || null,
             bankAccountId,
             allocationRule: rule,
-            workId: this.resolveWorkIdForPayload(),
+            workId: isYield ? null : this.resolveWorkIdForPayload(),
           };
           if (finalDocumentKeys.length > 0) {
             createBody.documentStorageKeys = finalDocumentKeys;
@@ -1879,8 +1907,9 @@ export class PainelTransacoesComponent implements OnInit {
     const n = Math.floor(this.recurringCount());
     const start = this.occurredOn();
     const desc = this.descriptionTx().trim() || null;
-    const fundId = this.fundIdForm() || null;
-    const workId = this.resolveWorkIdForPayload();
+    const isYield = this.txKind() === 'yield';
+    const fundId = isYield ? null : this.fundIdForm() || null;
+    const workId = isYield ? null : this.resolveWorkIdForPayload();
     const bankAccountId = this.bankAccountIdForm().trim();
     const kind = this.txKind();
 
