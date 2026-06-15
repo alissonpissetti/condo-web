@@ -677,6 +677,15 @@
                     <button
                       type="button"
                       class="btn ghost sm"
+                      [disabled]="busy() || meetingMinutesAiLoading()"
+                      (click)="generateMeetingMinutesWithAi(p)"
+                      title="Gera ou regera a ata com IA usando pauta, anotações e votos."
+                    >
+                      Gerar / regerar ata com IA
+                    </button>
+                    <button
+                      type="button"
+                      class="btn ghost sm"
                       [disabled]="busy()"
                       (click)="startEditBody()"
                     >
@@ -1570,44 +1579,83 @@
                 >
                   <div
                     class="plan-meeting-ai"
-                    [class.plan-meeting-ai--busy]="meetingMinutesAiLoading()"
+                    [class.plan-meeting-ai--busy]="meetingMinutesAiLoading() || meetingNotesSaving()"
                   >
                     @if (meetingMinutesAiLoading()) {
                       <p class="plan-meeting-ai__busy muted" aria-live="polite">
-                        Formatando ata e, se houver, registando votos…
+                        Gerando ata com IA a partir de todas as anotações e do contexto da pauta…
+                      </p>
+                    } @else if (meetingNotesSaving()) {
+                      <p class="plan-meeting-ai__busy muted" aria-live="polite">
+                        Salvando anotação…
                       </p>
                     }
                     <label class="field field--block">
-                      <span class="field__label">Assistente de ata (IA)</span>
+                      <span class="field__label">Anotações da reunião</span>
                       <textarea
                         class="input plan-meeting-ai__input"
                         rows="4"
-                        placeholder="Digite anotações ou votos e clique em «Incorporar agora» para processar."
+                        placeholder="Registre ocorrências, deliberações e observações. Clique em «Salvar anotação» — a ata final será gerada depois com IA."
                         [formControl]="meetingNotesControl"
-                        [disabled]="meetingMinutesAiLoading() || busy()"
+                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
                       ></textarea>
                     </label>
                     <div class="plan-meeting-ai__actions">
                       <button
                         type="button"
                         class="btn secondary sm"
-                        [disabled]="meetingMinutesAiLoading() || busy()"
-                        (click)="incorporateMeetingNote(p)"
+                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+                        (click)="saveMeetingAnnotation(p)"
                       >
-                        Incorporar agora
+                        Salvar anotação
                       </button>
-                      @if (lastMeetingAiMergeAt() !== null) {
+                      <button
+                        type="button"
+                        class="btn primary sm"
+                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+                        (click)="generateMeetingMinutesWithAi(p)"
+                      >
+                        Gerar / regerar ata com IA
+                      </button>
+                      @if (lastMeetingMinutesGeneratedAt() !== null) {
                         <span class="plan-meeting-ai__merged muted">
-                          Última incorporação: {{ meetingAiMergeTimeLabel() }}
+                          Última geração: {{ meetingMinutesGeneratedTimeLabel() }}
                         </span>
                       }
                     </div>
+                    @if (meetingNotes().length > 0) {
+                      <details class="plan-meeting-ai__history" open>
+                        <summary class="plan-meeting-ai__history-summary">
+                          Anotações salvas ({{ meetingNotes().length }})
+                        </summary>
+                        <ul class="plan-meeting-ai__history-list" role="list">
+                          @for (entry of meetingNotes(); track entry.id) {
+                            <li class="plan-meeting-ai__history-item">
+                              <div class="plan-meeting-ai__history-meta">
+                                <time [attr.datetime]="entry.createdAt">
+                                  {{ meetingNoteTimeLabel(entry.createdAt) }}
+                                </time>
+                              </div>
+                              <p class="plan-meeting-ai__history-text">{{ entry.text }}</p>
+                              <button
+                                type="button"
+                                class="btn ghost sm plan-meeting-ai__history-reuse"
+                                [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+                                (click)="reuseMeetingPrompt(entry.text)"
+                              >
+                                Reutilizar no assistente
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      </details>
+                    }
                   </div>
 
                   <h3 class="plan-meeting-fs__section-title">Ata final (rascunho)</h3>
                   <p class="form-section__hint muted plan-hint-tight">
-                    A IA e as edições aqui alteram só o rascunho da ata; a pauta original permanece
-                    intacta.
+                    Use «Gerar ata com IA» para montar o texto a partir das anotações, pauta e votos.
+                    Edições manuais alteram só o rascunho; a pauta original permanece intacta.
                   </p>
                   <app-poll-body-editor formControlName="minutesBody"></app-poll-body-editor>
                   <div class="plan-body-edit__actions">

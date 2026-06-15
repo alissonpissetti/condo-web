@@ -21,6 +21,12 @@ import { controlErrorMessagesPt } from '../../core/form-errors-pt';
 
 type LoginMode = 'email' | 'whatsapp';
 
+export type LoginNotice = {
+  kind: 'info' | 'warning';
+  title: string;
+  message: string;
+};
+
 @Component({
   selector: 'app-login',
   imports: [ReactiveFormsModule, RouterLink, BrPhoneMaskDirective, NgTemplateOutlet],
@@ -33,6 +39,8 @@ type LoginMode = 'email' | 'whatsapp';
 export class LoginComponent {
   /** Quando true, mostra só o cartão (ex.: modal na página inicial). */
   readonly embedded = input(false, { transform: booleanAttribute });
+  /** Aviso contextual (ex.: sessão expirada no modal da home). */
+  readonly notice = input<LoginNotice | null>(null);
   /** Destino pós-login vindo do componente pai (ex.: query `returnUrl` na home). */
   readonly returnAfterLogin = input<string | null>(null);
   readonly closed = output<void>();

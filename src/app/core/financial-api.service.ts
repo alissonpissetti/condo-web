@@ -97,11 +97,95 @@ export interface StatementTransactionRow {
   paymentStatus?: FinancialTransactionPaymentStatus;
 }
 
+export type StatementMovementLineType =
+  | 'fee_payment'
+  | 'fee_overdue'
+  | 'bank_transfer'
+  | string;
+
+export interface StatementMovementRow {
+  id: string;
+  kind: string;
+  title: string;
+  occurredOn: string;
+  paymentStatus: string;
+  signedDeltaCents: string;
+  runningAfterCents: string;
+  lineType?: StatementMovementLineType;
+  competenceYm?: string;
+  unitIdentifier?: string;
+  affectsBalance?: boolean;
+}
+
+export interface StatementOverdueFeeRow {
+  id: string;
+  competenceYm: string;
+  amountDueCents: string;
+  dueOn: string;
+  unitIdentifier: string;
+  groupingName: string;
+}
+
+export interface StatementLedgerSection {
+  fundId: string | null;
+  fundName: string | null;
+  openingBalanceCents: string;
+  closingBalanceCents: string;
+  movements: StatementMovementRow[];
+  overdueFees?: StatementOverdueFeeRow[];
+  overdueFeesTotalCents?: string;
+  projectedBalanceCents?: string | null;
+  bankAccountsSeedCents?: string | null;
+  bankAccountsAsOfYmd?: string | null;
+  openingDerivedFromCurrentBalance?: boolean;
+  movementsOpeningBalanceCents?: string | null;
+}
+
 export interface FinancialStatement {
   from: string;
   to: string;
   byUnit: StatementByUnitRow[];
   transactions: StatementTransactionRow[];
+  general?: StatementLedgerSection;
+  funds?: StatementLedgerSection[];
+}
+
+export interface CondominiumBankAccount {
+  id: string;
+  condominiumId: string;
+  name: string;
+  bankName: string | null;
+  initialBalanceCents: string;
+  initialBalanceOn: string;
+  isActive: boolean;
+  currentBalanceCents?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BankAccountBalancePreview {
+  projectedBalanceCents: string;
+  asOf: string;
+  initialBalanceOn: string;
+  initialBalanceCents: string;
+  transactionCount: number;
+  movementsDeltaCents: string;
+}
+
+export type CondominiumFeeSlipDeliveryAction =
+  | 'pdf_transparency'
+  | 'pdf_unit_slip'
+  | 'whatsapp_sent'
+  | 'whatsapp_skipped'
+  | 'whatsapp_failed';
+
+export interface CondominiumFeeSlipDeliveryLogRow {
+  id: string;
+  action: CondominiumFeeSlipDeliveryAction;
+  createdAt: string;
+  unitIdentifier?: string | null;
+  detail?: Record<string, unknown> | null;
+  actorLabel: string;
 }
 
 export interface CondominiumFeeCharge {
@@ -423,11 +507,13 @@ export class FinancialApiService {
     options?: {
       incomeTransactionId?: string | null;
       paymentReceiptStorageKey?: string | null;
+      bankAccountId?: string | null;
     },
   ): Observable<CondominiumFeeCharge> {
     const body: {
       incomeTransactionId?: string;
       paymentReceiptStorageKey?: string;
+      bankAccountId?: string;
     } = {};
     const tx = options?.incomeTransactionId?.trim();
     if (tx) {
@@ -436,6 +522,10 @@ export class FinancialApiService {
     const receipt = options?.paymentReceiptStorageKey?.trim();
     if (receipt) {
       body.paymentReceiptStorageKey = receipt;
+    }
+    const bankAccountId = options?.bankAccountId?.trim();
+    if (bankAccountId) {
+      body.bankAccountId = bankAccountId;
     }
     return this.http.post<CondominiumFeeCharge>(
       `${this.base(condoId)}/condominium-fees/${chargeId}/settle`,
@@ -505,6 +595,75 @@ export class FinancialApiService {
   ): Observable<SendFeeSlipsWhatsappResult> {
     return this.http.post<SendFeeSlipsWhatsappResult>(
       `${this.base(condoId)}/condominium-fees/send-slips-whatsapp`,
+      body,
+    );
+  }
+
+  listCondominiumFeeSlipDeliveryLog(
+    condoId: string,
+    competenceYm: string,
+  ): Observable<CondominiumFeeSlipDeliveryLogRow[]> {
+    const params = new HttpParams().set('competenceYm', competenceYm);
+    return this.http.get<CondominiumFeeSlipDeliveryLogRow[]>(
+      `${this.base(condoId)}/condominium-fees/slip-delivery-log`,
+      { params },
+    );
+  }
+
+  listBankAccounts(condoId: string): Observable<CondominiumBankAccount[]> {
+    return this.http.get<CondominiumBankAccount[]>(
+      `${this.base(condoId)}/bank-accounts`,
+    );
+  }
+
+  createBankAccount(
+    condoId: string,
+    body: {
+      name: string;
+      bankName?: string;
+      initialBalanceCents: number;
+      initialBalanceOn: string;
+    },
+  ): Observable<CondominiumBankAccount> {
+    return this.http.post<CondominiumBankAccount>(
+      `${this.base(condoId)}/bank-accounts`,
+      body,
+    );
+  }
+
+  updateBankAccount(
+    condoId: string,
+    accountId: string,
+    body: Partial<{
+      name: string;
+      bankName: string | null;
+      initialBalanceCents: number;
+      initialBalanceOn: string;
+      isActive: boolean;
+    }>,
+  ): Observable<CondominiumBankAccount> {
+    return this.http.patch<CondominiumBankAccount>(
+      `${this.base(condoId)}/bank-accounts/${accountId}`,
+      body,
+    );
+  }
+
+  deleteBankAccount(condoId: string, accountId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base(condoId)}/bank-accounts/${accountId}`,
+    );
+  }
+
+  previewBankAccountBalance(
+    condoId: string,
+    body: {
+      bankAccountId?: string;
+      initialBalanceCents: number;
+      initialBalanceOn: string;
+    },
+  ): Observable<BankAccountBalancePreview> {
+    return this.http.post<BankAccountBalancePreview>(
+      `${this.base(condoId)}/bank-accounts/balance-preview`,
       body,
     );
   }

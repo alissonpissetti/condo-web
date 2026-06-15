@@ -69,6 +69,18 @@ export interface AiMergeMeetingMinutesResult {
   votesApplied?: AiMergeMeetingMinutesVoteResult[];
 }
 
+/** Anotação pura registrada durante o modo reunião (persistida no servidor). */
+export interface PlanningMeetingNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdByUserId: string;
+}
+
+export interface GenerateMeetingMinutesResult {
+  body: string;
+}
+
 export interface PollAiDraftResult {
   title: string;
   body: string | null;
@@ -383,6 +395,37 @@ export class PlanningApiService {
     return this.http.post<AiMergeMeetingMinutesResult>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/meeting-minutes/merge-note`,
       body,
+    );
+  }
+
+  listMeetingNotes(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<PlanningMeetingNote[]> {
+    return this.http.get<PlanningMeetingNote[]>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/meeting-notes`,
+    );
+  }
+
+  addMeetingNote(
+    condominiumId: string,
+    pollId: string,
+    body: { text: string },
+  ): Observable<PlanningMeetingNote> {
+    return this.http.post<PlanningMeetingNote>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/meeting-notes`,
+      body,
+    );
+  }
+
+  generateMeetingMinutes(
+    condominiumId: string,
+    pollId: string,
+    body?: { currentBodyHtml?: string },
+  ): Observable<GenerateMeetingMinutesResult> {
+    return this.http.post<GenerateMeetingMinutesResult>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/meeting-minutes/generate`,
+      body ?? {},
     );
   }
 

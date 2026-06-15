@@ -36,6 +36,7 @@ import {
   type AssemblyType,
   type PollAiDraftResult,
   type CondominiumDocumentRow,
+  type PlanningMeetingNote,
   type PlanningPoll,
   type PlanningPollAttachment,
   type PlanningPollQuestion,
@@ -58,7 +59,7 @@ type LocalMinutesDraftV1 = {
   /** `poll.updatedAt` na abertura da sessão (deteção de conflito). */
   serverBaseUpdatedAt: string;
   lastLocalAt: string;
-  /** Anotação ainda não incorporada pela IA (modo reunião). */
+  /** Anotação ainda não salva no servidor (modo reunião). */
   meetingPendingNote?: string;
 };
 
@@ -140,7 +141,10 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected readonly createExpanded = signal(false);
   protected readonly aiDraftLoading = signal(false);
   protected readonly meetingMinutesAiLoading = signal(false);
-  protected readonly lastMeetingAiMergeAt = signal<number | null>(null);
+  protected readonly meetingNotesSaving = signal(false);
+  protected readonly lastMeetingMinutesGeneratedAt = signal<number | null>(null);
+  /** Anotações puras da reunião (servidor). */
+  protected readonly meetingNotes = signal<PlanningMeetingNote[]>([]);
   /** Última gravação do rascunho «Nova pauta» no navegador. */
   protected readonly lastLocalCreateSaveAt = signal<number | null>(null);
   /** questionId → optionId escolhida para «Registrar decisão». */
@@ -818,7 +822,8 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.meetingNotesControl.setValue(draft?.meetingPendingNote ?? '', {
       emitEvent: false,
     });
-    this.lastMeetingAiMergeAt.set(null);
+    this.lastMeetingMinutesGeneratedAt.set(null);
+    this.loadMeetingNotesFromServer(p);
     this.lastLocalBodySaveAt.set(
       draft?.lastLocalAt
         ? new Date(draft.lastLocalAt).getTime()
@@ -844,8 +849,8 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
   }
 
-  protected meetingAiMergeTimeLabel(): string {
-    const t = this.lastMeetingAiMergeAt();
+  protected meetingMinutesGeneratedTimeLabel(): string {
+    const t = this.lastMeetingMinutesGeneratedAt();
     if (t == null) {
       return '';
     }
@@ -855,13 +860,88 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
   }
 
-  protected incorporateMeetingNote(p: PlanningPoll): void {
+  protected meetingNoteTimeLabel(iso: string): string {
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) {
+      return iso;
+    }
+    return dt.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  protected reuseMeetingPrompt(text: string): void {
+    if (this.meetingMinutesAiLoading() || this.meetingNotesSaving()) {
+      return;
+    }
+    this.meetingNotesControl.setValue(text);
+    this.meetingNotesControl.markAsDirty();
+  }
+
+  protected saveMeetingAnnotation(p: PlanningPoll): void {
     const note = this.meetingNotesControl.value.trim();
     if (note.length < 2) {
       this.flash.warning('Digite uma anotação com pelo menos 2 caracteres.');
       return;
     }
-    this.mergeMeetingNoteIntoBody(p, note, { clearNote: true });
+    if (this.meetingNotesSaving() || this.meetingMinutesAiLoading()) {
+      return;
+    }
+    this.meetingNotesSaving.set(true);
+    this.meetingNotesControl.disable({ emitEvent: false });
+    this.api.addMeetingNote(this.condominiumId, p.id, { text: note }).subscribe({
+      next: (saved) => {
+        this.meetingNotesSaving.set(false);
+        this.meetingNotesControl.enable({ emitEvent: false });
+        this.meetingNotesControl.setValue('', { emitEvent: false });
+        this.meetingNotes.update((list) => [saved, ...list]);
+        this.writeMinutesDraftToStorage(
+          p,
+          this.minutesEditForm.getRawValue().minutesBody ?? '',
+        );
+        this.flash.success('Anotação salva.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.meetingNotesSaving.set(false);
+        this.meetingNotesControl.enable({ emitEvent: false });
+        this.flash.error(this.msg(err));
+      },
+    });
+  }
+
+  protected generateMeetingMinutesWithAi(p: PlanningPoll): void {
+    if (this.meetingMinutesAiLoading() || this.meetingNotesSaving() || this.busy()) {
+      return;
+    }
+    this.meetingMinutesAiLoading.set(true);
+    const currentBody = this.liveMode()
+      ? (this.minutesEditForm.getRawValue().minutesBody ?? '')
+      : (p.minutesBody ?? '');
+    this.api
+      .generateMeetingMinutes(this.condominiumId, p.id, {
+        currentBodyHtml: currentBody || undefined,
+      })
+      .subscribe({
+        next: (res) => {
+          this.meetingMinutesAiLoading.set(false);
+          this.lastMeetingMinutesGeneratedAt.set(Date.now());
+          const updated = { ...p, minutesBody: res.body };
+          this.upsertPollInList(updated);
+          this.selected.set(updated);
+          if (this.liveMode()) {
+            this.minutesEditForm.patchValue({ minutesBody: res.body });
+            this.writeMinutesDraftToStorage(updated, res.body);
+          }
+          this.flash.success('Ata gerada com IA e salva no servidor.');
+        },
+        error: (err: HttpErrorResponse) => {
+          this.meetingMinutesAiLoading.set(false);
+          this.flash.error(this.msg(err));
+        },
+      });
   }
 
   protected liveBodySaveTimeLabel(): string {
@@ -878,6 +958,13 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   private minutesDraftStorageKey(p: PlanningPoll): string {
     return `${MINUTES_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`;
+  }
+
+  private loadMeetingNotesFromServer(p: PlanningPoll): void {
+    this.api.listMeetingNotes(this.condominiumId, p.id).subscribe({
+      next: (notes) => this.meetingNotes.set(notes),
+      error: () => this.meetingNotes.set([]),
+    });
   }
 
   private readMinutesDraft(p: PlanningPoll): LocalMinutesDraftV1 | null {
@@ -1011,79 +1098,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.meetingAiMergeUnsub?.();
   }
 
-  private handleAiVotesApplied(
-    p: PlanningPoll,
-    votesApplied: { unitIdentifier: string; ok: boolean; message?: string }[] | undefined,
-  ): void {
-    if (!votesApplied?.length) {
-      this.flash.success('Anotação incorporada ao rascunho da ata.');
-      return;
-    }
-    const okVotes = votesApplied.filter((v) => v.ok);
-    const failed = votesApplied.filter((v) => !v.ok);
-    if (okVotes.length > 0) {
-      const labels = okVotes.map((v) => v.unitIdentifier).join(', ');
-      this.flash.success(
-        `Anotação incorporada. Voto(s) registado(s): ${labels}.`,
-      );
-      const currentUnitId = this.voteForm.getRawValue().unitId;
-      const refreshUnitId =
-        currentUnitId ||
-        this.myUnits().find(
-          (u) =>
-            u.identifier === okVotes[0].unitIdentifier ||
-            u.identifier
-              .toLowerCase()
-              .includes(okVotes[0].unitIdentifier.toLowerCase()),
-        )?.id ||
-        '';
-      this.refreshVoteFormAfterCast(p, refreshUnitId);
-    } else {
-      this.flash.success('Anotação incorporada ao rascunho da ata.');
-    }
-    for (const f of failed) {
-      this.flash.warning(
-        `Voto «${f.unitIdentifier}»: ${f.message ?? 'não registado'}.`,
-      );
-    }
-  }
-
-  private mergeMeetingNoteIntoBody(
-    p: PlanningPoll,
-    note: string,
-    opts: { clearNote?: boolean } = {},
-  ): void {
-    if (this.meetingMinutesAiLoading()) {
-      return;
-    }
-    this.meetingMinutesAiLoading.set(true);
-    this.meetingNotesControl.disable({ emitEvent: false });
-    const currentBody = this.minutesEditForm.getRawValue().minutesBody ?? '';
-    this.api
-      .mergeMeetingMinutesNote(this.condominiumId, p.id, {
-        note,
-        currentBodyHtml: currentBody,
-      })
-      .subscribe({
-        next: (res) => {
-          this.meetingMinutesAiLoading.set(false);
-          this.meetingNotesControl.enable({ emitEvent: false });
-          this.minutesEditForm.patchValue({ minutesBody: res.body });
-          if (opts.clearNote) {
-            this.meetingNotesControl.setValue('', { emitEvent: false });
-          }
-          this.lastMeetingAiMergeAt.set(Date.now());
-          this.writeMinutesDraftToStorage(p, res.body);
-          this.handleAiVotesApplied(p, res.votesApplied);
-        },
-        error: (err: HttpErrorResponse) => {
-          this.meetingMinutesAiLoading.set(false);
-          this.meetingNotesControl.enable({ emitEvent: false });
-          this.flash.error(this.msg(err));
-        },
-      });
-  }
-
   private resetLiveEditingState(): void {
     this.meetingFullscreen.set(false);
     this.lockMeetingFullscreenScroll(false);
@@ -1093,7 +1107,9 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.conflictDraftSnapshot = null;
     this.liveSessionServerBaseAt = '';
     this.lastLocalBodySaveAt.set(null);
-    this.lastMeetingAiMergeAt.set(null);
+    this.lastMeetingMinutesGeneratedAt.set(null);
+    this.meetingNotes.set([]);
+    this.meetingNotesSaving.set(false);
     this.meetingNotesControl.reset('', { emitEvent: false });
     this.detachLiveMinutesAutosave();
     this.detachMeetingNotesDraftPersist();

@@ -220,11 +220,9 @@
     (click)="closeLoginModal()"
   >
     <div class="login-modal-shell" (click)="$event.stopPropagation()">
-      @if (loginModalBanner(); as bannerText) {
-        <p class="login-modal-banner" role="status">{{ bannerText }}</p>
-      }
       <app-login
         embedded
+        [notice]="loginNotice()"
         [returnAfterLogin]="loginReturnUrl()"
         (closed)="closeLoginModal()"
       />

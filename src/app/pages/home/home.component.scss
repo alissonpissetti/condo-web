@@ -642,28 +642,8 @@ h1 {
   max-width: 440px;
   max-height: min(90vh, 900px);
   overflow-y: auto;
-  border-radius: 1rem;
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.login-modal-banner {
-  margin: 0;
-  padding: 0.85rem 1rem;
-  border-radius: 1rem 1rem 0 0;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: #0f172a;
-  background: #fef3c7;
-  border-bottom: 1px solid #fcd34d;
 }
 
 .login-modal-shell app-login {
   display: block;
-}
-
-.login-modal-banner + app-login .card {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
 }

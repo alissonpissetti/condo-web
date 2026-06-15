@@ -8,6 +8,11 @@
     >
       ×
     </button>
+    @if (notice(); as n) {
+      <ng-container
+        *ngTemplateOutlet="sessionNotice; context: { $implicit: n, aboveCard: true }"
+      />
+    }
     <ng-container *ngTemplateOutlet="loginCard" />
   </div>
 } @else {
@@ -30,8 +35,26 @@
   </div>
 }
 
+<ng-template #sessionNotice let-n let-aboveCard="aboveCard">
+  <div
+    class="session-notice"
+    [class.session-notice--warning]="n.kind === 'warning'"
+    [class.session-notice--info]="n.kind === 'info'"
+    [class.session-notice--above-card]="aboveCard"
+    role="status"
+  >
+    <p class="session-notice__title">{{ n.title }}</p>
+    <p class="session-notice__message">{{ n.message }}</p>
+  </div>
+</ng-template>
+
 <ng-template #loginCard>
   <div class="card">
+    @if (!embedded() && notice(); as n) {
+      <ng-container
+        *ngTemplateOutlet="sessionNotice; context: { $implicit: n, aboveCard: false }"
+      />
+    }
     <h1>Entrar</h1>
     <p class="sub">
       E-mail e senha, ou código enviado pelo WhatsApp ao seu número cadastrado.

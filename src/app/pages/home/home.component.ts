@@ -11,7 +11,7 @@ import {
   SaasPlansApiService,
   type SaasPlanCatalogEntry,
 } from '../../core/saas-plans-api.service';
-import { LoginComponent } from '../login/login.component';
+import { LoginComponent, type LoginNotice } from '../login/login.component';
 
 @Component({
   selector: 'app-home',
@@ -31,7 +31,7 @@ export class HomeComponent implements OnInit {
   /** Simulação de unidades para custo total mensal (1–1000). */
   protected readonly simulatedUnits = signal(30);
   protected readonly showLoginModal = signal(false);
-  protected readonly loginModalBanner = signal<string | null>(null);
+  protected readonly loginNotice = signal<LoginNotice | null>(null);
   protected readonly loginReturnUrl = signal<string | null>(null);
 
   constructor() {
@@ -46,17 +46,24 @@ export class HomeComponent implements OnInit {
           );
           const session = params.get('session');
           if (session === 'expired') {
-            this.loginModalBanner.set(
-              'Sua sessão expirou ou deixou de ser válida. Entre novamente para continuar.',
-            );
+            this.loginNotice.set({
+              kind: 'warning',
+              title: 'Sessão encerrada',
+              message:
+                'Seu acesso expirou por inatividade. Entre novamente para continuar.',
+            });
           } else if (session === 'required') {
-            this.loginModalBanner.set('Faça login para acessar o painel.');
+            this.loginNotice.set({
+              kind: 'info',
+              title: 'Login necessário',
+              message: 'Faça login para acessar o painel.',
+            });
           } else {
-            this.loginModalBanner.set(null);
+            this.loginNotice.set(null);
           }
         } else {
           this.showLoginModal.set(false);
-          this.loginModalBanner.set(null);
+          this.loginNotice.set(null);
           this.loginReturnUrl.set(null);
         }
       });

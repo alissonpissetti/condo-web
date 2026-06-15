@@ -16,6 +16,9 @@
 
 .embed-root {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .embed-close {
@@ -77,12 +80,60 @@
   }
 }
 
+:host(.login-embed) .card {
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 .card {
   padding: 1.75rem;
   border-radius: 1rem;
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.session-notice {
+  margin: 0 0 1.1rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+
+  &--above-card {
+    margin: 0;
+    border-radius: 0.85rem;
+    box-shadow: var(--shadow);
+  }
+
+  &__title {
+    margin: 0 0 0.2rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  &__message {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  &--warning {
+    background: color-mix(in srgb, #f59e0b 9%, var(--surface));
+    border-color: color-mix(in srgb, #f59e0b 28%, var(--border));
+
+    .session-notice__title {
+      color: color-mix(in srgb, #b45309 75%, var(--text));
+    }
+  }
+
+  &--info {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  }
 }
 
 h1 {

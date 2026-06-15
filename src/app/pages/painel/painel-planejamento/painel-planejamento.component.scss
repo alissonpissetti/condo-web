@@ -606,6 +606,92 @@
     font-size: 0.84rem;
   }
 
+  &__history {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+
+  &__history-summary {
+    cursor: pointer;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text);
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      content: '▸ ';
+      display: inline-block;
+      transition: transform 0.15s ease;
+    }
+  }
+
+  &__history[open] &__history-summary::before {
+    transform: rotate(90deg);
+  }
+
+  &__history-list {
+    margin: 0.65rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    max-height: 14rem;
+    overflow-y: auto;
+  }
+
+  &__history-item {
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  &__history-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.55rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.76rem;
+    color: var(--muted);
+  }
+
+  &__history-badge {
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+
+    &--failed {
+      color: #b91c1c;
+      background: color-mix(in srgb, #ef4444 12%, var(--surface));
+      border: 1px solid color-mix(in srgb, #ef4444 28%, var(--border));
+    }
+  }
+
+  &__history-text {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  &__history-reuse {
+    margin-top: 0.45rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
   &__draft-label {
     margin: 0.35rem 0 0.5rem;
     font-size: 0.82rem;
