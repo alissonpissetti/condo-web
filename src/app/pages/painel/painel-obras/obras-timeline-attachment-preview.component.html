@@ -1,0 +1,191 @@
+<article
+  class="obras-att"
+  [class.obras-att--video]="mediaKind() === 'video' && state() !== 'loading'"
+  [class.obras-att--image]="mediaKind() === 'image' && state() !== 'loading'"
+  [class.obras-att--audio]="mediaKind() === 'audio' && state() !== 'loading'"
+  [class.obras-att--pdf]="mediaKind() === 'pdf' && state() !== 'loading'"
+  [class.obras-att--loading]="state() === 'loading'"
+  [class.obras-att--idle]="state() === 'idle'"
+  [attr.data-kind]="mediaKind()"
+>
+  @if (state() !== 'loading') {
+    <button
+      type="button"
+      class="obras-att__dl"
+      title="Baixar"
+      [attr.aria-label]="'Baixar ' + attachment().originalFilename"
+      [disabled]="disabled()"
+      (click)="onDownload($event)"
+    >
+      <svg
+        class="obras-att__dl-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 3v11" />
+        <path d="M8 10l4 4 4-4" />
+        <path d="M5 20h14" />
+      </svg>
+    </button>
+  }
+
+  @if (state() === 'loading') {
+    <div class="obras-att__lead obras-att__lead--icon" aria-busy="true">
+      <span class="obras-att__spinner"></span>
+    </div>
+    <div class="obras-att__info">
+      <span class="obras-att__name">{{ attachment().originalFilename }}</span>
+      <span class="obras-att__hint muted">Carregando…</span>
+    </div>
+  } @else if (mediaKind() === 'video') {
+    <button
+      type="button"
+      class="obras-att__thumb-btn obras-att__thumb-btn--video"
+      [class.obras-att__thumb-btn--placeholder]="!hasVideoThumbnail() || state() === 'idle'"
+      [disabled]="disabled()"
+      (click)="openVideoModal()"
+      [attr.aria-label]="'Assistir ' + attachment().originalFilename"
+    >
+      @if (hasVideoThumbnail() && state() !== 'idle') {
+        <video
+          class="obras-att__thumb-video"
+          [src]="objectUrl()!"
+          muted
+          playsinline
+          preload="metadata"
+          aria-hidden="true"
+        ></video>
+      } @else {
+        <app-obras-attachment-file-icon kind="video" />
+      }
+      <span class="obras-att__play-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="obras-att__play-icon">
+          <path fill="currentColor" d="M8 5v14l11-7z" />
+        </svg>
+      </span>
+    </button>
+    <div class="obras-att__info">
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      <button
+        type="button"
+        class="obras-att__expand linkish"
+        [disabled]="disabled()"
+        (click)="openVideoModal()"
+      >
+        Assistir
+      </button>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
+    </div>
+  } @else if (mediaKind() === 'image') {
+    <button
+      type="button"
+      class="obras-att__thumb-btn"
+      [class.obras-att__thumb-btn--placeholder]="!hasImageThumbnail() || state() === 'idle'"
+      [disabled]="disabled()"
+      (click)="openImageModal()"
+      [attr.aria-label]="'Ampliar ' + attachment().originalFilename"
+    >
+      @if (hasImageThumbnail() && state() !== 'idle') {
+        <img
+          [src]="objectUrl()!"
+          alt=""
+          loading="lazy"
+          (error)="onImagePreviewError()"
+        />
+      } @else if (state() === 'loading' || imageModalLoading()) {
+        <span class="obras-att__spinner obras-att__spinner--thumb"></span>
+      } @else {
+        <app-obras-attachment-file-icon kind="image" />
+      }
+    </button>
+    <div class="obras-att__info">
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      <button
+        type="button"
+        class="obras-att__expand linkish"
+        [disabled]="disabled() || state() === 'loading'"
+        (click)="
+          state() === 'error' ? onDownload($event) : openImageModal()
+        "
+      >
+        @if (state() === 'loading' || imageModalLoading()) {
+          Carregando…
+        } @else if (state() === 'error') {
+          Baixar
+        } @else {
+          Ampliar
+        }
+      </button>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
+    </div>
+  } @else if (mediaKind() === 'pdf') {
+    <button
+      type="button"
+      class="obras-att__pdf-btn"
+      [disabled]="disabled()"
+      (click)="openPreviewModal()"
+      [attr.aria-label]="'Visualizar ' + attachment().originalFilename"
+    >
+      <div class="obras-att__lead obras-att__lead--pdf">
+        <div class="obras-att__icon" data-icon="pdf">
+          <app-obras-attachment-file-icon kind="pdf" />
+        </div>
+      </div>
+    </button>
+    <div class="obras-att__info">
+      <span class="obras-att__name" [title]="attachment().originalFilename">{{
+        attachment().originalFilename
+      }}</span>
+      <button
+        type="button"
+        class="obras-att__expand linkish"
+        [disabled]="disabled()"
+        (click)="openPreviewModal()"
+      >
+        Visualizar PDF
+      </button>
+      @if (sizeLabel) {
+        <span class="obras-att__size">{{ sizeLabel }}</span>
+      }
+    </div>
+  } @else {
+    <div class="obras-att__lead">
+      <div class="obras-att__icon" [attr.data-icon]="iconKind()">
+        <app-obras-attachment-file-icon [kind]="iconKind()" />
+      </div>
+    </div>
+
+    <div class="obras-att__info">
+      <div class="obras-att__meta-line">
+        <span class="obras-att__name" [title]="attachment().originalFilename">{{
+          attachment().originalFilename
+        }}</span>
+        @if (sizeLabel) {
+          <span class="obras-att__size">{{ sizeLabel }}</span>
+        }
+      </div>
+      @if (state() === 'audio' && objectUrl()) {
+        <audio
+          class="obras-att__audio"
+          [src]="objectUrl()!"
+          controls
+          preload="metadata"
+          [attr.aria-label]="attachment().originalFilename"
+        ></audio>
+      }
+    </div>
+  }
+</article>

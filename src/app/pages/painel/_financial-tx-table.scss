@@ -1,0 +1,523 @@
+/* Lista de transações — compacta, alinhada ao extrato financeiro */
+.tx-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+  overflow-y: visible;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+
+  &--menu-open {
+    padding-bottom: 10.5rem;
+  }
+
+  &--menu-open:has(.row-actions__menu--drop-up) {
+    padding-bottom: 0.35rem;
+  }
+}
+
+.tx-table {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  line-height: 1.35;
+
+  th,
+  td {
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    vertical-align: middle;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--surface-2) 92%, var(--surface));
+    font-weight: 650;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr:has(.row-actions__trigger--open) {
+    position: relative;
+    z-index: 2;
+  }
+
+  tbody tr:nth-child(even):not(.row--disabled):not(.is-selected) {
+    background: color-mix(in srgb, var(--surface-2) 32%, transparent);
+  }
+
+  tbody tr.is-selected td {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  }
+
+  tbody tr.row--editing td {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+
+  tbody tr.row--disabled {
+    opacity: 0.55;
+    filter: grayscale(0.2);
+  }
+
+  .num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+  }
+
+  th.col-select,
+  td.col-select {
+    width: 2rem;
+    padding-left: 0.35rem;
+    padding-right: 0.25rem;
+    text-align: center;
+  }
+
+  &__date {
+    white-space: nowrap;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.7rem;
+  }
+
+  &__title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.73rem;
+    line-height: 1.3;
+    color: var(--text);
+    word-break: break-word;
+    max-width: 18rem;
+  }
+
+  &__desc {
+    display: block;
+    margin-top: 0.1rem;
+    font-size: 0.66rem;
+    color: var(--muted);
+    word-break: break-word;
+    max-width: 18rem;
+  }
+
+  &__kind {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.62rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+
+    &[data-kind='income'] {
+      color: #047857;
+      background: color-mix(in srgb, #10b981 14%, transparent);
+    }
+
+    &[data-kind='expense'] {
+      color: #b91c1c;
+      background: color-mix(in srgb, #ef4444 12%, transparent);
+    }
+
+    &[data-kind='investment'] {
+      color: #6d28d9;
+      background: color-mix(in srgb, #8b5cf6 12%, transparent);
+    }
+
+    &[data-kind='yield'] {
+      color: #1d4ed8;
+      background: color-mix(in srgb, #3b82f6 12%, transparent);
+    }
+  }
+
+  &__status {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.62rem;
+    font-weight: 650;
+    white-space: nowrap;
+
+    &[data-pay='pending'] {
+      color: #b45309;
+      background: color-mix(in srgb, #f59e0b 16%, transparent);
+    }
+
+    &[data-pay='paid'] {
+      color: #047857;
+      background: color-mix(in srgb, #10b981 14%, transparent);
+    }
+
+    &[data-pay='cancelled'] {
+      color: var(--muted);
+      background: var(--surface-2);
+    }
+  }
+
+  &__fund {
+    font-size: 0.7rem;
+    color: var(--text);
+    max-width: 8rem;
+    word-break: break-word;
+  }
+
+  &__account {
+    min-width: 6.5rem;
+    max-width: 10rem;
+    vertical-align: middle;
+  }
+
+  &__account-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  &__account-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-width: 0;
+  }
+
+  &__account-name {
+    font-size: 0.71rem;
+    font-weight: 600;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  &__account-bank {
+    font-size: 0.62rem;
+    color: var(--muted);
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  &__amt--in,
+  .fund-extrato-table__amt--in {
+    color: #047857;
+  }
+
+  &__amt--out,
+  .fund-extrato-table__amt--out {
+    color: #b91c1c;
+  }
+
+  &__amt--yield,
+  .fund-extrato-table__amt--yield {
+    color: #1d4ed8;
+  }
+
+  &__amt--zero,
+  .fund-extrato-table__amt--zero {
+    color: var(--muted);
+  }
+
+  &__balance--neg,
+  .fund-extrato-table__balance--neg {
+    color: #b91c1c;
+    font-weight: 700;
+  }
+
+  &__balance--pos,
+  .fund-extrato-table__balance--pos {
+    color: #0f766e;
+  }
+
+  &__attach {
+    white-space: nowrap;
+  }
+
+  &__attach-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    justify-content: flex-end;
+  }
+
+  &__link-btn {
+    margin: 0;
+    padding: 0.12rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 0.3rem;
+    background: var(--surface);
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    }
+  }
+
+  .td-actions {
+    width: 1%;
+    padding-left: 0.25rem;
+    padding-right: 0.35rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 720px) {
+  .tx-table-wrap {
+    margin-top: 0.85rem;
+    border: none;
+    background: transparent;
+    overflow: visible;
+
+    &--menu-open {
+      padding-bottom: 0.35rem;
+    }
+  }
+
+  .tx-table--cards {
+    display: block;
+    min-width: 0;
+
+    thead {
+      display: none;
+    }
+
+    tbody,
+    tr {
+      display: block;
+      width: 100%;
+    }
+
+    tbody tr:nth-child(even):not(.row--disabled):not(.is-selected) {
+      background: var(--surface);
+    }
+
+    tr {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      grid-template-areas:
+        'select main amount actions'
+        'balance balance balance balance';
+      align-items: start;
+      column-gap: 0.45rem;
+      row-gap: 0.3rem;
+      padding: 0.6rem 0.65rem;
+      margin-bottom: 0.5rem;
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      border-left-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+      border-radius: 0.6rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    tr.row--disabled {
+      opacity: 0.6;
+    }
+
+    tr.is-selected {
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+      background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    }
+
+    td {
+      display: block;
+      min-width: 0;
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    td::before {
+      display: none;
+    }
+
+    .tx-table__cell--skip-mobile,
+    .tx-table__status-col,
+    .tx-table__fund,
+    .tx-table__work,
+    .tx-table__account,
+    .cell-receipt.tx-table__cell--skip-mobile {
+      display: none !important;
+    }
+
+    .cell-select,
+    .col-select {
+      grid-area: select;
+      align-self: start;
+      padding-top: 0.15rem;
+    }
+
+    .tx-table__main {
+      grid-area: main;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      min-width: 0;
+    }
+
+    .tx-table__date--table,
+    .tx-table__kind--table {
+      display: none;
+    }
+
+    .tx-table__mobile-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem 0.4rem;
+      margin-bottom: 0.05rem;
+    }
+
+    .tx-table__mobile-head .tx-table__date {
+      font-size: 0.72rem;
+      font-weight: 650;
+      color: var(--muted);
+    }
+
+    .tx-table__mobile-head .tx-table__kind {
+      margin: 0;
+      font-size: 0.62rem;
+    }
+
+    .tx-table__status--mobile {
+      font-size: 0.62rem;
+    }
+
+    .tx-table__title {
+      font-size: 0.92rem;
+      font-weight: 750;
+      line-height: 1.32;
+      max-width: none;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .tx-table__desc {
+      font-size: 0.78rem;
+      line-height: 1.35;
+      max-width: none;
+      margin: 0;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      overflow: hidden;
+    }
+
+    .tx-table__mobile-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.2rem 0.45rem;
+      margin-top: 0.1rem;
+      font-size: 0.76rem;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+
+    .tx-table__mobile-meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      min-width: 0;
+
+      &:not(:last-child)::after {
+        content: '·';
+        margin-left: 0.45rem;
+        color: color-mix(in srgb, var(--muted) 70%, transparent);
+        font-weight: 700;
+      }
+    }
+
+    .tx-table__mobile-meta-account {
+      gap: 0.3rem;
+    }
+
+    .tx-table__mobile-meta .tx-table__work-link {
+      font-size: 0.76rem;
+      font-weight: 650;
+      word-break: break-word;
+    }
+
+    .tx-table__mobile-attach {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.2rem;
+
+      .btn {
+        min-height: 2rem;
+        padding: 0.28rem 0.55rem;
+        font-size: 0.72rem;
+      }
+    }
+
+    td[data-label='Valor'] {
+      grid-area: amount;
+      align-self: start;
+      padding-top: 0.05rem;
+      text-align: right;
+    }
+
+    td[data-label='Saldo após'] {
+      grid-area: balance;
+      display: flex !important;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding-top: 0.35rem;
+      margin-top: 0.15rem;
+      border-top: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+      font-size: 0.78rem;
+      color: var(--muted);
+
+      &::before {
+        display: block;
+        content: 'Saldo';
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+    }
+
+    .td-actions {
+      grid-area: actions;
+      align-self: start;
+    }
+
+    .num {
+      white-space: nowrap;
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+  }
+}
+
+@media (min-width: 721px) {
+  .tx-table__mobile-head,
+  .tx-table__mobile-meta,
+  .tx-table__mobile-attach,
+  .tx-table__status--mobile {
+    display: none !important;
+  }
+}

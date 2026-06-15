@@ -70,13 +70,6 @@
       </p>
     }
 
-    @if (error()) {
-      <div class="alert" role="alert">{{ error() }}</div>
-    }
-    @if (success()) {
-      <div class="success" role="status">{{ success() }}</div>
-    }
-
     @if (invitePreview(); as prIv) {
       @if (!invitePreviewError()) {
       <form [formGroup]="inviteForm" (ngSubmit)="submit()" novalidate>
@@ -172,7 +165,7 @@
       </form>
     }
 
-    @if (success()) {
+    @if (registrationComplete()) {
       <button type="button" class="btn secondary" (click)="goLogin()">
         Ir para login
       </button>

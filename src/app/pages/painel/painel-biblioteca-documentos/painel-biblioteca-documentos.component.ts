@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
 import {
   CondominiumLibraryApiService,
@@ -22,16 +23,21 @@ import {
 })
 export class PainelBibliotecaDocumentosComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(CondominiumLibraryApiService);
   private readonly planningApi = inject(PlanningApiService);
 
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly docs = signal<CondominiumLibraryDocumentRow[]>([]);
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly removingId = signal<string | null>(null);
+  protected readonly renamingId = signal<string | null>(null);
+  protected readonly renameDraft = signal('');
+  protected readonly renamingBusy = signal(false);
+  protected readonly copiedShareId = signal<string | null>(null);
+  protected readonly shareBusyId = signal<string | null>(null);
   protected readonly uploadDisplayName = signal('');
   protected readonly downloadLog = signal<CondominiumLibraryDownloadLogRow[]>([]);
   protected readonly downloadLogLoading = signal(false);
@@ -43,7 +49,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
@@ -71,6 +77,11 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     return a.kind === 'participant' && a.role === 'syndic';
   }
 
+  /** Renomear: titular ou síndico. */
+  protected canRename(): boolean {
+    return this.canDelete();
+  }
+
   protected formatDateTime(value: string): string {
     const dt = new Date(value);
     if (Number.isNaN(dt.getTime())) return value;
@@ -92,7 +103,6 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    this.actionError.set(null);
     this.busy.set(true);
     this.api
       .upload(this.condominiumId, file, this.uploadDisplayName())
@@ -101,17 +111,99 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
           this.busy.set(false);
           this.uploadDisplayName.set('');
           input.value = '';
+          this.flash.success('Documento enviado.');
           this.reloadListAndAudit();
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
+  protected startRename(doc: CondominiumLibraryDocumentRow): void {
+    if (!this.canRename()) return;
+    this.renamingId.set(doc.id);
+    this.renameDraft.set(doc.originalFilename);
+  }
+
+  protected cancelRename(): void {
+    this.renamingId.set(null);
+    this.renameDraft.set('');
+  }
+
+  protected setRenameDraft(v: string): void {
+    this.renameDraft.set(v);
+  }
+
+  protected saveRename(doc: CondominiumLibraryDocumentRow): void {
+    if (!this.canRename() || this.renamingId() !== doc.id) return;
+    const name = this.renameDraft().trim();
+    if (!name) {
+      this.flash.warning('Informe o nome do documento.');
+      return;
+    }
+    if (name === doc.originalFilename.trim()) {
+      this.cancelRename();
+      return;
+    }
+    this.renamingBusy.set(true);
+    this.api.rename(this.condominiumId, doc.id, name).subscribe({
+      next: (updated) => {
+        this.renamingBusy.set(false);
+        this.cancelRename();
+        this.docs.update((list) =>
+          list.map((row) => (row.id === updated.id ? updated : row)),
+        );
+        this.flash.success('Nome atualizado.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.renamingBusy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível renomear o documento.');
+      },
+    });
+  }
+
+  protected onRenameKeydown(ev: KeyboardEvent, doc: CondominiumLibraryDocumentRow): void {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      this.saveRename(doc);
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      this.cancelRename();
+    }
+  }
+
+  protected copyShareLink(doc: CondominiumLibraryDocumentRow): void {
+    const cached = doc.fileUrl?.trim();
+    if (cached) {
+      void this.writeShareToClipboard(doc.id, cached);
+      return;
+    }
+    this.shareBusyId.set(doc.id);
+    this.api.resolveShareUrl(this.condominiumId, doc.id).subscribe({
+      next: ({ fileUrl }) => {
+        this.shareBusyId.set(null);
+        const url = fileUrl?.trim();
+        if (!url) {
+          this.flash.warning(
+            'Link de compartilhamento indisponível. Verifique o armazenamento (Nextcloud) na API.',
+          );
+          return;
+        }
+        this.docs.update((list) =>
+          list.map((row) => (row.id === doc.id ? { ...row, fileUrl: url } : row)),
+        );
+        void this.writeShareToClipboard(doc.id, url);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.shareBusyId.set(null);
+        this.flash.errorFromHttp(err, 'Não foi possível obter o link de compartilhamento.');
+      },
+    });
+  }
+
   protected download(doc: CondominiumLibraryDocumentRow): void {
-    this.actionError.set(null);
     this.busy.set(true);
     this.api.downloadBlob(this.condominiumId, doc.id).subscribe({
       next: (blob) => {
@@ -128,7 +220,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -137,16 +229,16 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     if (!this.canDelete()) return;
     const ok = confirm(`Remover o documento “${doc.originalFilename}”?`);
     if (!ok) return;
-    this.actionError.set(null);
     this.removingId.set(doc.id);
     this.api.remove(this.condominiumId, doc.id).subscribe({
       next: () => {
         this.removingId.set(null);
+        this.flash.success('Documento removido.');
         this.reloadListAndAudit();
       },
       error: (err: HttpErrorResponse) => {
         this.removingId.set(null);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -167,7 +259,7 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -205,6 +297,24 @@ export class PainelBibliotecaDocumentosComponent implements OnInit {
     });
     if (this.canViewDownloadAudit()) {
       this.refreshDownloadLog();
+    }
+  }
+
+  private async writeShareToClipboard(
+    documentId: string,
+    url: string,
+  ): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url);
+      this.copiedShareId.set(documentId);
+      this.flash.success('Link copiado.');
+      window.setTimeout(() => {
+        if (this.copiedShareId() === documentId) {
+          this.copiedShareId.set(null);
+        }
+      }, 2000);
+    } catch {
+      this.flash.warning('Não foi possível copiar o link.');
     }
   }
 

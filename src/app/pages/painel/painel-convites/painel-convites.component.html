@@ -1,252 +1,303 @@
 <div class="page">
   <header class="page__header">
     <h1>Convites</h1>
-    <p class="page__intro">
-      Escolha o <strong>agrupamento</strong> e a <strong>unidade</strong>, depois o <strong>e-mail</strong> e/ou o
-      <strong>celular (com DDD)</strong> de quem vai ser <strong>responsável</strong> por essa unidade. O convite
-      traz o nome de quem envia, o condomínio, a unidade e o link (mesmo conteúdo no e-mail e no WhatsApp). Use
-      “Identificar” com <strong>só o e-mail ou só o celular</strong> para checar o cadastro. Pode enviar
-      <strong>só por e-mail</strong>, <strong>só por WhatsApp</strong> (útil se a pessoa não tiver e-mail) ou
-      <strong>os dois</strong> se preencher e-mail e celular.
-    </p>
   </header>
 
   @if (pageError(); as pe) {
-    <p class="banner banner--error" role="alert">{{ pe }}</p>
+    <p class="error" role="alert">{{ pe }}</p>
   } @else {
-  @if (actionError(); as ae) {
-    <p class="banner banner--error" role="alert">{{ ae }}</p>
-  }
-  @if (actionOk(); as ok) {
-    <p class="banner banner--ok" role="status">{{ ok }}</p>
-  }
-
-  @if (navData.loading() && navData.tree().length === 0) {
-    <p class="muted">Carregando agrupamentos…</p>
-  }
-
-  <section class="card">
-    <h2 class="card__title">Novo convite</h2>
-    <form
-      class="invite-form"
-      [formGroup]="form"
-      (ngSubmit)="$event.preventDefault()"
-      novalidate
-    >
-      <div class="form-row form-row--2">
-        <label class="field">
-          <span class="field__label">Agrupamento</span>
-          <select
-            class="input"
-            formControlName="groupingId"
-            [disabled]="selectsLocked()"
-          >
-            <option value="">—</option>
-            @for (g of navData.tree(); track g.id) {
-              <option [value]="g.id">{{ g.name }}</option>
-            }
-          </select>
-        </label>
-        <label class="field">
-          <span class="field__label">Unidade</span>
-          <select
-            class="input"
-            formControlName="unitId"
-            [disabled]="selectsLocked()"
-          >
-            <option value="">—</option>
-            @for (u of unitOptions(); track u.id) {
-              <option [value]="u.id">{{ u.identifier }}</option>
-            }
-          </select>
-        </label>
-      </div>
-      <label class="field">
-        <span class="field__label">E-mail (opcional)</span>
-        <input
-          type="email"
-          class="input"
-          formControlName="email"
-          autocomplete="email"
-          [disabled]="busy()"
-        />
-      </label>
-      <label class="field">
-        <span class="field__label">Celular / WhatsApp (opcional)</span>
-        <input
-          type="tel"
-          class="input"
-          formControlName="phone"
-          appBrPhoneMask
-          [mobileOnly]="true"
-          autocomplete="tel"
-          placeholder="(61) 99999-8888"
-          [disabled]="busy()"
-        />
-        <span class="field__hint"
-          >Use o número de WhatsApp da pessoa. Pode combinar com o e-mail para enviar nos dois canais.</span
-        >
-      </label>
-      <div class="row-actions">
-        <button
-          type="button"
-          class="btn ghost"
-          (click)="runLookup()"
-          [disabled]="busy() || lookupBusy()"
-        >
-          {{ lookupBusy() ? 'Pesquisando…' : 'Identificar' }}
-        </button>
-      </div>
-
-      @if (lookup(); as lu) {
-        <div class="lookup" [class.lookup--warn]="!lu.found">
-          @if (lu.found && lu.fullName) {
-            <p>
-              <strong>Nome na base de dados:</strong> {{ lu.fullName }}
-            </p>
-          } @else if (lu.found && !lu.fullName) {
-            <p class="muted">Ficha encontrada sem nome preenchido.</p>
-          } @else {
-            <p class="muted">E-mail ainda não associado a uma pessoa.</p>
-          }
-          @if (lu.message) {
-            <p class="lookup__msg">{{ lu.message }}</p>
-          }
-        </div>
-      }
-
-      <label class="field">
-        <span class="field__label">Nome completo (para o convite)</span>
-        <input
-          type="text"
-          class="input"
-          formControlName="fullName"
-          autocomplete="name"
-          [disabled]="busy()"
-        />
-        <span class="field__hint">
-          Obrigatório para e-mail novo; se a pessoa já tem conta e ainda não tem ficha de pessoa, também é
-          necessário para criar a ficha. Caso contrário pode ajustar o nome antes de enviar.
-        </span>
-      </label>
-
-        <button
-        type="button"
-        class="btn primary"
-        (click)="sendInvite()"
-        [disabled]="busy() || lookupBusy()"
-      >
-        {{ busy() ? 'Enviando…' : 'Enviar convite' }}
-      </button>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2 class="card__title">Pendentes neste condomínio</h2>
-    @if (pendingError(); as perr) {
-      <p class="banner banner--error" role="alert">{{ perr }}</p>
+    @if (navData.loading() && navData.tree().length === 0) {
+      <p class="muted">Carregando agrupamentos…</p>
     }
-    @if (pendingLoading()) {
-      <p class="muted">Carregando convites…</p>
-    } @else if (pending().length === 0) {
-      <p class="muted">Nenhum convite pendente.</p>
-    } @else {
-      <ul class="pending-list">
-        @for (p of pending(); track p.id) {
-          <li class="pending-item">
-            <div class="pending-item__top">
-              <span class="pending-item__place">
-                <span class="pending-item__group">{{ p.groupingName }}</span>
-                <span class="pending-item__dot" aria-hidden="true">·</span>
-                <span class="pending-item__unit">{{ p.unitIdentifier }}</span>
-              </span>
-            </div>
-            <div class="pending-item__email">{{ contactLabel(p) }}</div>
-            <div class="pending-item__name">{{ p.personFullName }}</div>
-            <div class="pending-item__footer">
-              @if (p.pendingRegistration) {
-                <span class="pill pill--wait">Aguardando cadastro (nova conta)</span>
-              } @else {
-                <span class="pill pill--wait">Aguardando confirmação (conta existente)</span>
-              }
-              <span class="pending-item__expires">
-                Expira em {{ formatPendingExpiresAt(p.expiresAt) }}
-              </span>
-            </div>
-            <div class="pending-item__actions">
-              @if (p.inviteUrl) {
-                <button
-                  type="button"
-                  class="btn ghost sm"
-                  [disabled]="removingInviteId() !== null"
-                  (click)="copyPendingInviteLink(p.id, p.inviteUrl)"
+
+    <section
+      class="form-card form-card--collapsible invite-form-card"
+      [class.form-card--open]="inviteFormExpanded()"
+    >
+      <button
+        type="button"
+        class="form-card__toggle"
+        [attr.aria-expanded]="inviteFormExpanded()"
+        aria-controls="invite-form-panel"
+        (click)="toggleInviteForm()"
+      >
+        <span class="form-card__toggle-text">
+          <span class="form-card__toggle-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+              />
+            </svg>
+          </span>
+          <span class="form-card__toggle-label">Novo convite</span>
+        </span>
+        <span class="form-card__toggle-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+          </svg>
+        </span>
+      </button>
+
+      @if (inviteFormExpanded()) {
+        <div id="invite-form-panel" class="form-card__body">
+          <div class="form-card__head">
+            <p class="form-card__lede">
+              Escolha agrupamento e unidade, identifique o contacto por e-mail ou
+              WhatsApp e envie o convite.
+            </p>
+          </div>
+
+          <form
+            class="invite-form"
+            [formGroup]="form"
+            (ngSubmit)="$event.preventDefault()"
+            novalidate
+          >
+            <div class="values-grid invite-form__grid">
+              <label class="field field--block">
+                <span class="field__label">Agrupamento</span>
+                <select
+                  class="input input--lg"
+                  formControlName="groupingId"
+                  [disabled]="selectsLocked()"
                 >
-                  {{
-                    copiedInviteId() === p.id
-                      ? 'Link copiado!'
-                      : 'Copiar link do convite'
-                  }}
-                </button>
-              } @else {
-                <span class="pending-item__no-link muted">
-                  Link indisponível para convites criados antes desta atualização.
-                </span>
-              }
+                  <option value="">—</option>
+                  @for (g of navData.tree(); track g.id) {
+                    <option [value]="g.id">{{ g.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Unidade</span>
+                <select
+                  class="input input--lg"
+                  formControlName="unitId"
+                  [disabled]="selectsLocked()"
+                >
+                  <option value="">—</option>
+                  @for (u of unitOptions(); track u.id) {
+                    <option [value]="u.id">{{ u.identifier }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+
+            <label class="field field--block">
+              <span class="field__label">E-mail (opcional)</span>
+              <input
+                type="email"
+                class="input input--lg"
+                formControlName="email"
+                autocomplete="email"
+                [disabled]="busy()"
+              />
+            </label>
+
+            <label class="field field--block">
+              <span class="field__label">Celular / WhatsApp (opcional)</span>
+              <input
+                type="tel"
+                class="input input--lg"
+                formControlName="phone"
+                appBrPhoneMask
+                [mobileOnly]="true"
+                autocomplete="tel"
+                placeholder="(61) 99999-8888"
+                [disabled]="busy()"
+              />
+              <span class="field-hint muted"
+                >Use o número de WhatsApp da pessoa. Pode combinar com o e-mail
+                para enviar nos dois canais.</span
+              >
+            </label>
+
+            <div class="invite-form__actions">
               <button
                 type="button"
-                class="btn danger sm"
-                [disabled]="removingInviteId() !== null"
-                (click)="removePendingInvite(p.id)"
+                class="btn btn--ghost"
+                (click)="runLookup()"
+                [disabled]="busy() || lookupBusy()"
               >
-                {{
-                  removingInviteId() === p.id ? 'Removendo…' : 'Remover convite'
-                }}
+                {{ lookupBusy() ? 'Pesquisando…' : 'Identificar' }}
               </button>
             </div>
-          </li>
-        }
-      </ul>
-    }
-  </section>
 
-  <section class="card">
-    <h2 class="card__title">Histórico — convites aceitos</h2>
-    <p class="card__lead muted">
-      Cadastros concluídos por link de convite neste condomínio (mais recentes primeiro).
-    </p>
-    @if (historyError(); as herr) {
-      <p class="banner banner--error" role="alert">{{ herr }}</p>
-    }
-    @if (historyLoading()) {
-      <p class="muted">Carregando histórico…</p>
-    } @else if (history().length === 0) {
-      <p class="muted">Nenhum convite aceito ainda neste condomínio.</p>
-    } @else {
-      <ul class="pending-list history-list">
-        @for (h of history(); track h.id) {
-          <li class="pending-item history-item">
-            <div class="pending-item__top">
-              <span class="pending-item__place">
-                <span class="pending-item__group">{{ h.groupingName }}</span>
-                <span class="pending-item__dot" aria-hidden="true">·</span>
-                <span class="pending-item__unit">{{ h.unitIdentifier }}</span>
+            @if (lookup(); as lu) {
+              <div class="lookup" [class.lookup--warn]="!lu.found">
+                @if (lu.found && lu.fullName) {
+                  <p>
+                    <strong>Nome na base de dados:</strong> {{ lu.fullName }}
+                  </p>
+                } @else if (lu.found && !lu.fullName) {
+                  <p class="muted">Ficha encontrada sem nome preenchido.</p>
+                } @else {
+                  <p class="muted">E-mail ainda não associado a uma pessoa.</p>
+                }
+                @if (lu.message) {
+                  <p class="lookup__msg muted">{{ lu.message }}</p>
+                }
+              </div>
+            }
+
+            <label class="field field--block">
+              <span class="field__label">Nome completo (para o convite)</span>
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="fullName"
+                autocomplete="name"
+                [disabled]="busy()"
+              />
+              <span class="field-hint muted">
+                Obrigatório para e-mail novo; se a pessoa já tem conta e ainda
+                não tem ficha de pessoa, também é necessário para criar a ficha.
               </span>
+            </label>
+
+            <div class="invite-form__submit">
+              <button
+                type="button"
+                class="btn primary"
+                (click)="sendInvite()"
+                [disabled]="busy() || lookupBusy()"
+              >
+                {{ busy() ? 'Enviando…' : 'Enviar convite' }}
+              </button>
             </div>
-            <div class="pending-item__email">{{ contactLabel(h) }}</div>
-            <div class="pending-item__name">{{ h.personFullName }}</div>
-            <div class="pending-item__footer history-item__footer">
-              <span class="pill pill--accepted">Aceito</span>
-              <span class="pending-item__expires history-item__meta">
-                Aceito em {{ formatPendingExpiresAt(h.acceptedAt) }}
-              </span>
-            </div>
-            <div class="history-item__sub muted">
-              Convite enviado em {{ formatPendingExpiresAt(h.createdAt) }}
-            </div>
-          </li>
+          </form>
+        </div>
+      }
+    </section>
+
+    <section class="form-card convites-list-card" aria-labelledby="convites-pendentes">
+      <div class="form-card__head">
+        <h2 id="convites-pendentes" class="form-card__title">
+          Pendentes neste condomínio
+        </h2>
+      </div>
+      <div class="convites-list-card__body">
+        @if (pendingError(); as perr) {
+          <p class="error" role="alert">{{ perr }}</p>
         }
-      </ul>
-    }
-  </section>
+        @if (pendingLoading()) {
+          <p class="muted">Carregando convites…</p>
+        } @else if (pending().length === 0) {
+          <p class="convites-list__empty muted">Nenhum convite pendente.</p>
+        } @else {
+          <ul class="convites-list">
+            @for (p of pending(); track p.id) {
+              <li class="convites-item">
+                <div class="convites-item__top">
+                  <span class="convites-item__place">
+                    <span class="convites-item__group">{{ p.groupingName }}</span>
+                    <span class="convites-item__dot" aria-hidden="true">·</span>
+                    <span class="convites-item__unit">{{ p.unitIdentifier }}</span>
+                  </span>
+                </div>
+                <div class="convites-item__contact">{{ contactLabel(p) }}</div>
+                <div class="convites-item__name muted">{{ p.personFullName }}</div>
+                <div class="convites-item__footer">
+                  @if (p.pendingRegistration) {
+                    <span class="pill pill--wait"
+                      >Aguardando cadastro (nova conta)</span
+                    >
+                  } @else {
+                    <span class="pill pill--wait"
+                      >Aguardando confirmação (conta existente)</span
+                    >
+                  }
+                  <span class="convites-item__expires muted">
+                    Expira em {{ formatPendingExpiresAt(p.expiresAt) }}
+                  </span>
+                </div>
+                <div class="convites-item__actions">
+                  @if (p.inviteUrl) {
+                    <button
+                      type="button"
+                      class="btn btn--ghost sm"
+                      [disabled]="removingInviteId() !== null"
+                      (click)="copyPendingInviteLink(p.id, p.inviteUrl)"
+                    >
+                      {{
+                        copiedInviteId() === p.id
+                          ? 'Link copiado!'
+                          : 'Copiar link do convite'
+                      }}
+                    </button>
+                  } @else {
+                    <span class="convites-item__no-link muted">
+                      Link indisponível para convites criados antes desta
+                      atualização.
+                    </span>
+                  }
+                  <button
+                    type="button"
+                    class="btn danger sm"
+                    [disabled]="removingInviteId() !== null"
+                    (click)="removePendingInvite(p.id)"
+                  >
+                    {{
+                      removingInviteId() === p.id
+                        ? 'Removendo…'
+                        : 'Remover convite'
+                    }}
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+
+    <section class="form-card convites-list-card" aria-labelledby="convites-historico">
+      <div class="form-card__head">
+        <h2 id="convites-historico" class="form-card__title">
+          Histórico — convites aceitos
+        </h2>
+        <p class="form-card__lede">
+          Cadastros concluídos por link de convite neste condomínio (mais recentes
+          primeiro).
+        </p>
+      </div>
+      <div class="convites-list-card__body">
+        @if (historyError(); as herr) {
+          <p class="error" role="alert">{{ herr }}</p>
+        }
+        @if (historyLoading()) {
+          <p class="muted">Carregando histórico…</p>
+        } @else if (history().length === 0) {
+          <p class="convites-list__empty muted">
+            Nenhum convite aceito ainda neste condomínio.
+          </p>
+        } @else {
+          <ul class="convites-list">
+            @for (h of history(); track h.id) {
+              <li class="convites-item convites-item--history">
+                <div class="convites-item__top">
+                  <span class="convites-item__place">
+                    <span class="convites-item__group">{{ h.groupingName }}</span>
+                    <span class="convites-item__dot" aria-hidden="true">·</span>
+                    <span class="convites-item__unit">{{ h.unitIdentifier }}</span>
+                  </span>
+                </div>
+                <div class="convites-item__contact">{{ contactLabel(h) }}</div>
+                <div class="convites-item__name muted">{{ h.personFullName }}</div>
+                <div class="convites-item__footer">
+                  <span class="pill pill--accepted">Aceito</span>
+                  <span class="convites-item__expires muted">
+                    Aceito em {{ formatPendingExpiresAt(h.acceptedAt) }}
+                  </span>
+                </div>
+                <p class="convites-item__sub muted">
+                  Convite enviado em {{ formatPendingExpiresAt(h.createdAt) }}
+                </p>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
   }
 </div>

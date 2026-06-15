@@ -1,11 +1,6 @@
 <div class="page">
   <header class="page__header">
     <h1>Comunicação</h1>
-    <p class="page__intro">
-      Informativos com anexos. O síndico escolhe destinatários (contas de usuários ligadas às unidades
-      como proprietário ou responsável), canais (e-mail, SMS e WhatsApp em integração) e envia. A
-      leitura fica registrada ao abrir no painel ou pelo link do e-mail.
-    </p>
   </header>
 
   @if (readConfirmedBanner()) {
@@ -13,10 +8,6 @@
       Leitura registrada (link do e-mail).
       <button type="button" class="btn ghost sm" (click)="dismissReadBanner()">Fechar</button>
     </p>
-  }
-
-  @if (actionError(); as ae) {
-    <p class="error" role="alert">{{ ae }}</p>
   }
 
   @if (loading()) {
@@ -112,8 +103,9 @@
                 } @else {
                 <div class="comm-card__head">
                   <div class="comm-card__head-main">
+                    <span class="form-section__step" aria-hidden="true">1</span>
                     <div class="comm-card__head-text">
-                      <h2 class="comm-card__title">{{ sel.title }}</h2>
+                      <h2 class="comm-card__title">Mensagem do informativo</h2>
                       <p class="muted sm">
                         Estado: <strong>Enviado</strong>
                         @if (sel.sentAt) {
@@ -127,14 +119,42 @@
                       }
                     </div>
                   </div>
+                  <div class="comm-card__actions">
+                    <button
+                      type="button"
+                      class="btn ghost"
+                      [disabled]="busy()"
+                      (click)="saveSentChanges()"
+                    >
+                      Guardar alterações
+                    </button>
+                    <button
+                      type="button"
+                      class="btn primary"
+                      [disabled]="busy()"
+                      (click)="resendSelected()"
+                    >
+                      Enviar novamente
+                    </button>
+                  </div>
                 </div>
                 <p class="muted sm">
-                  Título, mensagem e anexos não podem ser alterados. À direita ajuste a audiência, os
-                  interruptores de canal e a tabela por pessoa; use <strong>Guardar destinatários e canais</strong>
-                  só para gravar, ou <strong>Enviar novamente</strong> para gravar e disparar e-mail/SMS com novos
-                  links.
+                  Pode corrigir título, mensagem e anexos. Use <strong>Guardar alterações</strong> só para
+                  gravar; <strong>Enviar novamente</strong> grava e dispara e-mail/SMS com novos links (os
+                  links do envio anterior continuam válidos).
                 </p>
-                <div class="comm-body poll-body-html" [innerHTML]="safeHtml(sel.body)"></div>
+                <form [formGroup]="draftForm" (ngSubmit)="saveSentChanges()" class="comm-draft-form">
+                  <label class="field field--block">
+                    <span class="field__label">Título</span>
+                    <input class="input" type="text" formControlName="title" maxlength="512" />
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Mensagem</span>
+                    <app-poll-body-editor formControlName="body"></app-poll-body-editor>
+                  </label>
+                  <button type="submit" class="sr-only">Guardar alterações</button>
+                </form>
+
                 @if (sel.attachments?.length) {
                   <h3 class="comm-subh">Anexos</h3>
                   <ul class="comm-att-list">
@@ -153,11 +173,34 @@
                           >
                             Baixar
                           </button>
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            [disabled]="busy()"
+                            (click)="removeAttachment(a)"
+                          >
+                            Remover
+                          </button>
                         </div>
                       </li>
                     }
                   </ul>
                 }
+
+                <div class="comm-upload">
+                  <label class="btn ghost sm comm-file-label">
+                    Adicionar anexo
+                    <input
+                      type="file"
+                      class="sr-only"
+                      [disabled]="busy()"
+                      (change)="onAttachmentSelected($event)"
+                    />
+                  </label>
+                  <p class="muted sm">
+                    Tipos permitidos: PDF, imagens, Word, texto, áudio e vídeo (MP4, WebM, MOV).
+                  </p>
+                </div>
                 }
               </div>
             </article>
@@ -171,16 +214,14 @@
                       <h2 class="comm-card__title">Destinatários e canais</h2>
                       @if (sel.status === 'draft') {
                         <p class="comm-side-hint">
-                          Entram apenas <strong>usuários</strong> com conta ligada à ficha (proprietário ou
-                          responsável). Lista vazia significa todas as unidades ou todos os agrupamentos. O
-                          botão <strong>Enviar</strong> salva o rascunho e a audiência antes de disparar os
-                          canais.
+                          Escolha <strong>disparo digital</strong> ou <strong>versão impressa</strong> — cada
+                          destinatário fica numa lista só. O botão <strong>Enviar</strong> dispara apenas os
+                          digitais; impressão usa o PDF gerado.
                         </p>
                       } @else {
                         <p class="comm-side-hint">
-                          Ajuste a audiência e os canais para o <strong>próximo envio</strong>. Os links já
-                          enviados continuam válidos. Guarde as alterações ou use <strong>Enviar novamente</strong>
-                          para gravar e notificar.
+                          Cada pessoa está no disparo digital <em>ou</em> na versão impressa, nunca nos dois.
+                          Ajuste a audiência e use <strong>Enviar novamente</strong> só para quem tem envio digital.
                         </p>
                       }
                     </div>
@@ -259,37 +300,88 @@
                 </div>
               }
 
-              <fieldset class="comm-fieldset">
-                <legend class="comm-legend">Canais padrão</legend>
+              <fieldset class="comm-fieldset comm-fieldset--mode">
+                <legend class="comm-legend">Forma de entrega (novos na lista)</legend>
                 <p class="muted sm comm-fieldset-help">
-                  Valores iniciais para novos destinatários na tabela abaixo; dá para ajustar por
-                  pessoa depois da pré-visualização.
+                  Ao atualizar a lista, cada pessoa entra na opção escolhida. Depois pode mover entre listas.
                 </p>
-                <label class="comm-check">
-                  <input
-                    type="checkbox"
-                    [checked]="channelEmail()"
-                    (change)="channelEmail.set($any($event.target).checked); onGlobalChannelChange()"
-                  />
-                  E-mail
-                </label>
-                <label class="comm-check">
-                  <input
-                    type="checkbox"
-                    [checked]="channelSms()"
-                    (change)="channelSms.set($any($event.target).checked); onGlobalChannelChange()"
-                  />
-                  SMS
-                </label>
-                <label class="comm-check">
-                  <input
-                    type="checkbox"
-                    [checked]="channelWhatsapp()"
-                    (change)="channelWhatsapp.set($any($event.target).checked); onGlobalChannelChange()"
-                  />
-                  WhatsApp <span class="muted sm">(integração em breve)</span>
-                </label>
+                <div class="comm-seg comm-seg--delivery">
+                  <label class="comm-radio">
+                    <input
+                      type="radio"
+                      name="deliveryMode"
+                      [checked]="deliveryDefaultsMode() === 'digital'"
+                      (change)="setDeliveryDefaultsMode('digital')"
+                    />
+                    Disparo digital
+                  </label>
+                  <label class="comm-radio">
+                    <input
+                      type="radio"
+                      name="deliveryMode"
+                      [checked]="deliveryDefaultsMode() === 'print'"
+                      (change)="setDeliveryDefaultsMode('print')"
+                    />
+                    Versão impressa (PDF)
+                  </label>
+                </div>
               </fieldset>
+
+              @if (deliveryDefaultsMode() === 'digital') {
+                <fieldset class="comm-fieldset comm-fieldset--digital">
+                  <legend class="comm-legend">Canais do disparo digital</legend>
+                  <p class="muted sm comm-fieldset-help">
+                    E-mail, SMS e WhatsApp com link de leitura (valores iniciais para a lista digital).
+                  </p>
+                  <label class="comm-check">
+                    <input
+                      type="checkbox"
+                      [checked]="channelEmail()"
+                      (change)="channelEmail.set($any($event.target).checked); onGlobalChannelChange()"
+                    />
+                    E-mail
+                  </label>
+                  <label class="comm-check">
+                    <input
+                      type="checkbox"
+                      [checked]="channelSms()"
+                      (change)="channelSms.set($any($event.target).checked); onGlobalChannelChange()"
+                    />
+                    SMS
+                  </label>
+                  <label class="comm-check">
+                    <input
+                      type="checkbox"
+                      [checked]="channelWhatsapp()"
+                      (change)="channelWhatsapp.set($any($event.target).checked); onGlobalChannelChange()"
+                    />
+                    WhatsApp <span class="muted sm">(integração em breve)</span>
+                  </label>
+                  <button
+                    type="button"
+                    class="btn ghost sm comm-pdf-gen-btn comm-pdf-gen-btn--secondary"
+                    [disabled]="busy() || pdfBusy()"
+                    (click)="generatePdf()"
+                  >
+                    {{ pdfBusy() ? 'Gerando PDF…' : 'Gerar PDF do informativo (impressão)' }}
+                  </button>
+                </fieldset>
+              } @else {
+                <fieldset class="comm-fieldset comm-fieldset--pdf">
+                  <legend class="comm-legend">Versão impressa (PDF)</legend>
+                  <p class="muted sm comm-fieldset-help">
+                    Sem envio por e-mail, SMS ou WhatsApp. Gere o PDF para imprimir ou entregar.
+                  </p>
+                  <button
+                    type="button"
+                    class="btn ghost sm comm-pdf-gen-btn"
+                    [disabled]="busy() || pdfBusy()"
+                    (click)="generatePdf()"
+                  >
+                    {{ pdfBusy() ? 'Gerando PDF…' : 'Gerar PDF do informativo' }}
+                  </button>
+                </fieldset>
+              }
 
               <button
                 type="button"
@@ -301,61 +393,108 @@
               </button>
 
               @if (previewUsers().length > 0) {
-                <h3 class="comm-subh">Quem recebe (por canal)</h3>
-                <div class="comm-table-wrap">
-                  <table class="comm-table comm-table--dense">
-                    <thead>
-                      <tr>
-                        <th>Nome</th>
-                        <th>Unidades</th>
-                        <th title="Enviar e-mail">E-mail</th>
-                        <th title="Enviar SMS">SMS</th>
-                        <th title="WhatsApp (em breve)">WApp</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (u of previewUsers(); track u.userId) {
+                @if (digitalPreviewUsers().length > 0) {
+                  <h3 class="comm-subh">Disparo digital</h3>
+                  <div class="comm-table-wrap">
+                    <table class="comm-table comm-table--dense">
+                      <thead>
                         <tr>
-                          <td>{{ u.displayName }}</td>
-                          <td class="muted sm">{{ u.unitSummary.join('; ') }}</td>
-                          <td>
-                            @if (u.hasEmail) {
-                              <input
-                                type="checkbox"
-                                [checked]="prefFor(u.userId).email"
-                                (change)="setPref(u.userId, 'email', $any($event.target).checked)"
-                              />
-                            } @else {
-                              <span class="muted">—</span>
-                            }
-                          </td>
-                          <td>
-                            @if (u.hasPhone) {
-                              <input
-                                type="checkbox"
-                                [checked]="prefFor(u.userId).sms"
-                                (change)="setPref(u.userId, 'sms', $any($event.target).checked)"
-                              />
-                            } @else {
-                              <span class="muted">—</span>
-                            }
-                          </td>
-                          <td>
-                            @if (u.hasPhone) {
-                              <input
-                                type="checkbox"
-                                [checked]="prefFor(u.userId).whatsapp"
-                                (change)="setPref(u.userId, 'whatsapp', $any($event.target).checked)"
-                              />
-                            } @else {
-                              <span class="muted">—</span>
-                            }
-                          </td>
+                          <th>Nome</th>
+                          <th>Unidades</th>
+                          <th title="E-mail">E-mail</th>
+                          <th title="SMS">SMS</th>
+                          <th title="WhatsApp">WApp</th>
+                          <th></th>
                         </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        @for (u of digitalPreviewUsers(); track u.userId) {
+                          <tr>
+                            <td>{{ u.displayName }}</td>
+                            <td class="muted sm">{{ u.unitSummary.join('; ') }}</td>
+                            <td>
+                              @if (u.hasEmail) {
+                                <input
+                                  type="checkbox"
+                                  [checked]="prefFor(u.userId).email"
+                                  (change)="setPref(u.userId, 'email', $any($event.target).checked)"
+                                />
+                              } @else {
+                                <span class="muted">—</span>
+                              }
+                            </td>
+                            <td>
+                              @if (u.hasPhone) {
+                                <input
+                                  type="checkbox"
+                                  [checked]="prefFor(u.userId).sms"
+                                  (change)="setPref(u.userId, 'sms', $any($event.target).checked)"
+                                />
+                              } @else {
+                                <span class="muted">—</span>
+                              }
+                            </td>
+                            <td>
+                              @if (u.hasPhone) {
+                                <input
+                                  type="checkbox"
+                                  [checked]="prefFor(u.userId).whatsapp"
+                                  (change)="setPref(u.userId, 'whatsapp', $any($event.target).checked)"
+                                />
+                              } @else {
+                                <span class="muted">—</span>
+                              }
+                            </td>
+                            <td class="comm-table__move">
+                              <button
+                                type="button"
+                                class="btn ghost sm"
+                                (click)="setDeliveryMode(u.userId, 'print')"
+                              >
+                                → Impressão
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+
+                @if (printPreviewUsers().length > 0) {
+                  <h3 class="comm-subh">Versão impressa (PDF)</h3>
+                  <p class="muted sm">
+                    Estas pessoas não recebem e-mail nem SMS. Use <strong>Gerar PDF do informativo</strong> acima.
+                  </p>
+                  <div class="comm-table-wrap">
+                    <table class="comm-table comm-table--dense">
+                      <thead>
+                        <tr>
+                          <th>Nome</th>
+                          <th>Unidades</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (u of printPreviewUsers(); track u.userId) {
+                          <tr>
+                            <td>{{ u.displayName }}</td>
+                            <td class="muted sm">{{ u.unitSummary.join('; ') }}</td>
+                            <td class="comm-table__move">
+                              <button
+                                type="button"
+                                class="btn ghost sm"
+                                (click)="setDeliveryMode(u.userId, 'digital')"
+                              >
+                                → Digital
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
               } @else if (!previewBusy()) {
                 <p class="muted sm">
                   Clique em <strong>Atualizar lista de destinatários</strong> para montar a tabela
@@ -365,14 +504,15 @@
 
               @if (sel.status === 'sent') {
                 <div class="comm-aside-sent-actions">
-                  <button type="button" class="btn ghost" [disabled]="busy()" (click)="saveDeliverySettings()">
-                    Guardar destinatários e canais
+                  <button type="button" class="btn ghost" [disabled]="busy()" (click)="saveSentChanges()">
+                    Guardar alterações
                   </button>
                   <button type="button" class="btn primary" [disabled]="busy()" (click)="resendSelected()">
                     Enviar novamente
                   </button>
                 </div>
               }
+
               </div>
             </aside>
           </div>
@@ -381,56 +521,88 @@
         @if (sel.status === 'sent' && sel.recipients?.length) {
           <article class="form-card comm-detail">
             <h3 class="comm-subh">Último disparo — destinatários</h3>
-            <div class="comm-table-wrap">
-              <table class="comm-table">
-                <thead>
-                  <tr>
-                    <th>Pessoa (conta)</th>
-                    <th>E-mail</th>
-                    <th>SMS</th>
-                    <th>WhatsApp</th>
-                    <th>Leitura</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (r of sel.recipients; track r.id) {
+
+            @if (sentDigitalRecipients().length > 0) {
+              <h4 class="comm-subh comm-subh--minor">Disparo digital</h4>
+              <div class="comm-table-wrap">
+                <table class="comm-table">
+                  <thead>
                     <tr>
-                      <td>
-                        <strong>{{ r.recipientDisplayName?.trim() || r.emailSnapshot || '—' }}</strong>
-                      </td>
-                      <td>
-                        <span [ngClass]="{ 'text-err': r.emailStatus === 'failed' }">{{
-                          channelLabel(r.emailStatus)
-                        }}</span>
-                        @if (r.emailError) {
-                          <span class="muted sm">{{ r.emailError }}</span>
-                        }
-                      </td>
-                      <td>
-                        <span [ngClass]="{ 'text-err': r.smsStatus === 'failed' }">{{
-                          channelLabel(r.smsStatus)
-                        }}</span>
-                        @if (r.smsError) {
-                          <span class="muted sm">{{ r.smsError }}</span>
-                        }
-                      </td>
-                      <td>
-                        <span
-                          [ngClass]="{
-                            'text-err': r.whatsappStatus === 'failed',
-                          }"
-                          >{{ channelLabel(r.whatsappStatus ?? 'skipped') }}</span
-                        >
-                        @if (r.whatsappError) {
-                          <span class="muted sm">{{ r.whatsappError }}</span>
-                        }
-                      </td>
-                      <td>{{ recipientRead(r) }}</td>
+                      <th>Pessoa (conta)</th>
+                      <th>E-mail</th>
+                      <th>SMS</th>
+                      <th>WhatsApp</th>
+                      <th>Leitura</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    @for (r of sentDigitalRecipients(); track r.id) {
+                      <tr>
+                        <td>
+                          <strong>{{
+                            r.recipientDisplayName?.trim() || r.emailSnapshot || '—'
+                          }}</strong>
+                        </td>
+                        <td>
+                          <span [ngClass]="{ 'text-err': r.emailStatus === 'failed' }">{{
+                            channelLabel(r.emailStatus)
+                          }}</span>
+                          @if (r.emailError) {
+                            <span class="muted sm">{{ r.emailError }}</span>
+                          }
+                        </td>
+                        <td>
+                          <span [ngClass]="{ 'text-err': r.smsStatus === 'failed' }">{{
+                            channelLabel(r.smsStatus)
+                          }}</span>
+                          @if (r.smsError) {
+                            <span class="muted sm">{{ r.smsError }}</span>
+                          }
+                        </td>
+                        <td>
+                          <span
+                            [ngClass]="{
+                              'text-err': r.whatsappStatus === 'failed',
+                            }"
+                            >{{ channelLabel(r.whatsappStatus ?? 'skipped') }}</span
+                          >
+                          @if (r.whatsappError) {
+                            <span class="muted sm">{{ r.whatsappError }}</span>
+                          }
+                        </td>
+                        <td>{{ recipientRead(r) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
+            @if (sentPrintRecipients().length > 0) {
+              <h4 class="comm-subh comm-subh--minor">Versão impressa (PDF)</h4>
+              <div class="comm-table-wrap">
+                <table class="comm-table">
+                  <thead>
+                    <tr>
+                      <th>Pessoa (conta)</th>
+                      <th>Entrega</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (r of sentPrintRecipients(); track r.id) {
+                      <tr>
+                        <td>
+                          <strong>{{
+                            r.recipientDisplayName?.trim() || r.emailSnapshot || '—'
+                          }}</strong>
+                        </td>
+                        <td>{{ pdfChannelLabel(r.pdfStatus) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
           </article>
         }
 
@@ -527,7 +699,7 @@
       } @else {
         <ul class="comm-list">
           @for (c of items(); track c.id) {
-            <li>
+            <li class="comm-list__row">
               <button type="button" class="comm-list__btn" (click)="navigateToDetail(c.id)">
                 <span class="comm-list__title">{{ c.title }}</span>
                 <span
@@ -539,6 +711,16 @@
                   <span class="muted sm">{{ fmtSentAt(c.sentAt) }}</span>
                 }
               </button>
+              @if (isMgmt()) {
+                <button
+                  type="button"
+                  class="btn ghost sm comm-list__remove"
+                  [disabled]="busy() || removeBusyId() === c.id"
+                  (click)="confirmRemoveCommunication(c, $event)"
+                >
+                  {{ removeBusyId() === c.id ? 'Removendo…' : 'Remover' }}
+                </button>
+              }
             </li>
           }
         </ul>

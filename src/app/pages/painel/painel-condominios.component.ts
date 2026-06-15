@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { translateHttpErrorMessage } from '../../core/api-errors-pt';
+import { FlashMessageService } from '../../core/flash-message.service';
 import { AuthService, Condominium } from '../../core/auth.service';
 import {
   CondominiumSaasApiService,
@@ -31,6 +32,7 @@ export class PainelCondominiosComponent implements OnInit {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly auth = inject(AuthService);
+  private readonly flash = inject(FlashMessageService);
   private readonly fb = inject(FormBuilder);
   private readonly selectedCondo = inject(SelectedCondominiumService);
   private readonly saasPlansApi = inject(SaasPlansApiService);
@@ -38,7 +40,6 @@ export class PainelCondominiosComponent implements OnInit {
 
   protected readonly condominiums = signal<Condominium[]>([]);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
   protected readonly loadingList = signal(true);
   protected readonly saving = signal(false);
   protected readonly deletingId = signal<string | null>(null);
@@ -348,7 +349,7 @@ export class PainelCondominiosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loadingList.set(false);
-        this.loadError.set(this.messageFromHttp(err));
+        (() => { const m = this.messageFromHttp(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -361,7 +362,6 @@ export class PainelCondominiosComponent implements OnInit {
   }
 
   create(): void {
-    this.formError.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -381,11 +381,12 @@ export class PainelCondominiosComponent implements OnInit {
           planId: def,
         });
         this.saving.set(false);
+        this.flash.success('Condomínio criado.');
         this.refresh();
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
-        this.formError.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }

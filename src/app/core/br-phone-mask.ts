@@ -60,3 +60,35 @@ export function formatBrPhoneDisplay(digitsNational: string): string {
   }
   return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4, 8)}`;
 }
+
+/** Celular brasileiro completo (11 dígitos, 9 após o DDD) — usável no WhatsApp. */
+export function isBrWhatsAppPhone(input: string): boolean {
+  const d = toNationalPhoneDigits(input);
+  return d.length === 11 && d[2] === '9';
+}
+
+/** E.164 BR sem «+» (ex.: 5511987654321) ou null se não for WhatsApp. */
+export function toWhatsAppPhoneE164(input: string): string | null {
+  const d = toNationalPhoneDigits(input);
+  if (!isBrWhatsAppPhone(d)) {
+    return null;
+  }
+  return `55${d}`;
+}
+
+/** Link wa.me para abrir conversa; null se o número não for celular BR. */
+export function buildWhatsAppChatUrl(
+  input: string,
+  text?: string,
+): string | null {
+  const e164 = toWhatsAppPhoneE164(input);
+  if (!e164) {
+    return null;
+  }
+  const base = `https://wa.me/${e164}`;
+  const msg = (text ?? '').trim();
+  if (!msg) {
+    return base;
+  }
+  return `${base}?text=${encodeURIComponent(msg)}`;
+}

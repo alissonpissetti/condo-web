@@ -1,4 +1,5 @@
 import { BrAddressNumberMaskDirective } from '../../core/br-address-number-mask.directive';
+import { FlashMessageService } from '../../core/flash-message.service';
 import { BrCepMaskDirective } from '../../core/br-cep-mask.directive';
 import { BrCpfMaskDirective } from '../../core/br-cpf-mask.directive';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
@@ -87,12 +88,11 @@ export class PainelDadosComponent implements OnInit {
   protected readonly brazilStates = BRAZIL_STATES;
 
   private readonly auth = inject(AuthService);
+  private readonly flash = inject(FlashMessageService);
   private readonly cep = inject(CepService);
   private readonly fb = inject(FormBuilder);
 
   protected readonly loadError = signal<string | null>(null);
-  protected readonly saveError = signal<string | null>(null);
-  protected readonly saveSuccess = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly cepLookupError = signal<string | null>(null);
@@ -195,9 +195,12 @@ export class PainelDadosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(
-          this.messageFromHttp(err, 'Não foi possível carregar os dados.'),
+        const msg = this.messageFromHttp(
+          err,
+          'Não foi possível carregar os dados.',
         );
+        this.loadError.set(msg);
+        this.flash.error(msg);
       },
     });
   }
@@ -461,8 +464,6 @@ export class PainelDadosComponent implements OnInit {
   }
 
   submit(): void {
-    this.saveError.set(null);
-    this.saveSuccess.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -490,7 +491,7 @@ export class PainelDadosComponent implements OnInit {
     this.auth.updateMe(body).subscribe({
       next: (me) => {
         this.saving.set(false);
-        this.saveSuccess.set('Dados salvos com sucesso.');
+        this.flash.success('Dados salvos com sucesso.');
         this.hasPersonProfile.set(!!me.person);
         this.initialPersonCpf.set(me.person?.cpf ?? null);
         this.personRecordId.set(me.person?.id ?? null);
@@ -525,7 +526,7 @@ export class PainelDadosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
-        this.saveError.set(
+        this.flash.error(
           this.messageFromHttp(err, 'Não foi possível salvar os dados.'),
         );
       },

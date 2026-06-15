@@ -43,7 +43,16 @@ const EXACT: Record<string, string> = {
     'Indique o mês/ano da primeira mensalidade.',
   'O valor total por unidade é baixo demais para o número de parcelas.':
     'O total por unidade é baixo demais para o número de parcelas.',
-  'Regra de rateio em falta.': 'Regra de rateio em falta.',
+  'Origem e destino devem diferir (conta ou fundo).':
+    'Escolha contas de origem e destino diferentes (pode ser o mesmo banco, ex.: investimento → corrente).',
+  'Na mesma conta bancária, escolha fundos de origem e destino diferentes.':
+    'Na mesma conta bancária, escolha fundos de origem e destino diferentes.',
+  'Escolha contas de origem e destino diferentes (pode ser o mesmo banco, ex.: investimento → corrente).':
+    'Escolha contas de origem e destino diferentes (pode ser o mesmo banco, ex.: investimento → corrente).',
+  'Regra de rateio em falta.': 'Regra de rateio ausente.',
+  'Regra de rateio ausente.': 'Regra de rateio ausente.',
+  'Token em falta.': 'Token ausente.',
+  'Token ausente.': 'Token ausente.',
   'Login por SMS indisponível neste ambiente.':
     'Login por SMS indisponível neste ambiente.',
   'Não foi possível contatar o serviço de SMS.':
@@ -65,18 +74,18 @@ const EXACT: Record<string, string> = {
   'Cannot delete the last grouping':
     'Não é possível excluir o último agrupamento.',
   'Email já está associado a outra ficha de pessoa.':
-    'E-mail já está associado a outra ficha de pessoa.',
+    'E-mail já está associado a outro cadastro de pessoa.',
   'CPF já cadastrado em outra ficha de pessoa.':
-    'CPF já cadastrado em outra ficha de pessoa.',
+    'CPF já cadastrado em outro cadastro de pessoa.',
   'E-mail ou CPF já cadastrado em outra ficha de pessoa.':
-    'E-mail ou CPF já cadastrado em outra ficha de pessoa.',
+    'E-mail ou CPF já cadastrado em outro cadastro de pessoa.',
   'CEP inválido: são necessários 8 dígitos quando indicar endereço.':
     'CEP inválido: são necessários 8 dígitos quando indicar endereço.',
   'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.':
     'Endereço incompleto: logradouro, número, bairro, cidade e UF são obrigatórios com o CEP.',
   'UF deve ter 2 letras.': 'UF deve ter 2 letras.',
   'Indique o nome completo para cadastrar o endereço na ficha.':
-    'Indique o nome completo para cadastrar o endereço na ficha.',
+    'Informe o nome completo para cadastrar o endereço no cadastro.',
   'Expense transactions require an allocation rule':
     'Despesas exigem uma regra de rateio.',
   'Expense and investment transactions require an allocation rule':

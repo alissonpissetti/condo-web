@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { NgClass } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import type { Observable } from 'rxjs';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   CondominiumManagementService,
   type GroupingWithUnits,
@@ -19,6 +21,11 @@ import {
   type FinancialFund,
   type FinancialTransaction,
 } from '../../../core/financial-api.service';
+import {
+  extratoBalanceCssClass,
+  extratoDeltaCssClass,
+  parseCentsBigint,
+} from '../../../core/financial-extrato-display';
 import {
   centsToReaisInput,
   formatCentsBrl,
@@ -54,12 +61,13 @@ function addMonthsYm(ym: string, add: number): string {
 
 @Component({
   selector: 'app-painel-fundos',
-  imports: [ReactiveFormsModule],
+  imports: [NgClass, ReactiveFormsModule],
   templateUrl: './painel-fundos.component.html',
   styleUrl: './painel-fundos.component.scss',
 })
 export class PainelFundosComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly fb = inject(FormBuilder);
   private readonly api = inject(FinancialApiService);
   private readonly condoApi = inject(CondominiumManagementService);
@@ -70,7 +78,6 @@ export class PainelFundosComponent implements OnInit {
   protected readonly funds = signal<FinancialFund[]>([]);
   protected readonly tree = signal<GroupingWithUnits[]>([]);
   protected readonly loadError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly editingId = signal<string | null>(null);
@@ -120,7 +127,7 @@ export class PainelFundosComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condoId = id;
@@ -131,7 +138,7 @@ export class PainelFundosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -152,7 +159,6 @@ export class PainelFundosComponent implements OnInit {
   }
 
   startEdit(f: FinancialFund): void {
-    this.formError.set(null);
     this.editingId.set(f.id);
     this.parcelEntryMode.set('byInstallments');
     this.form.patchValue({
@@ -172,7 +178,6 @@ export class PainelFundosComponent implements OnInit {
   cancelEdit(): void {
     this.editingId.set(null);
     this.createFundExpanded.set(false);
-    this.formError.set(null);
     this.parcelEntryMode.set('byInstallments');
     this.form.reset({
       name: '',
@@ -242,7 +247,7 @@ export class PainelFundosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -451,18 +456,17 @@ export class PainelFundosComponent implements OnInit {
   }
 
   submit(): void {
-    this.formError.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
     const rule = this.buildRule();
     if (rule.kind === 'unit_ids' && rule.unitIds.length === 0) {
-      this.formError.set('Selecione pelo menos uma unidade no rateio.');
+      this.flash.warning('Selecione pelo menos uma unidade no rateio.');
       return;
     }
     if (rule.kind === 'grouping_ids' && rule.groupingIds.length === 0) {
-      this.formError.set('Selecione pelo menos um agrupamento no rateio.');
+      this.flash.warning('Selecione pelo menos um agrupamento no rateio.');
       return;
     }
 
@@ -472,12 +476,12 @@ export class PainelFundosComponent implements OnInit {
     if (isPermanent) {
       const r = parseFloat(String(v.permanentMonthlyReais).replace(',', '.'));
       if (!Number.isFinite(r) || r <= 0) {
-        this.formError.set('Indique o débito mensal (R$) para o fundo permanente.');
+        this.flash.warning('Indique o débito mensal (R$) para o fundo permanente.');
         return;
       }
       const cents = reaisToCents(r);
       if (cents < 1) {
-        this.formError.set('Valor mensal demasiado baixo.');
+        this.flash.warning('Valor mensal demasiado baixo.');
         return;
       }
       const body = {
@@ -500,53 +504,53 @@ export class PainelFundosComponent implements OnInit {
     if (this.parcelEntryMode() === 'byObra') {
       const paying = this.countPayingUnits();
       if (paying < 1) {
-        this.formError.set(
+        this.flash.warning(
           'No modo obra, defina o rateio com pelo menos uma unidade a pagar.',
         );
         return;
       }
       const obraTotal = parseFloat(String(v.obraTotalReais).replace(',', '.'));
       if (!Number.isFinite(obraTotal) || obraTotal <= 0) {
-        this.formError.set('Indique o valor total da obra (R$).');
+        this.flash.warning('Indique o valor total da obra (R$).');
         return;
       }
       const desiredMonthly = parseFloat(
         String(v.obraDesiredMonthlyReais).replace(',', '.'),
       );
       if (!Number.isFinite(desiredMonthly) || desiredMonthly <= 0) {
-        this.formError.set('Indique a mensalidade desejada por unidade (R$).');
+        this.flash.warning('Indique a mensalidade desejada por unidade (R$).');
         return;
       }
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(start)) {
-        this.formError.set('Indique o mês/ano da primeira mensalidade.');
+        this.flash.warning('Indique o mês/ano da primeira mensalidade.');
         return;
       }
       const obraCents = reaisToCents(obraTotal);
       const desiredCents = reaisToCents(desiredMonthly);
       if (obraCents < 1) {
-        this.formError.set('Valor total da obra demasiado baixo.');
+        this.flash.warning('Valor total da obra demasiado baixo.');
         return;
       }
       if (desiredCents < 1) {
-        this.formError.set('Mensalidade desejada demasiado baixa.');
+        this.flash.warning('Mensalidade desejada demasiado baixa.');
         return;
       }
       const totalPerUnitCents = Math.round(obraCents / paying);
       if (totalPerUnitCents < 1) {
-        this.formError.set(
+        this.flash.warning(
           'O total da obra não chega para dividir pelas unidades do rateio.',
         );
         return;
       }
       const nObra = Math.ceil(totalPerUnitCents / desiredCents);
       if (!Number.isFinite(nObra) || nObra < 1) {
-        this.formError.set(
+        this.flash.warning(
           'Não foi possível calcular o número de mensalidades.',
         );
         return;
       }
       if (Math.floor(totalPerUnitCents / nObra) < 1) {
-        this.formError.set(
+        this.flash.warning(
           'Ajuste a mensalidade desejada ou o total da obra (parcela mensal efetiva seria zero).',
         );
         return;
@@ -574,20 +578,20 @@ export class PainelFundosComponent implements OnInit {
     const total = parseFloat(String(v.termTotalPerUnitReais).replace(',', '.'));
     const n = parseInt(String(v.termInstallmentCount), 10);
     if (!Number.isFinite(total) || total <= 0) {
-      this.formError.set('Indique o total por unidade a arrecadar (R$).');
+      this.flash.warning('Indique o total por unidade a arrecadar (R$).');
       return;
     }
     if (!Number.isFinite(n) || n < 1) {
-      this.formError.set('Indique em quantas mensalidades parcelar.');
+      this.flash.warning('Indique em quantas mensalidades parcelar.');
       return;
     }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(start)) {
-      this.formError.set('Indique o mês/ano da primeira mensalidade.');
+      this.flash.warning('Indique o mês/ano da primeira mensalidade.');
       return;
     }
     const totalCents = reaisToCents(total);
     if (Math.floor(totalCents / n) < 1) {
-      this.formError.set(
+      this.flash.warning(
         'O total por unidade é baixo demais para o número de parcelas.',
       );
       return;
@@ -619,7 +623,7 @@ export class PainelFundosComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -649,26 +653,39 @@ export class PainelFundosComponent implements OnInit {
     this.extratoLoading.set(false);
   }
 
-  /** Saldo acumulado atual na lista de fundos (atualizado ao fechar o carregamento do extrato). */
+  /** Saldo acumulado atual na lista de fundos (com sinal). */
   protected fundBalanceDisplay(fundId: string): string {
     const f = this.funds().find((x) => x.id === fundId);
     if (f?.accumulatedBalanceCents == null) {
       return '—';
     }
-    return formatCentsBrl(f.accumulatedBalanceCents, { absolute: true });
+    return formatCentsBrl(f.accumulatedBalanceCents);
   }
 
-  /** Saldo após o último movimento do extrato (deve coincidir com o saldo do cartão). */
+  protected fundBalanceCssClass(fundId: string): string {
+    const f = this.funds().find((x) => x.id === fundId);
+    return this.extratoBalanceCssClass(this.parseCentsBigint(f?.accumulatedBalanceCents));
+  }
+
+  /** Saldo após o último movimento do extrato (com sinal). */
   protected extratoLastRunningDisplay(): string {
     const r = this.extratoRows();
     if (r.length === 0) {
       return '—';
     }
     const last = r[r.length - 1];
-    return last
-      ? formatCentsBrl(last.runningAfterCents, { absolute: true })
-      : '—';
+    return last ? formatCentsBrl(last.runningAfterCents) : '—';
   }
+
+  protected extratoLastRunningCssClass(): string {
+    const r = this.extratoRows();
+    const last = r[r.length - 1];
+    return this.extratoBalanceCssClass(last?.runningAfterCents ?? 0n);
+  }
+
+  protected readonly extratoDeltaCssClass = extratoDeltaCssClass;
+  protected readonly extratoBalanceCssClass = extratoBalanceCssClass;
+  protected readonly parseCentsBigint = parseCentsBigint;
 
   protected onExtratoBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) {
@@ -737,7 +754,7 @@ export class PainelFundosComponent implements OnInit {
     this.api.deleteFund(this.condoId, f.id).subscribe({
       next: () => this.refreshFundsOnly(),
       error: (err: HttpErrorResponse) => {
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }

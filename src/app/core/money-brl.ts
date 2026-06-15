@@ -43,7 +43,7 @@ export function reaisToCents(reais: number): number {
   return Math.round(reais * 100);
 }
 
-/** Centavos (string ou número da API) para texto em reais em formulários (ex.: "12.50"). */
+/** Centavos (string ou número da API) para texto em reais em formulários (pt-BR). */
 export function centsToReaisInput(cents: string | number | null | undefined): string {
   if (cents == null || cents === '') {
     return '';
@@ -52,5 +52,45 @@ export function centsToReaisInput(cents: string | number | null | undefined): st
   if (!Number.isFinite(n)) {
     return '';
   }
-  return (n / 100).toFixed(2);
+  return (n / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Converte texto digitado em reais (pt-BR ou com ponto decimal) para centavos.
+ * Ex.: "5.420,00", "5420,00", "5420.00" → 542000
+ */
+export function parseReaisInputToCents(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) {
+    return null;
+  }
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  let normalized: string;
+
+  if (hasComma && hasDot) {
+    normalized = s.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    normalized = s.replace(',', '.');
+  } else if (hasDot) {
+    const parts = s.split('.');
+    const last = parts[parts.length - 1] ?? '';
+    if (parts.length === 2 && last.length > 0 && last.length <= 2) {
+      normalized = s;
+    } else {
+      normalized = s.replace(/\./g, '');
+    }
+  } else {
+    normalized = s;
+  }
+
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n < 0) {
+    return null;
+  }
+  return Math.round(n * 100);
 }

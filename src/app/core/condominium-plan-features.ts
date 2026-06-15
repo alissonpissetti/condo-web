@@ -17,6 +17,7 @@ export const SAAS_PLAN_FEATURE_KEYS = [
   'works',
   'planning',
   'documents',
+  'works',
 ] as const;
 
 export type SaasPlanFeatureKey = (typeof SAAS_PLAN_FEATURE_KEYS)[number];
@@ -37,6 +38,7 @@ export const SAAS_PLAN_FEATURE_LABELS: Record<SaasPlanFeatureKey, string> = {
   works: 'Obras',
   planning: 'Pautas/Atas',
   documents: 'Comunicação',
+  works: 'Obras',
 };
 
 export function defaultSaasPlanFeatures(): SaasPlanFeatures {

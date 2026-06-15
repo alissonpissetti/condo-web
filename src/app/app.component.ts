@@ -1,9 +1,10 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { FlashHostComponent } from './core/flash-host.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, FlashHostComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })

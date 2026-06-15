@@ -7,6 +7,7 @@ import {
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { translateHttpErrorMessage } from '../../core/api-errors-pt';
+import { FlashMessageService } from '../../core/flash-message.service';
 import { optionalBrMobilePhoneValidator } from '../../core/br-phone-mask';
 import { BrPhoneMaskDirective } from '../../core/br-phone-mask.directive';
 import { AuthService } from '../../core/auth.service';
@@ -26,14 +27,13 @@ export class RegisterComponent {
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly fb = inject(FormBuilder);
+  private readonly flash = inject(FlashMessageService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly invites = inject(InvitesPublicService);
-
-  protected readonly error = signal<string | null>(null);
-  protected readonly success = signal<string | null>(null);
   protected readonly submitting = signal(false);
+  protected readonly registrationComplete = signal(false);
   protected readonly inviteToken = signal<string | null>(null);
   protected readonly invitePreview = signal<InvitePreview | null>(null);
   protected readonly invitePreviewError = signal<string | null>(null);
@@ -66,21 +66,19 @@ export class RegisterComponent {
           }
         },
         error: (err: HttpErrorResponse) => {
-          this.invitePreviewError.set(
-            translateHttpErrorMessage(err, {
-              network:
-                'Sem conexão com o servidor. Verifique a internet e tente novamente.',
-              default: 'Convite inválido ou expirado.',
-            }),
-          );
+          const msg = translateHttpErrorMessage(err, {
+            network:
+              'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+            default: 'Convite inválido ou expirado.',
+          });
+          this.invitePreviewError.set(msg);
+          this.flash.error(msg);
         },
       });
     }
   }
 
   submit(): void {
-    this.error.set(null);
-    this.success.set(null);
     const token = this.inviteToken();
     if (token) {
       if (!this.invitePreview()) {
@@ -98,13 +96,14 @@ export class RegisterComponent {
     this.auth.register(email, password, phone.trim()).subscribe({
       next: () => {
         this.submitting.set(false);
-        this.success.set(
+        this.registrationComplete.set(true);
+        this.flash.success(
           'Conta criada. Faça login com e-mail e senha ou com o celular e o código por SMS.',
         );
       },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
-        this.error.set(this.messageFromHttp(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -133,17 +132,18 @@ export class RegisterComponent {
     this.invites.accept(token, body).subscribe({
         next: () => {
           this.submitting.set(false);
+          this.registrationComplete.set(true);
           const kind = pr?.inviteKind;
           const uid = pr?.unitIdentifier;
           if (kind === 'condominium' && pr && !pr.pendingRegistration) {
-            this.success.set(
+            this.flash.success(
               uid
                 ? `Unidade vinculada à sua conta (responsável por ${uid}). Faça login para acessar o condomínio.`
                 : 'Associação ao condomínio confirmada. Faça login para continuar.',
             );
             return;
           }
-          this.success.set(
+          this.flash.success(
             kind === 'condominium'
               ? uid
                 ? `Conta criada. Você é o responsável pela unidade ${uid}. Faça login para continuar.`
@@ -153,20 +153,12 @@ export class RegisterComponent {
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
-          this.error.set(this.messageFromHttp(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   goLogin(): void {
     void this.router.navigateByUrl('/auth/login');
-  }
-
-  private messageFromHttp(err: HttpErrorResponse): string {
-    return translateHttpErrorMessage(err, {
-      network:
-        'Não foi possível contatar o servidor. Verifique sua conexão com a internet e tente novamente.',
-      default: 'Não foi possível criar a conta.',
-    });
   }
 }

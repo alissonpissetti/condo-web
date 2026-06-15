@@ -37,6 +37,8 @@ export interface UnitRow {
    * Deve ser o `id` de alguém em `responsiblePeople` quando há vários.
    */
   financialResponsiblePersonId?: string | null;
+  /** Relação carregada na API (PATCH/listagens); usar `id` se o campo acima vier vazio. */
+  financialResponsiblePerson?: UnitPersonRef | null;
   /** Nome resolvido na API (designado, único responsável ou rótulo livre). */
   financialResponsibleName?: string | null;
   /**
@@ -144,6 +146,8 @@ export class CondominiumManagementService {
       floor?: string | null;
       notes?: string | null;
       financialResponsiblePersonId?: string | null;
+      /** Nome para taxas/relatórios quando ainda não há convite aceito. */
+      responsibleDisplayName?: string | null;
       pendingWhatsappPhone?: string | null;
     },
   ): Observable<UnitRow> {

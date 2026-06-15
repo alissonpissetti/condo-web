@@ -1,10 +1,18 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { DestroyRef, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  DestroyRef,
+  Component,
+  HostListener,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormArray,
   FormBuilder,
   FormControl,
+  FormGroup,
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
@@ -14,37 +22,72 @@ import {
   SafeHtml,
   type SafeResourceUrl,
 } from '@angular/platform-browser';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   formatDateDdMmYyyy,
   localIsoDateDaysAgo,
   todayLocalIsoDate,
 } from '../../../core/date-display';
+import { dateToDatetimeLocalValue } from '../../../core/filename-recorded-on.util';
 import {
   PlanningApiService,
   type AssemblyType,
+  type PollAiDraftResult,
   type CondominiumDocumentRow,
   type PlanningPoll,
   type PlanningPollAttachment,
+  type PlanningPollQuestion,
+  type PollFinalResolutionOutcome,
   type PollMyUnitVotes,
   type PollResults,
   type PollUnitVoteRow,
 } from '../../../core/planning-api.service';
+import {
+  pollQuestions,
+  questionAllowsMulti,
+} from '../../../core/poll-questions.util';
 import { PollBodyEditorComponent } from '../poll-body-editor/poll-body-editor.component';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 
-/** Rascunho local da descrição da pauta (modo reunião). */
-type LocalBodyDraftV1 = {
+/** Rascunho local da ata final (modo reunião); a pauta original fica em `poll.body`. */
+type LocalMinutesDraftV1 = {
   v: 1;
-  html: string;
+  minutesHtml: string;
   /** `poll.updatedAt` na abertura da sessão (deteção de conflito). */
   serverBaseUpdatedAt: string;
+  lastLocalAt: string;
+  /** Anotação ainda não incorporada pela IA (modo reunião). */
+  meetingPendingNote?: string;
+};
+
+/** Rascunho local do formulário «Nova pauta» e do assistente de IA. */
+type LocalCreateDraftV1 = {
+  v: 1;
+  aiBrief: string;
+  form: {
+    title: string;
+    body: string;
+    competenceDate: string;
+    opensAt: string;
+    closesAt: string;
+    assemblyType: AssemblyType;
+    questions: {
+      title: string;
+      allowMultiple: boolean;
+      options: string[];
+    }[];
+  };
   lastLocalAt: string;
 };
 
 const LIVE_BODY_DEBOUNCE_MS = 400;
-const BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
+const LIVE_CREATE_DEBOUNCE_MS = 400;
+const MINUTES_DRAFT_STORAGE_PREFIX = 'condo.planning.minutesDraft.v1:';
+/** Legado: rascunhos gravados no campo `body` antes da separação pauta/ata. */
+const LEGACY_BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
+const CREATE_DRAFT_STORAGE_PREFIX = 'condo.planning.createDraft.v1:';
 
 @Component({
   selector: 'app-painel-planejamento',
@@ -60,6 +103,8 @@ const BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
 })
 export class PainelPlanejamentoComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly flash = inject(FlashMessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(PlanningApiService);
   private readonly fb = inject(FormBuilder);
@@ -70,14 +115,19 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected readonly results = signal<PollResults | null>(null);
   /** Votos em vigor das unidades do utilizador na pauta aberta (detalhe). */
   protected readonly myUnitVotesDetail = signal<PollMyUnitVotes | null>(null);
-  protected readonly myUnits = signal<{ id: string; identifier: string }[]>(
+  protected readonly myUnits = signal<
+    { id: string; identifier: string; responsibleName: string | null }[]
+  >(
     [],
   );
   protected readonly loadError = signal<string | null>(null);
-  protected readonly actionError = signal<string | null>(null);
   protected readonly busy = signal(false);
   /** Último documento `assembly_minutes_draft` por pauta (para download do PDF em Pautas). */
   protected readonly minutesDraftDocumentIdByPollId = signal<
+    Record<string, string>
+  >({});
+  /** Último PDF `assembly_attendance_sheet` por pauta (lista de presença). */
+  protected readonly attendanceSheetDocumentIdByPollId = signal<
     Record<string, string>
   >({});
   /** Carregamento da lista (todas as rotas pedem a lista em fundo). */
@@ -88,16 +138,33 @@ export class PainelPlanejamentoComponent implements OnInit {
   protected readonly detailPollId = signal<string | null>(null);
   /** Formulário “Nova pauta” recolhido por defeito. */
   protected readonly createExpanded = signal(false);
+  protected readonly aiDraftLoading = signal(false);
+  protected readonly meetingMinutesAiLoading = signal(false);
+  protected readonly lastMeetingAiMergeAt = signal<number | null>(null);
+  /** Última gravação do rascunho «Nova pauta» no navegador. */
+  protected readonly lastLocalCreateSaveAt = signal<number | null>(null);
+  /** questionId → optionId escolhida para «Registrar decisão». */
+  protected readonly decideOptionByQuestion = signal<Record<string, string>>({});
   protected readonly access = signal<{ kind: string; role?: string } | null>(
     null,
   );
   /** Opções escolhidas no formulário de voto (uma ou várias). */
   protected readonly voteOptionIds = signal<string[]>([]);
+  /** Unidade seleccionada no formulário de voto (para pré-preenchimento). */
+  protected readonly voteUnitId = signal('');
 
   /** Força atualização do template quando URLs de pré-visualização (áudio/imagem) mudam. */
   private readonly attachmentPreviewRev = signal(0);
   private readonly attachmentRawBlobUrl = new Map<string, string>();
   private readonly attachmentSafeUrl = new Map<string, SafeResourceUrl>();
+
+  protected readonly aiBriefControl = this.fb.nonNullable.control('', [
+    Validators.maxLength(4000),
+  ]);
+
+  protected readonly meetingNotesControl = this.fb.nonNullable.control('', [
+    Validators.maxLength(2000),
+  ]);
 
   protected readonly createForm = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.maxLength(512)]],
@@ -109,23 +176,19 @@ export class PainelPlanejamentoComponent implements OnInit {
       'ordinary',
       Validators.required,
     ),
-    allowMultiple: [false],
-    options: this.fb.array<FormControl<string>>([
-      this.newOptionControl(),
-      this.newOptionControl(),
-    ]),
+    questions: this.fb.array<FormGroup>([this.newQuestionGroup()]),
   });
 
   protected readonly voteForm = this.fb.nonNullable.group({
     unitId: ['', Validators.required],
   });
 
-  protected readonly decideForm = this.fb.nonNullable.group({
-    optionId: ['', Validators.required],
-  });
-
   protected readonly bodyEditForm = this.fb.nonNullable.group({
     body: [''],
+  });
+
+  protected readonly minutesEditForm = this.fb.nonNullable.group({
+    minutesBody: [''],
   });
 
   protected readonly titleEditForm = this.fb.nonNullable.group({
@@ -136,27 +199,39 @@ export class PainelPlanejamentoComponent implements OnInit {
     competenceDate: ['', Validators.required],
   });
 
-  /** Rascunho: alterar tipo de assembleia (incl. Ata) e opções. */
+  protected readonly finalResolutionForm = this.fb.nonNullable.group({
+    opinion: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(12000)]],
+    opensAt: [''],
+    closesAt: [''],
+  });
+
+  /** Rascunho: alterar tipo de assembleia (incl. Ata) e deliberações. */
   protected readonly typeSettingsForm = this.fb.nonNullable.group({
     assemblyType: this.fb.nonNullable.control<AssemblyType>(
       'ordinary',
       Validators.required,
     ),
-    allowMultiple: [false],
-    options: this.fb.array<FormControl<string>>([]),
+    questions: this.fb.array<FormGroup>([]),
   });
 
   protected readonly editingBody = signal(false);
   /** Síndico/secretário: grava o HTML no localStorage com debounce (navegador). */
   protected readonly liveMode = signal(false);
+  /** Painel imersivo para conduzir a reunião (síndico). */
+  protected readonly meetingFullscreen = signal(false);
   protected readonly lastLocalBodySaveAt = signal<number | null>(null);
   /** A pauta no servidor mudou depois do rascunho local ainda baseado noutra versão. */
-  protected readonly bodyDraftConflict = signal(false);
-  private conflictDraftSnapshot: LocalBodyDraftV1 | null = null;
+  protected readonly minutesDraftConflict = signal(false);
+  private conflictDraftSnapshot: LocalMinutesDraftV1 | null = null;
   private liveSessionServerBaseAt = '';
-  private liveBodySaveUnsub: (() => void) | undefined;
+  private liveMinutesSaveUnsub: (() => void) | undefined;
+  private meetingAiMergeUnsub: (() => void) | undefined;
+  private createDraftSaveUnsub: (() => void) | undefined;
+  private restoringCreateDraft = false;
+  private questionGroupSeq = 0;
   protected readonly editingTitle = signal(false);
   protected readonly editingCompetence = signal(false);
+  protected readonly editingDeliberations = signal(false);
   /** Último carregamento da lista foi por busca no título (ignora período). */
   protected readonly listSearchActive = signal(false);
 
@@ -164,26 +239,33 @@ export class PainelPlanejamentoComponent implements OnInit {
     registeredFrom: [localIsoDateDaysAgo(29)],
     registeredTo: [todayLocalIsoDate()],
     titleQuery: ['', Validators.maxLength(200)],
+    includeArchived: [false],
   });
 
   protected condominiumId = '';
 
-  protected get optionsArray(): FormArray<FormControl<string>> {
-    return this.createForm.controls.options;
+  protected get createQuestionsArray(): FormArray<FormGroup> {
+    return this.createForm.controls.questions;
   }
 
-  protected get typeSettingsOptions(): FormArray<FormControl<string>> {
-    return this.typeSettingsForm.controls.options;
+  protected get typeSettingsQuestions(): FormArray<FormGroup> {
+    return this.typeSettingsForm.controls.questions;
+  }
+
+  protected pollQuestions(p: PlanningPoll) {
+    return pollQuestions(p);
   }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.listLoading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condominiumId = id;
+    this.restoreCreateDraftFromStorage();
+    this.attachCreateDraftAutosave();
     this.api.access(id).subscribe({
       next: (a) => {
         this.access.set(a.access as { kind: string; role?: string });
@@ -194,38 +276,30 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.createForm.controls.assemblyType.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((at) => {
-        if (at === 'election' || at === 'ata') {
-          this.createForm.patchValue(
-            { allowMultiple: false },
-            { emitEvent: false },
-          );
-        }
         if (at === 'ata') {
-          while (this.optionsArray.length > 0) {
-            this.optionsArray.removeAt(0);
+          while (this.createQuestionsArray.length > 0) {
+            this.createQuestionsArray.removeAt(0);
           }
-        } else {
-          while (this.optionsArray.length < 2) {
-            this.optionsArray.push(this.newOptionControl());
+        } else if (this.createQuestionsArray.length === 0) {
+          this.createQuestionsArray.push(this.newQuestionGroup());
+        } else if (at === 'election') {
+          for (const g of this.createQuestionsArray.controls) {
+            g.patchValue({ allowMultiple: false }, { emitEvent: false });
           }
         }
       });
     this.typeSettingsForm.controls.assemblyType.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((at) => {
-        if (at === 'election' || at === 'ata') {
-          this.typeSettingsForm.patchValue(
-            { allowMultiple: false },
-            { emitEvent: false },
-          );
-        }
         if (at === 'ata') {
-          while (this.typeSettingsOptions.length > 0) {
-            this.typeSettingsOptions.removeAt(0);
+          while (this.typeSettingsQuestions.length > 0) {
+            this.typeSettingsQuestions.removeAt(0);
           }
-        } else {
-          while (this.typeSettingsOptions.length < 2) {
-            this.typeSettingsOptions.push(this.newOptionControl());
+        } else if (this.typeSettingsQuestions.length === 0) {
+          this.typeSettingsQuestions.push(this.newQuestionGroup());
+        } else if (at === 'election') {
+          for (const g of this.typeSettingsQuestions.controls) {
+            g.patchValue({ allowMultiple: false }, { emitEvent: false });
           }
         }
       });
@@ -235,31 +309,64 @@ export class PainelPlanejamentoComponent implements OnInit {
       error: () => this.myUnits.set([]),
     });
 
-    this.destroyRef.onDestroy(() => this.revokeAllAttachmentPreviewUrls());
+    this.voteForm.controls.unitId.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((unitId) => {
+        this.voteUnitId.set(unitId ?? '');
+        const p = this.selected();
+        if (!p || !unitId) {
+          this.voteOptionIds.set([]);
+          return;
+        }
+        this.prefillVoteOptionsForUnit(p, unitId);
+      });
+
+    this.destroyRef.onDestroy(() => {
+      this.revokeAllAttachmentPreviewUrls();
+      this.detachCreateDraftAutosave();
+      this.lockMeetingFullscreenScroll(false);
+    });
+
+    if (typeof document !== 'undefined') {
+      const onFullscreenChange = () => {
+        if (!document.fullscreenElement && this.meetingFullscreen()) {
+          this.meetingFullscreen.set(false);
+          this.lockMeetingFullscreenScroll(false);
+        }
+      };
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      this.destroyRef.onDestroy(() => {
+        document.removeEventListener('fullscreenchange', onFullscreenChange);
+      });
+    }
 
     if (typeof window !== 'undefined') {
       const flushLiveDraft = () => {
-        if (!this.liveMode() || !this.editingBody()) {
+        if (!this.liveMode()) {
           return;
         }
         const p = this.selected();
         if (!p) {
           return;
         }
-        this.writeBodyDraftToStorage(
+        this.writeMinutesDraftToStorage(
           p,
-          this.bodyEditForm.getRawValue().body ?? '',
+          this.minutesEditForm.getRawValue().minutesBody ?? '',
         );
       };
+      const flushCreateDraft = () => this.writeCreateDraftToStorage();
       window.addEventListener('pagehide', flushLiveDraft);
+      window.addEventListener('pagehide', flushCreateDraft);
       const onVis = () => {
         if (document.visibilityState === 'hidden') {
           flushLiveDraft();
+          flushCreateDraft();
         }
       };
       document.addEventListener('visibilitychange', onVis);
       this.destroyRef.onDestroy(() => {
         window.removeEventListener('pagehide', flushLiveDraft);
+        window.removeEventListener('pagehide', flushCreateDraft);
         document.removeEventListener('visibilitychange', onVis);
       });
     }
@@ -270,6 +377,9 @@ export class PainelPlanejamentoComponent implements OnInit {
         const pollId = pm.get('pollId');
         this.detailPollId.set(pollId);
         if (pollId) {
+          if (this.meetingFullscreen()) {
+            this.exitMeetingFullscreen();
+          }
           this.loadPollDetail(pollId);
         } else {
           this.detailError.set(null);
@@ -288,6 +398,192 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   protected toggleCreateExpanded(): void {
     this.createExpanded.update((v) => !v);
+    this.writeCreateDraftToStorage();
+  }
+
+  protected localCreateSaveTimeLabel(): string {
+    const t = this.lastLocalCreateSaveAt();
+    if (t == null) {
+      return '';
+    }
+    return new Date(t).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  protected clearCreateDraftAndForm(): void {
+    this.clearCreateDraft();
+    this.aiBriefControl.reset('', { emitEvent: false });
+    this.createForm.patchValue(
+      {
+        title: '',
+        body: '',
+        competenceDate: todayLocalIsoDate(),
+        opensAt: '',
+        closesAt: '',
+        assemblyType: 'ordinary',
+      },
+      { emitEvent: false },
+    );
+    while (this.createQuestionsArray.length > 0) {
+      this.createQuestionsArray.removeAt(0);
+    }
+    this.createQuestionsArray.push(this.newQuestionGroup());
+    this.createExpanded.set(false);
+    this.flash.success('Rascunho local apagado.');
+  }
+
+  protected generatePollAiDraft(): void {
+    const brief = this.aiBriefControl.value.trim();
+    if (brief.length < 8) {
+      this.flash.warning(
+        'Descreva o assunto da pauta com pelo menos 8 caracteres.',
+      );
+      return;
+    }
+    const assemblyType = this.createForm.getRawValue().assemblyType;
+    this.setCreateFormAiLocked(true);
+    this.api
+      .draftPollWithAi(this.condominiumId, { brief, assemblyType })
+      .subscribe({
+        next: (draft) => {
+          this.setCreateFormAiLocked(false);
+          this.applyAiDraftToCreateForm(draft);
+          this.writeCreateDraftToStorage();
+          this.flash.success(
+            'Rascunho gerado pela IA. Revise antes de criar a pauta.',
+          );
+        },
+        error: (err: HttpErrorResponse) => {
+          this.setCreateFormAiLocked(false);
+          this.flash.error(this.msg(err));
+        },
+      });
+  }
+
+  private setCreateFormAiLocked(locked: boolean): void {
+    this.aiDraftLoading.set(locked);
+    if (locked) {
+      this.createForm.disable({ emitEvent: false });
+      this.aiBriefControl.disable({ emitEvent: false });
+      return;
+    }
+    if (!this.busy()) {
+      this.createForm.enable({ emitEvent: false });
+      this.aiBriefControl.enable({ emitEvent: false });
+    }
+  }
+
+  private applyAiDraftToCreateForm(draft: PollAiDraftResult): void {
+    this.restoringCreateDraft = true;
+    try {
+      const assemblyType = draft.assemblyType;
+      this.clearCreateQuestionsArray();
+      if (assemblyType !== 'ata') {
+        for (const q of draft.questions ?? []) {
+          this.createQuestionsArray.push(
+            this.buildQuestionGroupFromAi(q, assemblyType),
+          );
+        }
+        if (this.createQuestionsArray.length === 0) {
+          this.createQuestionsArray.push(this.newQuestionGroup());
+        }
+      }
+      this.createForm.patchValue(
+        {
+          title: draft.title,
+          body: draft.body ?? '',
+          assemblyType,
+        },
+        { emitEvent: false },
+      );
+      this.createForm.controls.body.setValue(draft.body ?? '', {
+        emitEvent: false,
+      });
+    } finally {
+      this.restoringCreateDraft = false;
+    }
+  }
+
+  protected questionTrackId(ctrl: FormGroup): string {
+    return String(ctrl.controls['_localKey']?.value ?? ctrl);
+  }
+
+  protected newQuestionGroup(
+    title = '',
+    allowMultiple = false,
+  ): FormGroup {
+    return this.fb.nonNullable.group({
+      _localKey: [`q${++this.questionGroupSeq}`],
+      title: [title, [Validators.required, Validators.maxLength(512)]],
+      allowMultiple: [allowMultiple],
+      options: this.fb.array<FormControl<string>>([
+        this.newOptionControl(),
+        this.newOptionControl(),
+      ]),
+    });
+  }
+
+  private clearCreateQuestionsArray(): void {
+    while (this.createQuestionsArray.length > 0) {
+      this.createQuestionsArray.removeAt(0);
+    }
+  }
+
+  private buildQuestionGroupFromAi(
+    q: { title: string; allowMultiple: boolean; options: unknown[] },
+    assemblyType: AssemblyType,
+  ): FormGroup {
+    const allowMultiple =
+      assemblyType === 'ordinary' ? !!q.allowMultiple : false;
+    const group = this.newQuestionGroup(q.title, allowMultiple);
+    const opts = group.controls['options'] as FormArray<FormControl<string>>;
+    while (opts.length > 0) {
+      opts.removeAt(0);
+    }
+    const labels = this.normalizeAiOptionLabels(q.options);
+    const count = Math.max(2, labels.length);
+    for (let i = 0; i < count; i++) {
+      const ctrl = this.newOptionControl();
+      if (labels[i]) {
+        ctrl.setValue(labels[i]);
+      }
+      opts.push(ctrl);
+    }
+    return group;
+  }
+
+  private normalizeAiOptionLabels(raw: unknown): string[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    const out: string[] = [];
+    for (const item of raw) {
+      const label = this.aiOptionLabel(item);
+      if (label) {
+        out.push(label);
+      }
+    }
+    return out;
+  }
+
+  private aiOptionLabel(item: unknown): string {
+    if (typeof item === 'string') {
+      return item.trim();
+    }
+    if (item && typeof item === 'object') {
+      const o = item as Record<string, unknown>;
+      for (const key of ['label', 'text', 'name', 'value', 'title']) {
+        const v = o[key];
+        if (typeof v === 'string' && v.trim()) {
+          return v.trim();
+        }
+      }
+    }
+    const s = String(item ?? '').trim();
+    return s === '[object Object]' ? '' : s;
   }
 
   protected newOptionControl(): FormControl<string> {
@@ -297,28 +593,86 @@ export class PainelPlanejamentoComponent implements OnInit {
     ]);
   }
 
-  protected addOptionRow(): void {
+  protected questionOptionsArray(qi: number): FormArray<FormControl<string>> {
+    return this.createQuestionsArray.at(qi).controls[
+      'options'
+    ] as FormArray<FormControl<string>>;
+  }
+
+  protected typeSettingsQuestionOptions(
+    qi: number,
+  ): FormArray<FormControl<string>> {
+    return this.typeSettingsQuestions.at(qi).controls[
+      'options'
+    ] as FormArray<FormControl<string>>;
+  }
+
+  protected addCreateQuestionRow(): void {
     if (this.createForm.getRawValue().assemblyType === 'ata') return;
-    if (this.optionsArray.length >= 24) return;
-    this.optionsArray.push(this.newOptionControl());
+    if (this.createQuestionsArray.length >= 24) return;
+    this.createQuestionsArray.push(this.newQuestionGroup());
   }
 
-  protected addTypeSettingOptionRow(): void {
-    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
-    if (this.typeSettingsOptions.length >= 24) return;
-    this.typeSettingsOptions.push(this.newOptionControl());
-  }
-
-  protected removeTypeSettingOptionRow(index: number): void {
-    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
-    if (this.typeSettingsOptions.length <= 2) return;
-    this.typeSettingsOptions.removeAt(index);
-  }
-
-  protected removeOptionRow(index: number): void {
+  protected removeCreateQuestionRow(index: number): void {
     if (this.createForm.getRawValue().assemblyType === 'ata') return;
-    if (this.optionsArray.length <= 2) return;
-    this.optionsArray.removeAt(index);
+    if (this.createQuestionsArray.length <= 1) return;
+    if (index < 0 || index >= this.createQuestionsArray.length) return;
+    this.createQuestionsArray.removeAt(index);
+    this.createQuestionsArray.updateValueAndValidity({ emitEvent: true });
+    this.writeCreateDraftToStorage();
+  }
+
+  protected addOptionRow(qi: number): void {
+    if (this.createForm.getRawValue().assemblyType === 'ata') return;
+    const arr = this.questionOptionsArray(qi);
+    if (arr.length >= 24) return;
+    arr.push(this.newOptionControl());
+  }
+
+  protected removeOptionRow(qi: number, oi: number): void {
+    if (this.createForm.getRawValue().assemblyType === 'ata') return;
+    const arr = this.questionOptionsArray(qi);
+    if (arr.length <= 2) return;
+    arr.removeAt(oi);
+  }
+
+  protected addTypeSettingQuestionRow(): void {
+    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
+    if (this.typeSettingsQuestions.length >= 24) return;
+    this.typeSettingsQuestions.push(this.newQuestionGroup());
+  }
+
+  protected removeTypeSettingQuestionRow(index: number): void {
+    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
+    if (this.typeSettingsQuestions.length <= 1) return;
+    if (index < 0 || index >= this.typeSettingsQuestions.length) return;
+    this.typeSettingsQuestions.removeAt(index);
+    this.typeSettingsQuestions.updateValueAndValidity({ emitEvent: true });
+  }
+
+  protected addTypeSettingOptionRow(qi: number): void {
+    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
+    const arr = this.typeSettingsQuestionOptions(qi);
+    if (arr.length >= 24) return;
+    arr.push(this.newOptionControl());
+  }
+
+  protected removeTypeSettingOptionRow(qi: number, oi: number): void {
+    if (this.typeSettingsForm.getRawValue().assemblyType === 'ata') return;
+    const arr = this.typeSettingsQuestionOptions(qi);
+    if (arr.length <= 2) return;
+    arr.removeAt(oi);
+  }
+
+  protected setDecideOption(questionId: string, optionId: string): void {
+    this.decideOptionByQuestion.update((m) => ({
+      ...m,
+      [questionId]: optionId,
+    }));
+  }
+
+  protected decideOptionFor(questionId: string): string {
+    return this.decideOptionByQuestion()[questionId] ?? '';
   }
 
   protected isMgmt(): boolean {
@@ -347,6 +701,39 @@ export class PainelPlanejamentoComponent implements OnInit {
    * Titular ou síndico: qualquer altura (sem respeitar as datas «Abre/Encerra»),
    * em rascunho, votação aberta ou encerrada — até à decisão final.
    */
+  protected detailAsideVisible(p: PlanningPoll): boolean {
+    if (this.isSyndicOrOwner()) {
+      return true;
+    }
+    if (this.canShowVotePanel(p)) {
+      return true;
+    }
+    if (!this.pollIsAta(p) && this.results()) {
+      return true;
+    }
+    const myv = this.myUnitVotesDetail();
+    if (myv && myv.byUnit.length > 0) {
+      return true;
+    }
+    if (this.pollAfterMeeting(p) && this.minutesDraftDocumentIdFor(p)) {
+      return true;
+    }
+    if (p.finalOpinion?.trim() && (p.status === 'postponed' || p.status === 'withdrawn')) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Pauta já passou pela fase de reunião/votação (encerrada ou com desfecho). */
+  protected pollAfterMeeting(p: PlanningPoll): boolean {
+    return (
+      p.status === 'closed' ||
+      p.status === 'decided' ||
+      p.status === 'postponed' ||
+      p.status === 'withdrawn'
+    );
+  }
+
   protected canShowVotePanel(p: PlanningPoll): boolean {
     if (this.pollIsAta(p)) {
       return false;
@@ -382,70 +769,99 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.editingBody.set(true);
   }
 
+  @HostListener('document:keydown.escape')
+  protected onMeetingEscape(): void {
+    if (this.meetingFullscreen()) {
+      this.exitMeetingFullscreen();
+    }
+  }
+
+  protected enterMeetingFullscreen(): void {
+    const p = this.selected();
+    if (!p || !this.canEditPollContent(p)) {
+      return;
+    }
+    this.startLiveMode();
+    this.meetingFullscreen.set(true);
+    this.lockMeetingFullscreenScroll(true);
+    void this.requestBrowserFullscreen();
+  }
+
+  protected exitMeetingFullscreen(): void {
+    this.meetingFullscreen.set(false);
+    this.lockMeetingFullscreenScroll(false);
+    void this.exitBrowserFullscreen();
+  }
+
   protected startLiveMode(): void {
     const p = this.selected();
     if (!p) return;
-    this.detachLiveBodyAutosave();
-    this.bodyDraftConflict.set(false);
+    this.detachLiveMinutesAutosave();
+    this.minutesDraftConflict.set(false);
     this.conflictDraftSnapshot = null;
 
-    const draft = this.readBodyDraft(p);
-    let body = p.body ?? '';
+    const draft = this.readMinutesDraft(p);
+    let minutesBody = p.minutesBody ?? '';
     if (draft) {
       if (draft.serverBaseUpdatedAt === p.updatedAt) {
-        body = draft.html;
+        minutesBody = draft.minutesHtml;
       } else {
-        this.bodyDraftConflict.set(true);
+        this.minutesDraftConflict.set(true);
         this.conflictDraftSnapshot = draft;
-        body = p.body ?? '';
+        minutesBody = p.minutesBody ?? '';
       }
     }
 
     this.liveSessionServerBaseAt = p.updatedAt;
-    this.bodyEditForm.patchValue({ body }, { emitEvent: false });
-    this.editingBody.set(true);
+    this.minutesEditForm.patchValue({ minutesBody }, { emitEvent: false });
     this.liveMode.set(true);
+    this.meetingNotesControl.setValue(draft?.meetingPendingNote ?? '', {
+      emitEvent: false,
+    });
+    this.lastMeetingAiMergeAt.set(null);
     this.lastLocalBodySaveAt.set(
       draft?.lastLocalAt
         ? new Date(draft.lastLocalAt).getTime()
         : null,
     );
-    this.attachLiveBodyAutosave();
-  }
-
-  /**
-   * Já em «Editar descrição» — ativa gravação local sem perder o texto actual.
-   */
-  protected enableLiveWhileEditing(): void {
-    const p = this.selected();
-    if (!p || !this.editingBody()) return;
-    this.liveSessionServerBaseAt = p.updatedAt;
-    this.bodyDraftConflict.set(false);
-    this.conflictDraftSnapshot = null;
-    this.liveMode.set(true);
-    this.attachLiveBodyAutosave();
-    this.writeBodyDraftToStorage(
-      p,
-      this.bodyEditForm.getRawValue().body ?? '',
-    );
-  }
-
-  protected stopLiveWhileEditing(): void {
-    this.liveMode.set(false);
-    this.detachLiveBodyAutosave();
+    this.attachLiveMinutesAutosave();
+    this.attachMeetingNotesDraftPersist();
   }
 
   protected restoreConflictDraft(): void {
     const p = this.selected();
     const d = this.conflictDraftSnapshot;
     if (!p || !d) return;
-    this.bodyEditForm.patchValue({ body: d.html }, { emitEvent: false });
-    this.bodyDraftConflict.set(false);
+    this.minutesEditForm.patchValue(
+      { minutesBody: d.minutesHtml },
+      { emitEvent: false },
+    );
+    this.minutesDraftConflict.set(false);
     this.conflictDraftSnapshot = null;
     this.liveSessionServerBaseAt = p.updatedAt;
     if (this.liveMode()) {
-      this.writeBodyDraftToStorage(p, d.html);
+      this.writeMinutesDraftToStorage(p, d.minutesHtml);
     }
+  }
+
+  protected meetingAiMergeTimeLabel(): string {
+    const t = this.lastMeetingAiMergeAt();
+    if (t == null) {
+      return '';
+    }
+    return new Date(t).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  protected incorporateMeetingNote(p: PlanningPoll): void {
+    const note = this.meetingNotesControl.value.trim();
+    if (note.length < 2) {
+      this.flash.warning('Digite uma anotação com pelo menos 2 caracteres.');
+      return;
+    }
+    this.mergeMeetingNoteIntoBody(p, note, { clearNote: true });
   }
 
   protected liveBodySaveTimeLabel(): string {
@@ -460,61 +876,90 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
   }
 
-  private localDraftStorageKey(p: PlanningPoll): string {
-    return `${BODY_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`;
+  private minutesDraftStorageKey(p: PlanningPoll): string {
+    return `${MINUTES_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`;
   }
 
-  private readBodyDraft(p: PlanningPoll): LocalBodyDraftV1 | null {
-    try {
-      const raw = localStorage.getItem(this.localDraftStorageKey(p));
+  private readMinutesDraft(p: PlanningPoll): LocalMinutesDraftV1 | null {
+    const parse = (raw: string | null): LocalMinutesDraftV1 | null => {
       if (!raw) {
         return null;
       }
-      const o = JSON.parse(raw) as LocalBodyDraftV1;
-      if (o?.v !== 1 || typeof o.html !== 'string') {
+      try {
+        const o = JSON.parse(raw) as LocalMinutesDraftV1 & { html?: string };
+        if (o?.v !== 1) {
+          return null;
+        }
+        const minutesHtml =
+          typeof o.minutesHtml === 'string'
+            ? o.minutesHtml
+            : typeof o.html === 'string'
+              ? o.html
+              : null;
+        if (minutesHtml == null) {
+          return null;
+        }
+        return {
+          v: 1,
+          minutesHtml,
+          serverBaseUpdatedAt: o.serverBaseUpdatedAt,
+          lastLocalAt: o.lastLocalAt,
+          meetingPendingNote: o.meetingPendingNote,
+        };
+      } catch {
         return null;
       }
-      return o;
-    } catch {
-      return null;
-    }
+    };
+    return (
+      parse(localStorage.getItem(this.minutesDraftStorageKey(p))) ??
+      parse(
+        localStorage.getItem(
+          `${LEGACY_BODY_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`,
+        ),
+      )
+    );
   }
 
-  private writeBodyDraftToStorage(p: PlanningPoll, html: string): void {
+  private writeMinutesDraftToStorage(p: PlanningPoll, minutesHtml: string): void {
     if (!this.liveMode()) {
       return;
     }
-    const data: LocalBodyDraftV1 = {
+    const pending = this.meetingNotesControl.value.trim();
+    const data: LocalMinutesDraftV1 = {
       v: 1,
-      html,
+      minutesHtml,
       serverBaseUpdatedAt: this.liveSessionServerBaseAt,
       lastLocalAt: new Date().toISOString(),
+      ...(pending ? { meetingPendingNote: pending } : {}),
     };
     try {
       localStorage.setItem(
-        this.localDraftStorageKey(p),
+        this.minutesDraftStorageKey(p),
         JSON.stringify(data),
       );
       this.lastLocalBodySaveAt.set(Date.now());
     } catch {
-      this.actionError.set(
-        'Não foi possível guardar o rascunho no navegador (armazenamento cheio ou indisponível).',
+      this.flash.error(
+        'Não foi possível salvar o rascunho no navegador (armazenamento cheio ou indisponível).',
       );
     }
   }
 
-  private clearBodyDraft(p: PlanningPoll): void {
+  private clearMinutesDraft(p: PlanningPoll): void {
     try {
-      localStorage.removeItem(this.localDraftStorageKey(p));
+      localStorage.removeItem(this.minutesDraftStorageKey(p));
+      localStorage.removeItem(
+        `${LEGACY_BODY_DRAFT_STORAGE_PREFIX}${this.condominiumId}:${p.id}`,
+      );
     } catch {
       /* ignore */
     }
     this.lastLocalBodySaveAt.set(null);
   }
 
-  private attachLiveBodyAutosave(): void {
-    this.detachLiveBodyAutosave();
-    const sub = this.bodyEditForm.controls.body.valueChanges
+  private attachLiveMinutesAutosave(): void {
+    this.detachLiveMinutesAutosave();
+    const sub = this.minutesEditForm.controls.minutesBody.valueChanges
       .pipe(
         debounceTime(LIVE_BODY_DEBOUNCE_MS),
         distinctUntilChanged(),
@@ -527,29 +972,168 @@ export class PainelPlanejamentoComponent implements OnInit {
         if (!poll) {
           return;
         }
-        this.writeBodyDraftToStorage(poll, html ?? '');
+        this.writeMinutesDraftToStorage(poll, html ?? '');
       });
-    this.liveBodySaveUnsub = () => {
+    this.liveMinutesSaveUnsub = () => {
       sub.unsubscribe();
-      this.liveBodySaveUnsub = undefined;
+      this.liveMinutesSaveUnsub = undefined;
     };
   }
 
-  private detachLiveBodyAutosave(): void {
-    this.liveBodySaveUnsub?.();
+  private detachLiveMinutesAutosave(): void {
+    this.liveMinutesSaveUnsub?.();
+  }
+
+  private attachMeetingNotesDraftPersist(): void {
+    this.detachMeetingNotesDraftPersist();
+    const persistSub = this.meetingNotesControl.valueChanges
+      .pipe(debounceTime(LIVE_BODY_DEBOUNCE_MS), distinctUntilChanged())
+      .subscribe(() => {
+        if (!this.liveMode()) {
+          return;
+        }
+        const poll = this.selected();
+        if (!poll) {
+          return;
+        }
+        this.writeMinutesDraftToStorage(
+          poll,
+          this.minutesEditForm.getRawValue().minutesBody ?? '',
+        );
+      });
+    this.meetingAiMergeUnsub = () => {
+      persistSub.unsubscribe();
+      this.meetingAiMergeUnsub = undefined;
+    };
+  }
+
+  private detachMeetingNotesDraftPersist(): void {
+    this.meetingAiMergeUnsub?.();
+  }
+
+  private handleAiVotesApplied(
+    p: PlanningPoll,
+    votesApplied: { unitIdentifier: string; ok: boolean; message?: string }[] | undefined,
+  ): void {
+    if (!votesApplied?.length) {
+      this.flash.success('Anotação incorporada ao rascunho da ata.');
+      return;
+    }
+    const okVotes = votesApplied.filter((v) => v.ok);
+    const failed = votesApplied.filter((v) => !v.ok);
+    if (okVotes.length > 0) {
+      const labels = okVotes.map((v) => v.unitIdentifier).join(', ');
+      this.flash.success(
+        `Anotação incorporada. Voto(s) registado(s): ${labels}.`,
+      );
+      const currentUnitId = this.voteForm.getRawValue().unitId;
+      const refreshUnitId =
+        currentUnitId ||
+        this.myUnits().find(
+          (u) =>
+            u.identifier === okVotes[0].unitIdentifier ||
+            u.identifier
+              .toLowerCase()
+              .includes(okVotes[0].unitIdentifier.toLowerCase()),
+        )?.id ||
+        '';
+      this.refreshVoteFormAfterCast(p, refreshUnitId);
+    } else {
+      this.flash.success('Anotação incorporada ao rascunho da ata.');
+    }
+    for (const f of failed) {
+      this.flash.warning(
+        `Voto «${f.unitIdentifier}»: ${f.message ?? 'não registado'}.`,
+      );
+    }
+  }
+
+  private mergeMeetingNoteIntoBody(
+    p: PlanningPoll,
+    note: string,
+    opts: { clearNote?: boolean } = {},
+  ): void {
+    if (this.meetingMinutesAiLoading()) {
+      return;
+    }
+    this.meetingMinutesAiLoading.set(true);
+    this.meetingNotesControl.disable({ emitEvent: false });
+    const currentBody = this.minutesEditForm.getRawValue().minutesBody ?? '';
+    this.api
+      .mergeMeetingMinutesNote(this.condominiumId, p.id, {
+        note,
+        currentBodyHtml: currentBody,
+      })
+      .subscribe({
+        next: (res) => {
+          this.meetingMinutesAiLoading.set(false);
+          this.meetingNotesControl.enable({ emitEvent: false });
+          this.minutesEditForm.patchValue({ minutesBody: res.body });
+          if (opts.clearNote) {
+            this.meetingNotesControl.setValue('', { emitEvent: false });
+          }
+          this.lastMeetingAiMergeAt.set(Date.now());
+          this.writeMinutesDraftToStorage(p, res.body);
+          this.handleAiVotesApplied(p, res.votesApplied);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.meetingMinutesAiLoading.set(false);
+          this.meetingNotesControl.enable({ emitEvent: false });
+          this.flash.error(this.msg(err));
+        },
+      });
   }
 
   private resetLiveEditingState(): void {
+    this.meetingFullscreen.set(false);
+    this.lockMeetingFullscreenScroll(false);
+    void this.exitBrowserFullscreen();
     this.liveMode.set(false);
-    this.bodyDraftConflict.set(false);
+    this.minutesDraftConflict.set(false);
     this.conflictDraftSnapshot = null;
     this.liveSessionServerBaseAt = '';
     this.lastLocalBodySaveAt.set(null);
-    this.detachLiveBodyAutosave();
+    this.lastMeetingAiMergeAt.set(null);
+    this.meetingNotesControl.reset('', { emitEvent: false });
+    this.detachLiveMinutesAutosave();
+    this.detachMeetingNotesDraftPersist();
+  }
+
+  private lockMeetingFullscreenScroll(lock: boolean): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.body.classList.toggle('plan-meeting-fs-lock', lock);
+  }
+
+  private async requestBrowserFullscreen(): Promise<void> {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    try {
+      const root = document.documentElement;
+      if (!document.fullscreenElement && root.requestFullscreen) {
+        await root.requestFullscreen();
+      }
+    } catch {
+      /* Navegador pode recusar; o overlay CSS cobre a área útil. */
+    }
+  }
+
+  private async exitBrowserFullscreen(): Promise<void> {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   protected cancelEditBody(): void {
-    this.resetLiveEditingState();
     this.editingBody.set(false);
     const p = this.selected();
     if (p) {
@@ -559,7 +1143,6 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   protected saveBody(p: PlanningPoll): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .updatePoll(this.condominiumId, p.id, {
         body: this.bodyEditForm.getRawValue().body ?? '',
@@ -569,13 +1152,34 @@ export class PainelPlanejamentoComponent implements OnInit {
           this.busy.set(false);
           this.upsertPollInList(x);
           this.selected.set(x);
-          this.clearBodyDraft(x);
-          this.resetLiveEditingState();
           this.editingBody.set(false);
+          this.flash.success('Pauta original salva no servidor.');
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+        },
+      });
+  }
+
+  protected saveMinutesBody(p: PlanningPoll): void {
+    this.busy.set(true);
+    this.api
+      .updatePoll(this.condominiumId, p.id, {
+        minutesBody: this.minutesEditForm.getRawValue().minutesBody ?? '',
+      })
+      .subscribe({
+        next: (x) => {
+          this.busy.set(false);
+          this.upsertPollInList(x);
+          this.selected.set(x);
+          this.clearMinutesDraft(x);
+          this.liveSessionServerBaseAt = x.updatedAt;
+          this.flash.success('Rascunho da ata salvo no servidor.');
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -586,7 +1190,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     input.value = '';
     if (!file) return;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.uploadPollAttachment(this.condominiumId, p.id, file).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -596,7 +1199,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -618,7 +1221,6 @@ export class PainelPlanejamentoComponent implements OnInit {
 
   private removeAttachment(p: PlanningPoll, a: PlanningPollAttachment): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .deletePollAttachment(this.condominiumId, p.id, a.id)
       .subscribe({
@@ -630,7 +1232,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -639,14 +1241,13 @@ export class PainelPlanejamentoComponent implements OnInit {
     p: PlanningPoll,
     a: PlanningPollAttachment,
   ): void {
-    this.actionError.set(null);
     this.api
       .downloadPollAttachmentBlob(this.condominiumId, p.id, a.id)
       .subscribe({
         next: (blob) =>
           this.triggerBlobDownload(blob, a.originalFilename || 'anexo'),
         error: (err: HttpErrorResponse) => {
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -657,6 +1258,10 @@ export class PainelPlanejamentoComponent implements OnInit {
    */
   protected minutesDraftDocumentIdFor(p: PlanningPoll): string | undefined {
     return this.minutesDraftDocumentIdByPollId()[p.id];
+  }
+
+  protected attendanceSheetDocumentIdFor(p: PlanningPoll): string | undefined {
+    return this.attendanceSheetDocumentIdByPollId()[p.id];
   }
 
   protected formatBytes(n: number): string {
@@ -818,7 +1423,11 @@ export class PainelPlanejamentoComponent implements OnInit {
   }
 
   protected pollAllowsMulti(p: PlanningPoll): boolean {
-    return !!p.allowMultiple;
+    return pollQuestions(p).some((q) => questionAllowsMulti(q));
+  }
+
+  protected isQuestionMulti(q: PlanningPollQuestion): boolean {
+    return questionAllowsMulti(q);
   }
 
   protected fmtDate(iso: string): string {
@@ -850,8 +1459,91 @@ export class PainelPlanejamentoComponent implements OnInit {
       open: 'Aberta',
       closed: 'Encerrada',
       decided: 'Decidida',
+      postponed: 'Prorrogada',
+      withdrawn: 'Sem necessidade',
     };
     return m[status] ?? status;
+  }
+
+  protected finalResolutionHeadline(p: PlanningPoll): string {
+    if (p.status === 'postponed') {
+      return 'Pauta prorrogada';
+    }
+    if (p.status === 'withdrawn') {
+      return 'Pauta sem necessidade';
+    }
+    return 'Parecer final';
+  }
+
+  protected registerFinalResolution(
+    p: PlanningPoll,
+    outcome: PollFinalResolutionOutcome,
+  ): void {
+    if (this.finalResolutionForm.invalid) {
+      this.finalResolutionForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.finalResolutionForm.getRawValue();
+    const body: {
+      outcome: PollFinalResolutionOutcome;
+      opinion: string;
+      opensAt?: string;
+      closesAt?: string;
+    } = {
+      outcome,
+      opinion: raw.opinion.trim(),
+    };
+    if (outcome === 'postpone') {
+      if (raw.opensAt?.trim()) {
+        body.opensAt = new Date(raw.opensAt).toISOString();
+      }
+      if (raw.closesAt?.trim()) {
+        body.closesAt = new Date(raw.closesAt).toISOString();
+      }
+      if (body.opensAt && body.closesAt) {
+        const t0 = new Date(body.opensAt).getTime();
+        const t1 = new Date(body.closesAt).getTime();
+        if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) {
+          this.flash.warning('«Encerra em» deve ser posterior a «Abre em».');
+          return;
+        }
+      }
+    }
+    this.busy.set(true);
+    this.api
+      .registerPollFinalResolution(this.condominiumId, p.id, body)
+      .subscribe({
+        next: (x) => {
+          this.busy.set(false);
+          this.upsertPollInList(x);
+          this.applySelectedPoll(x);
+          this.flash.success(
+            outcome === 'postpone'
+              ? 'Pauta prorrogada com parecer registado.'
+              : 'Necessidade da pauta cancelada com parecer registado.',
+          );
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível registar o parecer.');
+        },
+      });
+  }
+
+  protected resumePostponedPoll(p: PlanningPoll): void {
+    this.busy.set(true);
+    this.api.resumePostponedPoll(this.condominiumId, p.id).subscribe({
+      next: (x) => {
+        this.busy.set(false);
+        this.upsertPollInList(x);
+        this.applySelectedPoll(x);
+        this.flash.success('Pauta retomada para rascunho.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível retomar a pauta.');
+      },
+    });
   }
 
   /** Rótulo curto do tipo de assembleia (listas e detalhe). */
@@ -876,13 +1568,20 @@ export class PainelPlanejamentoComponent implements OnInit {
   }
 
   /** Texto da opção após «Registrar decisão» (pauta com `status === 'decided'`). */
-  protected decidedOptionLabel(p: PlanningPoll): string | null {
-    if (p.status !== 'decided' || !p.decidedOptionId) {
-      return null;
+  protected decidedQuestionsSummary(p: PlanningPoll): string[] {
+    if (p.status !== 'decided') {
+      return [];
     }
-    const o = p.options?.find((x) => x.id === p.decidedOptionId);
-    const label = o?.label?.trim();
-    return label || null;
+    const out: string[] = [];
+    for (const q of pollQuestions(p)) {
+      if (!q.decidedOptionId) continue;
+      const o = q.options?.find((x) => x.id === q.decidedOptionId);
+      const label = o?.label?.trim();
+      if (label) {
+        out.push(`${q.title}: ${label}`);
+      }
+    }
+    return out;
   }
 
   protected canEditTitle(p: PlanningPoll): boolean {
@@ -940,7 +1639,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const ymd = this.competenceEditForm.getRawValue().competenceDate.trim();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .updatePoll(this.condominiumId, p.id, { competenceDate: ymd })
       .subscribe({
@@ -952,7 +1650,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -970,51 +1668,70 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
   }
 
+  protected canEditDeliberations(p: PlanningPoll): boolean {
+    return p.status === 'draft' && this.isSyndicOrOwner();
+  }
+
+  protected startEditDeliberations(p: PlanningPoll): void {
+    this.patchTypeSettingsForm(p);
+    this.editingDeliberations.set(true);
+  }
+
+  protected cancelEditDeliberations(): void {
+    const p = this.selected();
+    this.editingDeliberations.set(false);
+    if (p) {
+      this.patchTypeSettingsForm(p);
+    }
+  }
+
   protected saveTypeSettings(p: PlanningPoll): void {
-    if (p.status !== 'draft' || !this.isSyndicOrOwner()) return;
+    if (!this.canEditDeliberations(p)) return;
     const v = this.typeSettingsForm.getRawValue();
     if (v.assemblyType !== 'ata') {
-      if (this.typeSettingsForm.controls.options.invalid) {
+      if (this.typeSettingsForm.invalid) {
         this.typeSettingsForm.markAllAsTouched();
         return;
       }
-      const labels = v.options.map((x) => x.trim()).filter(Boolean);
-      if (labels.length < 2) {
-        this.actionError.set('Indique pelo menos duas opções com texto.');
+      const built = this.questionsPayloadFromFormValue(
+        v.questions,
+        v.assemblyType,
+      );
+      if (!built) {
         this.typeSettingsForm.markAllAsTouched();
         return;
       }
     }
-    const allowMultiple =
-      v.assemblyType === 'election' || v.assemblyType === 'ata'
-        ? false
-        : !!v.allowMultiple;
     const patch: {
       assemblyType: AssemblyType;
-      allowMultiple: boolean;
-      options?: { label: string }[];
+      questions?: {
+        title: string;
+        allowMultiple?: boolean;
+        options: { label: string }[];
+      }[];
     } = {
       assemblyType: v.assemblyType,
-      allowMultiple,
     };
     if (v.assemblyType !== 'ata') {
-      patch.options = v.options
-        .map((x) => x.trim())
-        .filter(Boolean)
-        .map((label) => ({ label }));
+      const built = this.questionsPayloadFromFormValue(
+        v.questions,
+        v.assemblyType,
+      );
+      if (!built) return;
+      patch.questions = built;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.updatePoll(this.condominiumId, p.id, patch).subscribe({
       next: (x) => {
         this.busy.set(false);
         this.upsertPollInList(x);
         this.selected.set(x);
         this.patchTypeSettingsForm(x);
+        this.editingDeliberations.set(false);
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1026,7 +1743,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const t = this.titleEditForm.getRawValue().title.trim();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.updatePoll(this.condominiumId, p.id, { title: t }).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -1036,21 +1752,31 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
-  protected toggleVoteOption(p: PlanningPoll, optionId: string): void {
-    if (this.pollAllowsMulti(p)) {
-      const cur = this.voteOptionIds();
+  protected toggleVoteOption(
+    _p: PlanningPoll,
+    optionId: string,
+    questionId: string,
+  ): void {
+    const q = pollQuestions(_p).find((x) => x.id === questionId);
+    if (!q) return;
+    const qOptionIds = new Set((q.options ?? []).map((o) => o.id));
+    const cur = this.voteOptionIds();
+    const others = cur.filter((id) => !qOptionIds.has(id));
+    if (questionAllowsMulti(q)) {
       if (cur.includes(optionId)) {
         this.voteOptionIds.set(cur.filter((x) => x !== optionId));
       } else {
         this.voteOptionIds.set([...cur, optionId]);
       }
+    } else if (cur.includes(optionId)) {
+      this.voteOptionIds.set(others);
     } else {
-      this.voteOptionIds.set([optionId]);
+      this.voteOptionIds.set([...others, optionId]);
     }
   }
 
@@ -1058,12 +1784,102 @@ export class PainelPlanejamentoComponent implements OnInit {
     return this.voteOptionIds().includes(optionId);
   }
 
+  protected selectedVoteLabelsForQuestion(
+    q: PlanningPollQuestion,
+  ): string | null {
+    const qOptIds = new Set((q.options ?? []).map((o) => o.id));
+    const labels = this.voteOptionIds()
+      .filter((id) => qOptIds.has(id))
+      .map((id) => q.options?.find((o) => o.id === id)?.label?.trim())
+      .filter((x): x is string => !!x);
+    return labels.length ? labels.join(', ') : null;
+  }
+
+  protected voteUnitOptionLabel(u: {
+    identifier: string;
+    responsibleName: string | null;
+  }): string {
+    const name = u.responsibleName?.trim();
+    return name ? `${u.identifier} — ${name}` : u.identifier;
+  }
+
+  protected voteSubmitLabel(unitId: string): string {
+    if (!unitId) {
+      return 'Votar';
+    }
+    return this.existingVoteOptionIdsForUnit(unitId).length > 0
+      ? 'Atualizar voto'
+      : 'Registrar voto';
+  }
+
+  private existingVoteOptionIdsForUnit(unitId: string): string[] {
+    const fromResults = this.results()?.votesByUnit?.find(
+      (r) => r.unitId === unitId,
+    );
+    if (fromResults?.choices?.length) {
+      return fromResults.choices.map((c) => c.id);
+    }
+    const myv = this.myUnitVotesDetail()?.byUnit.find(
+      (r) => r.unitId === unitId,
+    );
+    if (myv?.choices?.length) {
+      return myv.choices.map((c) => c.id);
+    }
+    return [];
+  }
+
+  private prefillVoteOptionsForUnit(p: PlanningPoll, unitId: string): void {
+    const cached = this.existingVoteOptionIdsForUnit(unitId);
+    if (cached.length > 0) {
+      this.voteOptionIds.set(cached);
+      return;
+    }
+    if (this.isMgmt()) {
+      this.api.pollResults(this.condominiumId, p.id).subscribe({
+        next: (r) => {
+          this.results.set(r);
+          const row = r.votesByUnit?.find((x) => x.unitId === unitId);
+          this.voteOptionIds.set(row?.choices?.map((c) => c.id) ?? []);
+        },
+        error: () => this.voteOptionIds.set([]),
+      });
+      return;
+    }
+    this.api.pollMyUnitVotes(this.condominiumId, p.id).subscribe({
+      next: (v) => {
+        this.myUnitVotesDetail.set(v);
+        const row = v.byUnit.find((x) => x.unitId === unitId);
+        this.voteOptionIds.set(row?.choices?.map((c) => c.id) ?? []);
+      },
+      error: () => this.voteOptionIds.set([]),
+    });
+  }
+
+  private refreshVoteFormAfterCast(p: PlanningPoll, unitId: string): void {
+    this.api.pollResults(this.condominiumId, p.id).subscribe({
+      next: (r) => {
+        this.results.set(r);
+        this.tryLoadMyUnitVotesForCurrentDetail();
+        if (unitId) {
+          this.voteForm.patchValue({ unitId }, { emitEvent: false });
+          this.voteUnitId.set(unitId);
+          this.prefillVoteOptionsForUnit(p, unitId);
+        }
+      },
+      error: () => {
+        if (unitId) {
+          this.prefillVoteOptionsForUnit(p, unitId);
+        }
+      },
+    });
+  }
+
   protected resultBarPercent(
     votes: number,
-    results: PollResults | null,
+    options: { votes: number }[],
   ): number {
-    if (!results || results.options.length === 0) return 0;
-    const max = Math.max(...results.options.map((o) => o.votes), 1);
+    if (!options?.length) return 0;
+    const max = Math.max(...options.map((o) => o.votes), 1);
     return Math.round((votes / max) * 100);
   }
 
@@ -1103,19 +1919,63 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
   }
 
+  /** Votos da unidade no detalhe: uma linha por deliberação, com título quando há várias. */
+  protected myVoteChoiceRows(
+    p: PlanningPoll,
+    row: PollMyUnitVotes['byUnit'][number],
+  ): { optionId: string; questionTitle: string | null; label: string }[] {
+    const questions = pollQuestions(p);
+    const showQuestion = questions.length > 1;
+    const optionMeta = new Map<
+      string,
+      { questionTitle: string; questionIndex: number }
+    >();
+    questions.forEach((q, qi) => {
+      for (const o of q.options ?? []) {
+        optionMeta.set(o.id, { questionTitle: q.title, questionIndex: qi });
+      }
+    });
+    return row.choices
+      .map((c) => {
+        const meta = optionMeta.get(c.id);
+        return {
+          optionId: c.id,
+          questionTitle: showQuestion ? (meta?.questionTitle ?? null) : null,
+          label: c.label,
+          sortOrder: meta?.questionIndex ?? 999,
+        };
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(({ optionId, questionTitle, label }) => ({
+        optionId,
+        questionTitle,
+        label,
+      }));
+  }
+
   private getListPollParams():
-    | { q: string; limit: number; includeMyVotes: true }
+    | {
+        q: string;
+        limit: number;
+        includeMyVotes: true;
+        includeArchived?: boolean;
+      }
     | {
         registeredFrom: string;
         registeredTo: string;
         limit: number;
         includeMyVotes: true;
+        includeArchived?: boolean;
       } {
     const lim = 100;
     const raw = this.listFilterForm.getRawValue();
+    const archivedOpt =
+      raw.includeArchived && this.isSyndicOrOwner()
+        ? { includeArchived: true as const }
+        : {};
     const tq = raw.titleQuery?.trim() ?? '';
     if (tq) {
-      return { q: tq, limit: lim, includeMyVotes: true };
+      return { q: tq, limit: lim, includeMyVotes: true, ...archivedOpt };
     }
     const rf = raw.registeredFrom.trim().slice(0, 10);
     const rt = raw.registeredTo.trim().slice(0, 10);
@@ -1125,6 +1985,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         registeredTo: todayLocalIsoDate(),
         limit: lim,
         includeMyVotes: true,
+        ...archivedOpt,
       };
     }
     return {
@@ -1132,36 +1993,97 @@ export class PainelPlanejamentoComponent implements OnInit {
       registeredTo: rt,
       limit: lim,
       includeMyVotes: true,
+      ...archivedOpt,
     };
+  }
+
+  protected isPollArchived(p: PlanningPoll): boolean {
+    return !!p.archivedAt?.trim();
+  }
+
+  protected archivePoll(p: PlanningPoll): void {
+    if (this.isPollArchived(p)) {
+      return;
+    }
+    const title = p.title?.trim() || 'esta pauta';
+    if (
+      !confirm(
+        `Arquivar «${title}»?\n\nDeixará de aparecer na lista padrão; o histórico permanece no sistema.`,
+      )
+    ) {
+      return;
+    }
+    this.busy.set(true);
+    this.api.archivePoll(this.condominiumId, p.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.flash.success('Pauta arquivada.');
+        void this.router.navigateByUrl(this.planejamentoListUrl());
+        this.reload();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível arquivar a pauta.');
+      },
+    });
+  }
+
+  protected deleteDraftPoll(p: PlanningPoll): void {
+    if (p.status !== 'draft') {
+      return;
+    }
+    const title = p.title?.trim() || 'este rascunho';
+    if (
+      !confirm(
+        `Excluir permanentemente o rascunho «${title}»?\n\nEsta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.busy.set(true);
+    this.api.deleteDraftPoll(this.condominiumId, p.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.flash.success('Rascunho excluído.');
+        void this.router.navigateByUrl(this.planejamentoListUrl());
+        this.reload();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível excluir o rascunho.');
+      },
+    });
+  }
+
+  private planejamentoListUrl(): string {
+    return `/painel/condominio/${this.condominiumId}/planejamento`;
   }
 
   protected applyListFilters(): void {
     this.listFilterForm.patchValue({ titleQuery: '' }, { emitEvent: false });
     const { registeredFrom, registeredTo } = this.listFilterForm.getRawValue();
     if (registeredFrom.trim() > registeredTo.trim()) {
-      this.actionError.set('A data «de» não pode ser posterior à data «até».');
+      this.flash.warning('A data «de» não pode ser posterior à data «até».');
       return;
     }
-    this.actionError.set(null);
     this.reload();
   }
 
   protected searchByTitleOnly(): void {
     const q = this.listFilterForm.getRawValue().titleQuery?.trim() ?? '';
     if (!q) {
-      this.actionError.set('Digite um trecho do título para buscar.');
+      this.flash.warning('Digite um trecho do título para buscar.');
       return;
     }
-    this.actionError.set(null);
     this.reload();
   }
 
   protected clearListFilters(): void {
-    this.actionError.set(null);
     this.listFilterForm.patchValue({
       registeredFrom: localIsoDateDaysAgo(29),
       registeredTo: todayLocalIsoDate(),
       titleQuery: '',
+      includeArchived: false,
     });
     this.reload();
   }
@@ -1175,7 +2097,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       next: (list) => {
         this.polls.set(list);
         this.listLoading.set(false);
-        this.refreshMinutesDraftIndex();
+        this.refreshPlanningDocumentIndices();
         const pid = this.detailPollId();
         if (pid) {
           const hit = list.find((q) => q.id === pid);
@@ -1184,7 +2106,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.listLoading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
   }
@@ -1197,9 +2119,9 @@ export class PainelPlanejamentoComponent implements OnInit {
       this.applySelectedPoll(cached);
       return;
     }
+    this.detailLoading.set(true);
     this.selected.set(null);
     this.results.set(null);
-    this.detailLoading.set(true);
     this.api.getPoll(this.condominiumId, pollId).subscribe({
       next: (p) => {
         this.detailLoading.set(false);
@@ -1219,11 +2141,11 @@ export class PainelPlanejamentoComponent implements OnInit {
   private applySelectedPoll(p: PlanningPoll): void {
     this.selected.set(p);
     this.results.set(null);
-    this.actionError.set(null);
     this.resetLiveEditingState();
     this.editingBody.set(false);
     this.editingTitle.set(false);
     this.editingCompetence.set(false);
+    this.editingDeliberations.set(false);
     this.titleEditForm.patchValue({ title: p.title ?? '' });
     this.bodyEditForm.patchValue({ body: p.body ?? '' });
     this.competenceEditForm.patchValue({
@@ -1231,11 +2153,26 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
     this.patchTypeSettingsForm(p);
     this.voteOptionIds.set([]);
+    this.voteUnitId.set('');
     this.voteForm.reset({ unitId: '' });
-    this.decideForm.patchValue({ optionId: p.decidedOptionId ?? '' });
+    const decideMap: Record<string, string> = {};
+    for (const q of pollQuestions(p)) {
+      if (q.decidedOptionId) {
+        decideMap[q.id] = q.decidedOptionId;
+      }
+    }
+    this.decideOptionByQuestion.set(decideMap);
+    this.finalResolutionForm.patchValue(
+      {
+        opinion: p.finalOpinion?.trim() ?? '',
+        opensAt: p.opensAt ? dateToDatetimeLocalValue(new Date(p.opensAt)) : '',
+        closesAt: p.closesAt ? dateToDatetimeLocalValue(new Date(p.closesAt)) : '',
+      },
+      { emitEvent: false },
+    );
     this.syncAndPrefetchAttachmentPreviews(p);
     this.tryLoadResultsForCurrentDetail();
-    this.refreshMinutesDraftIndex();
+    this.refreshPlanningDocumentIndices();
     this.tryLoadMyUnitVotesForCurrentDetail();
   }
 
@@ -1249,7 +2186,13 @@ export class PainelPlanejamentoComponent implements OnInit {
       this.results.set(null);
       return;
     }
-    if (!this.isMgmt() && p.status !== 'closed' && p.status !== 'decided') {
+    if (
+      !this.isMgmt() &&
+      p.status !== 'closed' &&
+      p.status !== 'decided' &&
+      p.status !== 'postponed' &&
+      p.status !== 'withdrawn'
+    ) {
       this.results.set(null);
       return;
     }
@@ -1287,21 +2230,25 @@ export class PainelPlanejamentoComponent implements OnInit {
       this.createForm.markAllAsTouched();
       return;
     }
-    const labels =
-      v.assemblyType === 'ata'
-        ? []
-        : v.options.map((x) => x.trim()).filter(Boolean);
-    if (v.assemblyType !== 'ata' && labels.length < 2) {
-      this.actionError.set('Indique pelo menos duas opções com texto.');
-      this.createForm.markAllAsTouched();
-      return;
+    let questions:
+      | {
+          title: string;
+          allowMultiple?: boolean;
+          options: { label: string }[];
+        }[]
+      | undefined;
+    if (v.assemblyType !== 'ata') {
+      const built = this.questionsPayloadFromFormValue(
+        v.questions,
+        v.assemblyType,
+      );
+      if (!built) {
+        this.createForm.markAllAsTouched();
+        return;
+      }
+      questions = built;
     }
-    const allowMultiple =
-      v.assemblyType === 'election' || v.assemblyType === 'ata'
-        ? false
-        : !!v.allowMultiple;
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .createPoll(this.condominiumId, {
         title: v.title.trim(),
@@ -1310,8 +2257,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         opensAt: new Date(v.opensAt).toISOString(),
         closesAt: new Date(v.closesAt).toISOString(),
         assemblyType: v.assemblyType,
-        allowMultiple,
-        options: labels.map((label) => ({ label })),
+        questions,
       })
       .subscribe({
         next: () => {
@@ -1323,20 +2269,195 @@ export class PainelPlanejamentoComponent implements OnInit {
             opensAt: '',
             closesAt: '',
             assemblyType: 'ordinary',
-            allowMultiple: false,
           });
-          while (this.optionsArray.length > 0) {
-            this.optionsArray.removeAt(0);
+          while (this.createQuestionsArray.length > 0) {
+            this.createQuestionsArray.removeAt(0);
           }
-          this.optionsArray.push(this.newOptionControl());
-          this.optionsArray.push(this.newOptionControl());
+          this.createQuestionsArray.push(this.newQuestionGroup());
+          this.aiBriefControl.reset('', { emitEvent: false });
+          this.clearCreateDraft();
           this.reload();
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
+  }
+
+  private localCreateDraftStorageKey(): string {
+    return `${CREATE_DRAFT_STORAGE_PREFIX}${this.condominiumId}`;
+  }
+
+  private serializeCreateDraft(): LocalCreateDraftV1 {
+    const v = this.createForm.getRawValue();
+    const questions = (v.questions as {
+      title: string;
+      allowMultiple: boolean;
+      options: string[];
+    }[]).map((q) => ({
+      title: q.title ?? '',
+      allowMultiple: !!q.allowMultiple,
+      options: (q.options ?? []).map((x) => String(x ?? '')),
+    }));
+    return {
+      v: 1,
+      aiBrief: this.aiBriefControl.value,
+      form: {
+        title: v.title,
+        body: v.body,
+        competenceDate: v.competenceDate,
+        opensAt: v.opensAt,
+        closesAt: v.closesAt,
+        assemblyType: v.assemblyType,
+        questions,
+      },
+      lastLocalAt: new Date().toISOString(),
+    };
+  }
+
+  private isCreateDraftEmpty(draft: LocalCreateDraftV1): boolean {
+    const f = draft.form;
+    const hasBrief = draft.aiBrief.trim().length > 0;
+    const hasTitle = f.title.trim().length > 0;
+    const hasBody = (f.body ?? '').trim().length > 0;
+    const hasDates = !!f.opensAt || !!f.closesAt;
+    const hasQuestions = f.questions.some(
+      (q) =>
+        q.title.trim().length > 0 ||
+        q.options.some((o) => o.trim().length > 0),
+    );
+    return !hasBrief && !hasTitle && !hasBody && !hasDates && !hasQuestions;
+  }
+
+  private readCreateDraft(): LocalCreateDraftV1 | null {
+    try {
+      const raw = localStorage.getItem(this.localCreateDraftStorageKey());
+      if (!raw) {
+        return null;
+      }
+      const o = JSON.parse(raw) as LocalCreateDraftV1;
+      if (o?.v !== 1 || !o.form || typeof o.aiBrief !== 'string') {
+        return null;
+      }
+      return o;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeCreateDraftToStorage(): void {
+    if (this.restoringCreateDraft || !this.condominiumId) {
+      return;
+    }
+    const data = this.serializeCreateDraft();
+    try {
+      if (this.isCreateDraftEmpty(data)) {
+        localStorage.removeItem(this.localCreateDraftStorageKey());
+        this.lastLocalCreateSaveAt.set(null);
+        return;
+      }
+      localStorage.setItem(
+        this.localCreateDraftStorageKey(),
+        JSON.stringify(data),
+      );
+      this.lastLocalCreateSaveAt.set(Date.now());
+    } catch {
+      this.flash.error(
+        'Não foi possível salvar o rascunho no navegador (armazenamento cheio ou indisponível).',
+      );
+    }
+  }
+
+  private clearCreateDraft(): void {
+    try {
+      localStorage.removeItem(this.localCreateDraftStorageKey());
+    } catch {
+      /* ignore */
+    }
+    this.lastLocalCreateSaveAt.set(null);
+  }
+
+  private restoreCreateDraftFromStorage(): void {
+    const draft = this.readCreateDraft();
+    if (!draft) {
+      return;
+    }
+    this.restoringCreateDraft = true;
+    try {
+      this.aiBriefControl.setValue(draft.aiBrief, { emitEvent: false });
+      this.createForm.patchValue(
+        {
+          title: draft.form.title,
+          body: draft.form.body,
+          competenceDate: draft.form.competenceDate || todayLocalIsoDate(),
+          opensAt: draft.form.opensAt,
+          closesAt: draft.form.closesAt,
+          assemblyType: draft.form.assemblyType,
+        },
+        { emitEvent: false },
+      );
+      while (this.createQuestionsArray.length > 0) {
+        this.createQuestionsArray.removeAt(0);
+      }
+      if (draft.form.assemblyType !== 'ata') {
+        const qs = draft.form.questions ?? [];
+        if (qs.length === 0) {
+          this.createQuestionsArray.push(this.newQuestionGroup());
+        } else {
+          for (const q of qs) {
+            const g = this.newQuestionGroup(q.title, !!q.allowMultiple);
+            const opts = g.controls['options'] as FormArray<
+              FormControl<string>
+            >;
+            while (opts.length > 0) {
+              opts.removeAt(0);
+            }
+            const labels = (q.options ?? []).map((x) => String(x ?? ''));
+            if (labels.length < 2) {
+              opts.push(this.newOptionControl());
+              opts.push(this.newOptionControl());
+              if (labels[0]) {
+                opts.at(0)?.setValue(labels[0], { emitEvent: false });
+              }
+            } else {
+              for (const label of labels) {
+                opts.push(
+                  this.fb.nonNullable.control(label, [
+                    Validators.required,
+                    Validators.maxLength(512),
+                  ]),
+                );
+              }
+            }
+            this.createQuestionsArray.push(g);
+          }
+        }
+      }
+      const at = draft.lastLocalAt ? Date.parse(draft.lastLocalAt) : NaN;
+      this.lastLocalCreateSaveAt.set(Number.isFinite(at) ? at : Date.now());
+    } finally {
+      this.restoringCreateDraft = false;
+    }
+  }
+
+  private attachCreateDraftAutosave(): void {
+    this.detachCreateDraftAutosave();
+    const subBrief = this.aiBriefControl.valueChanges
+      .pipe(debounceTime(LIVE_CREATE_DEBOUNCE_MS), distinctUntilChanged())
+      .subscribe(() => this.writeCreateDraftToStorage());
+    const subForm = this.createForm.valueChanges
+      .pipe(debounceTime(LIVE_CREATE_DEBOUNCE_MS))
+      .subscribe(() => this.writeCreateDraftToStorage());
+    this.createDraftSaveUnsub = () => {
+      subBrief.unsubscribe();
+      subForm.unsubscribe();
+      this.createDraftSaveUnsub = undefined;
+    };
+  }
+
+  private detachCreateDraftAutosave(): void {
+    this.createDraftSaveUnsub?.();
   }
 
   openPoll(p: PlanningPoll): void {
@@ -1349,7 +2470,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1364,14 +2485,13 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
   finalizeAta(p: PlanningPoll): void {
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.finalizeAtaPoll(this.condominiumId, p.id).subscribe({
       next: (x) => {
         this.busy.set(false);
@@ -1380,16 +2500,18 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
 
-  decide(p: PlanningPoll): void {
-    const oid = this.decideForm.getRawValue().optionId;
+  decideQuestion(p: PlanningPoll, questionId: string): void {
+    const oid = this.decideOptionFor(questionId);
     if (!oid) return;
     this.busy.set(true);
-    this.api.decidePoll(this.condominiumId, p.id, oid).subscribe({
+    this.api
+      .decidePoll(this.condominiumId, p.id, { questionId, optionId: oid })
+      .subscribe({
       next: (x) => {
         this.busy.set(false);
         this.upsertPollInList(x);
@@ -1397,7 +2519,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1407,12 +2529,11 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.api.generateMinutesDraft(this.condominiumId, p.id).subscribe({
       next: (doc) => {
         this.busy.set(false);
-        this.actionError.set(null);
         this.minutesDraftDocumentIdByPollId.update((m) => ({
           ...m,
           [p.id]: doc.id,
         }));
-        this.refreshMinutesDraftIndex();
+        this.refreshPlanningDocumentIndices();
         this.api
           .downloadDocumentBlob(this.condominiumId, doc.id)
           .subscribe({
@@ -1422,13 +2543,64 @@ export class PainelPlanejamentoComponent implements OnInit {
                 this.minutesDraftDownloadFilename(p.title, doc.title),
               ),
             error: (err: HttpErrorResponse) => {
-              this.actionError.set(this.msg(err));
+              this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
             },
           });
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+      },
+    });
+  }
+
+  generateAttendanceSheet(p: PlanningPoll): void {
+    this.busy.set(true);
+    this.api.generateAttendanceSheet(this.condominiumId, p.id).subscribe({
+      next: (doc) => {
+        this.busy.set(false);
+        this.attendanceSheetDocumentIdByPollId.update((m) => ({
+          ...m,
+          [p.id]: doc.id,
+        }));
+        this.refreshPlanningDocumentIndices();
+        this.api
+          .downloadDocumentBlob(this.condominiumId, doc.id)
+          .subscribe({
+            next: (blob) =>
+              this.triggerBlobDownload(
+                blob,
+                this.attendanceSheetDownloadFilename(p.title, doc.title),
+              ),
+            error: (err: HttpErrorResponse) => {
+              this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+            },
+          });
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+      },
+    });
+  }
+
+  protected downloadAttendanceSheetReadOnly(p: PlanningPoll): void {
+    const docId = this.attendanceSheetDocumentIdFor(p);
+    if (!docId) {
+      return;
+    }
+    this.busy.set(true);
+    this.api.downloadDocumentBlob(this.condominiumId, docId).subscribe({
+      next: (blob) => {
+        this.busy.set(false);
+        this.triggerBlobDownload(
+          blob,
+          this.attendanceSheetDownloadFilename(p.title, undefined),
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1440,66 +2612,116 @@ export class PainelPlanejamentoComponent implements OnInit {
     }
     const optionIds = this.voteOptionIds();
     if (optionIds.length === 0) {
-      this.actionError.set(
-        this.pollAllowsMulti(p)
-          ? 'Selecione pelo menos uma opção.'
-          : 'Selecione uma opção.',
-      );
+      this.flash.warning('Selecione pelo menos uma opção em alguma deliberação.');
       return;
+    }
+    if (!this.isSyndicOrOwner()) {
+      for (const q of pollQuestions(p)) {
+        const qOptionIds = new Set((q.options ?? []).map((o) => o.id));
+        if (!optionIds.some((id) => qOptionIds.has(id))) {
+          this.flash.warning(`Responda a deliberação: «${q.title}».`);
+          return;
+        }
+      }
     }
     const { unitId } = this.voteForm.getRawValue();
     this.busy.set(true);
-    this.actionError.set(null);
     this.api
       .castVote(this.condominiumId, p.id, { unitId, optionIds })
       .subscribe({
         next: () => {
           this.busy.set(false);
-          this.actionError.set(null);
-          this.api.getPoll(this.condominiumId, p.id).subscribe({
-            next: (fresh) => {
-              this.upsertPollInList(fresh);
-              this.applySelectedPoll(fresh);
-            },
-            error: () => {
-              this.applySelectedPoll(p);
-            },
-          });
+          this.flash.success('Voto registado.');
+          this.refreshVoteFormAfterCast(p, unitId);
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   private patchTypeSettingsForm(p: PlanningPoll): void {
     this.typeSettingsForm.patchValue(
-      {
-        assemblyType: p.assemblyType,
-        allowMultiple: p.allowMultiple,
-      },
+      { assemblyType: p.assemblyType },
       { emitEvent: false },
     );
-    while (this.typeSettingsOptions.length > 0) {
-      this.typeSettingsOptions.removeAt(0);
+    while (this.typeSettingsQuestions.length > 0) {
+      this.typeSettingsQuestions.removeAt(0);
     }
     if (p.assemblyType !== 'ata') {
-      const opts = p.options ?? [];
-      if (opts.length === 0) {
-        this.typeSettingsOptions.push(this.newOptionControl());
-        this.typeSettingsOptions.push(this.newOptionControl());
+      const qs = pollQuestions(p);
+      if (qs.length === 0) {
+        this.typeSettingsQuestions.push(this.newQuestionGroup());
       } else {
-        for (const o of opts) {
-          this.typeSettingsOptions.push(
-            this.fb.nonNullable.control(o.label, [
-              Validators.required,
-              Validators.maxLength(512),
-            ]),
-          );
+        for (const q of qs) {
+          const g = this.newQuestionGroup(q.title, !!q.allowMultiple);
+          const opts = g.controls['options'] as FormArray<FormControl<string>>;
+          while (opts.length > 0) {
+            opts.removeAt(0);
+          }
+          const labels = (q.options ?? []).map((o) => o.label);
+          if (labels.length < 2) {
+            opts.push(this.newOptionControl());
+            opts.push(this.newOptionControl());
+          } else {
+            for (const label of labels) {
+              opts.push(
+                this.fb.nonNullable.control(label, [
+                  Validators.required,
+                  Validators.maxLength(512),
+                ]),
+              );
+            }
+          }
+          this.typeSettingsQuestions.push(g);
         }
       }
     }
+  }
+
+  private questionsPayloadFromFormValue(
+    raw: unknown,
+    assemblyType: AssemblyType,
+  ):
+    | {
+        title: string;
+        allowMultiple?: boolean;
+        options: { label: string }[];
+      }[]
+    | null {
+    const rows = raw as {
+      title: string;
+      allowMultiple: boolean;
+      options: string[];
+    }[];
+    if (!rows.length) {
+      this.flash.warning('Indique pelo menos uma deliberação com opções.');
+      return null;
+    }
+    const out: {
+      title: string;
+      allowMultiple?: boolean;
+      options: { label: string }[];
+    }[] = [];
+    for (const q of rows) {
+      const title = q.title.trim();
+      const labels = q.options.map((x) => x.trim()).filter(Boolean);
+      if (!title || labels.length < 2) {
+        this.flash.warning(
+          'Cada deliberação precisa de enunciado e pelo menos duas opções.',
+        );
+        return null;
+      }
+      const allowMultiple =
+        assemblyType === 'ordinary' ? !!q.allowMultiple : false;
+      out.push({
+        title,
+        allowMultiple,
+        options: labels.map((label) => ({ label })),
+      });
+    }
+    return out;
   }
 
   private upsertPollInList(x: PlanningPoll): void {
@@ -1526,12 +2748,15 @@ export class PainelPlanejamentoComponent implements OnInit {
     });
   }
 
-  private refreshMinutesDraftIndex(): void {
+  private refreshPlanningDocumentIndices(): void {
     if (!this.condominiumId) return;
     this.api.listDocuments(this.condominiumId).subscribe({
       next: (docs) => {
         this.minutesDraftDocumentIdByPollId.set(
           this.buildMinutesDraftIndexFromDocs(docs),
+        );
+        this.attendanceSheetDocumentIdByPollId.set(
+          this.buildAttendanceSheetIndexFromDocs(docs),
         );
       },
       error: () => {
@@ -1573,6 +2798,30 @@ export class PainelPlanejamentoComponent implements OnInit {
     return out;
   }
 
+  private buildAttendanceSheetIndexFromDocs(
+    docs: CondominiumDocumentRow[],
+  ): Record<string, string> {
+    const forPolls = docs
+      .filter(
+        (d) => !!d.pollId && d.kind === 'assembly_attendance_sheet',
+      )
+      .sort((a, b) => {
+        const ta = Date.parse(a.createdAt);
+        const tb = Date.parse(b.createdAt);
+        if (!Number.isNaN(ta) && !Number.isNaN(tb) && tb !== ta) {
+          return tb - ta;
+        }
+        return b.id.localeCompare(a.id);
+      });
+    const out: Record<string, string> = {};
+    for (const d of forPolls) {
+      if (d.pollId && out[d.pollId] === undefined) {
+        out[d.pollId] = d.id;
+      }
+    }
+    return out;
+  }
+
   /**
    * Morador (ou gestão): só descarrega o PDF já existente, sem gerar no servidor.
    * Usa o melhor documento por pauta (definitiva publicada, senão rascunho).
@@ -1583,7 +2832,6 @@ export class PainelPlanejamentoComponent implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.actionError.set(null);
     this.api.downloadDocumentBlob(this.condominiumId, docId).subscribe({
       next: (blob) => {
         this.busy.set(false);
@@ -1594,7 +2842,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -1607,6 +2855,17 @@ export class PainelPlanejamentoComponent implements OnInit {
       .replace(/[/\\?%*:|"<>]/g, '-')
       .trim();
     const base = raw || 'ata-rascunho';
+    return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+  }
+
+  private attendanceSheetDownloadFilename(
+    pollTitle: string,
+    documentTitle: string | null | undefined,
+  ): string {
+    const raw = (documentTitle ?? `lista-presenca-${pollTitle}` ?? 'lista-presenca')
+      .replace(/[/\\?%*:|"<>]/g, '-')
+      .trim();
+    const base = raw || 'lista-presenca';
     return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
   }
 

@@ -13,10 +13,14 @@ import {
   translateHttpErrorMessage,
   translateHttpErrorMessageAsync,
 } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import { CondominiumAccessStore } from '../../../core/condominium-access.store';
 import {
   FinancialApiService,
+  type CondominiumBankAccount,
   type CondominiumFeeCharge,
+  type CondominiumFeeSlipDeliveryAction,
+  type CondominiumFeeSlipDeliveryLogRow,
   type SendFeeSlipsWhatsappResult,
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
@@ -29,6 +33,7 @@ import { formatCentsBrl } from '../../../core/money-brl';
 })
 export class PainelTaxasCondominiaisComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(FinancialApiService);
   protected readonly condoAccess = inject(CondominiumAccessStore);
 
@@ -38,15 +43,22 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly charges = signal<CondominiumFeeCharge[]>([]);
   protected readonly competenceYm = signal('');
   protected readonly loadError = signal<string | null>(null);
-  protected readonly formError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly actionBusy = signal(false);
   /** Resumo do último envio de slips por WhatsApp (gestão). */
   protected readonly slipWaInfo = signal<string | null>(null);
   protected readonly slipWaBusy = signal(false);
 
+  protected readonly slipDeliveryLog = signal<CondominiumFeeSlipDeliveryLogRow[]>(
+    [],
+  );
+  protected readonly slipDeliveryLogLoading = signal(false);
+  protected readonly slipDeliveryLogError = signal<string | null>(null);
+
   /** Quitação: cobrança alvo do modal, arquivo anexado (opcional) e estado. */
   protected readonly settleTarget = signal<CondominiumFeeCharge | null>(null);
+  protected readonly bankAccounts = signal<CondominiumBankAccount[]>([]);
+  protected readonly settleBankAccountId = signal('');
   protected readonly settleReceiptFile = signal<File | null>(null);
   protected readonly settleError = signal<string | null>(null);
   protected readonly settleBusy = signal(false);
@@ -72,6 +84,18 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly openActionMenuId = signal<string | null>(null);
 
   protected readonly selectedCount = computed(() => this.selectedIds().size);
+
+  protected readonly activeBankAccounts = computed(() =>
+    this.bankAccounts().filter((a) => a.isActive),
+  );
+
+  protected readonly settleBankAccount = computed(() => {
+    const id = this.settleBankAccountId().trim();
+    if (!id) {
+      return null;
+    }
+    return this.bankAccounts().find((a) => a.id === id) ?? null;
+  });
 
   protected readonly selectedOpenUnitCount = computed(() => {
     const ids = this.selectedIds();
@@ -202,7 +226,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('condominiumId');
     if (!id) {
       this.loading.set(false);
-      this.loadError.set('Condomínio inválido.');
+      (() => { this.loadError.set('Condomínio inválido.'); this.flash.error('Condomínio inválido.'); })();
       return;
     }
     this.condoId = id;
@@ -214,6 +238,10 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     this.competenceYm.set(`${y}-${m}`);
+    this.api.listBankAccounts(this.condoId).subscribe({
+      next: (rows) => this.bankAccounts.set(rows),
+      error: () => this.bankAccounts.set([]),
+    });
     this.load();
   }
 
@@ -223,17 +251,102 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
 
   load(): void {
     this.loadError.set(null);
-    this.formError.set(null);
     this.slipWaInfo.set(null);
     this.loading.set(true);
     this.api.listCondominiumFees(this.condoId, this.competenceYm()).subscribe({
       next: (rows) => {
         this.charges.set(rows);
         this.loading.set(false);
+        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.loadError.set(this.msg(err));
+        (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
+      },
+    });
+  }
+
+  protected formatDateTime(value: string): string {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) {
+      return value;
+    }
+    return dt.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    });
+  }
+
+  protected slipDeliveryActionLabel(
+    action: CondominiumFeeSlipDeliveryAction,
+  ): string {
+    switch (action) {
+      case 'pdf_transparency':
+        return 'PDF transparência (condomínio)';
+      case 'pdf_unit_slip':
+        return 'PDF da unidade';
+      case 'whatsapp_sent':
+        return 'WhatsApp enviado';
+      case 'whatsapp_skipped':
+        return 'WhatsApp não enviado';
+      case 'whatsapp_failed':
+        return 'Falha no WhatsApp';
+      default:
+        return action;
+    }
+  }
+
+  protected slipDeliveryDetailLabel(
+    row: CondominiumFeeSlipDeliveryLogRow,
+  ): string {
+    const d = row.detail;
+    if (!d) {
+      return '—';
+    }
+    const reason = d['reason'];
+    if (typeof reason === 'string' && reason.trim()) {
+      return reason.trim();
+    }
+    const err = d['error'];
+    if (typeof err === 'string' && err.trim()) {
+      return err.trim();
+    }
+    const last4 = d['phoneLast4'];
+    if (typeof last4 === 'string' && last4.trim()) {
+      return `Celular ···${last4.trim()}`;
+    }
+    const storageKey = d['storageKey'];
+    if (typeof storageKey === 'string' && storageKey.trim()) {
+      return storageKey.trim();
+    }
+    return '—';
+  }
+
+  private loadSlipDeliveryLog(): void {
+    if (!this.condoAccess.canManage()) {
+      this.slipDeliveryLog.set([]);
+      this.slipDeliveryLogError.set(null);
+      return;
+    }
+    const ym = this.competenceYm().trim();
+    if (!ym) {
+      this.slipDeliveryLog.set([]);
+      return;
+    }
+    this.slipDeliveryLogLoading.set(true);
+    this.slipDeliveryLogError.set(null);
+    this.api.listCondominiumFeeSlipDeliveryLog(this.condoId, ym).subscribe({
+      next: (rows) => {
+        this.slipDeliveryLog.set(rows);
+        this.slipDeliveryLogLoading.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.slipDeliveryLogLoading.set(false);
+        this.slipDeliveryLogError.set(this.msg(err));
       },
     });
   }
@@ -254,7 +367,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   regenerateMonth(): void {
     if (
       !confirm(
-        'Regenerar todas as cobranças em aberto deste mês? As linhas não pagas serão apagadas e recalculadas. Não use se já existir cobrança paga.',
+        'Regenerar cobranças deste mês? Apaga cobranças em aberto e mensalidades de fundo ainda aguardando quitação; recalcula tudo. Mensalidades de fundo já quitadas não são apagadas. Não use se existir cobrança de unidade já paga.',
       )
     ) {
       return;
@@ -268,7 +381,6 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   }
 
   private runAction(req: Observable<CondominiumFeeCharge[]>): void {
-    this.formError.set(null);
     this.actionBusy.set(true);
     req.subscribe({
       next: (rows) => {
@@ -277,7 +389,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.actionBusy.set(false);
-        this.formError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -286,6 +398,8 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   openSettle(c: CondominiumFeeCharge): void {
     this.settleError.set(null);
     this.settleReceiptFile.set(null);
+    const primary = this.activeBankAccounts()[0]?.id ?? '';
+    this.settleBankAccountId.set(primary);
     this.settleTarget.set(c);
   }
 
@@ -510,6 +624,13 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   confirmSettle(): void {
     const target = this.settleTarget();
     if (!target) return;
+    const bankAccountId = this.settleBankAccountId().trim();
+    if (!bankAccountId) {
+      this.settleError.set(
+        'Selecione a conta bancária que recebeu o pagamento.',
+      );
+      return;
+    }
     this.settleError.set(null);
     this.settleBusy.set(true);
     const file = this.settleReceiptFile();
@@ -517,6 +638,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       this.api
         .settleCondominiumFee(this.condoId, target.id, {
           paymentReceiptStorageKey: receiptKey ?? null,
+          bankAccountId,
         })
         .subscribe({
           next: (updated) => {
@@ -548,7 +670,6 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
 
   /** Abre o comprovante anexado (imagem/PDF) em nova aba. */
   viewPaymentReceiptFile(c: CondominiumFeeCharge): void {
-    this.formError.set(null);
     this.actionBusy.set(true);
     this.api
       .condominiumFeePaymentReceiptFile(this.condoId, c.id)
@@ -561,7 +682,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.actionBusy.set(false);
-          this.formError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
@@ -569,10 +690,9 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   downloadTransparencyPdf(): void {
     const ym = this.competenceYm().trim();
     if (!ym) {
-      this.formError.set('Indique a competência.');
+      this.flash.warning('Indique a competência.');
       return;
     }
-    this.formError.set(null);
     this.actionBusy.set(true);
     this.api.condominiumFeesTransparencyPdf(this.condoId, ym).subscribe({
       next: (blob) => {
@@ -583,6 +703,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         a.download = `transparencia-condominial-${ym}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
+        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.actionBusy.set(false);
@@ -590,22 +711,22 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
           network:
             'Sem conexão com o servidor. Verifique a internet e tente novamente.',
           default: 'Não foi possível gerar o PDF de transparência.',
-        }).then((m) => this.formError.set(m));
+        }).then((m) => this.flash.error(m));
       },
     });
   }
 
   /**
-   * PDF específico da unidade: 1ª página é o slip de pagamento (valor devido,
-   * chave PIX e QR Code com valor e referência «Condomínio - MM/AAAA»).
+   * PDF da unidade: capa slip PIX (quando houver taxa em aberto); folha de
+   * administração e agrupamentos; extrato financeiro do período; extrato de
+   * despesas e taxa por agrupamento (unidade só em bloco próprio se valor diferente).
    */
   downloadUnitSlipPdf(c: CondominiumFeeCharge): void {
     const ym = this.competenceYm().trim();
     if (!ym) {
-      this.formError.set('Indique a competência.');
+      this.flash.warning('Indique a competência.');
       return;
     }
-    this.formError.set(null);
     this.actionBusy.set(true);
     this.api
       .condominiumFeesTransparencyPdf(this.condoId, ym, c.unitId)
@@ -621,6 +742,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
           a.download = `taxa-${ym}-${unitTag}.pdf`;
           a.click();
           URL.revokeObjectURL(url);
+          this.loadSlipDeliveryLog();
         },
         error: (err: HttpErrorResponse) => {
           this.actionBusy.set(false);
@@ -628,13 +750,12 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
             network:
               'Sem conexão com o servidor. Verifique a internet e tente novamente.',
             default: 'Não foi possível gerar o PDF da unidade.',
-          }).then((m) => this.formError.set(m));
+          }).then((m) => this.flash.error(m));
         },
       });
   }
 
   downloadReceipt(c: CondominiumFeeCharge): void {
-    this.formError.set(null);
     this.actionBusy.set(true);
     this.api.condominiumFeePaymentReceiptPdf(this.condoId, c.id).subscribe({
       next: (blob) => {
@@ -652,7 +773,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
           network:
             'Sem conexão com o servidor. Verifique a internet e tente novamente.',
           default: 'Não foi possível baixar o comprovante.',
-        }).then((m) => this.formError.set(m));
+        }).then((m) => this.flash.error(m));
       },
     });
   }
@@ -664,7 +785,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     const open = this.charges().filter((c) => c.status === 'open');
     const n = new Set(open.map((c) => c.unitId)).size;
     if (n === 0) {
-      this.formError.set('Não há cobranças em aberto nesta competência.');
+      this.flash.warning('Não há cobranças em aberto nesta competência.');
       return;
     }
     if (
@@ -686,7 +807,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     );
     const unitIds = [...new Set(openSelected.map((c) => c.unitId))];
     if (unitIds.length === 0) {
-      this.formError.set(
+      this.flash.warning(
         'Selecione cobranças em aberto ou use «WhatsApp slips (todas em aberto)».',
       );
       return;
@@ -706,7 +827,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       return;
     }
     if (c.status !== 'open') {
-      this.formError.set(
+      this.flash.warning(
         'Só é possível enviar slip por WhatsApp para cobranças em aberto.',
       );
       return;
@@ -743,10 +864,9 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   private runSendSlipsWhatsapp(unitIds: string[] | undefined): void {
     const ym = this.competenceYm().trim();
     if (!ym) {
-      this.formError.set('Indique a competência.');
+      this.flash.warning('Indique a competência.');
       return;
     }
-    this.formError.set(null);
     this.slipWaBusy.set(true);
     this.slipWaInfo.set(null);
     this.api
@@ -758,6 +878,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         next: (r) => {
           this.slipWaBusy.set(false);
           this.slipWaInfo.set(this.formatSlipWaResult(r));
+          this.loadSlipDeliveryLog();
           if (unitIds?.length) {
             this.clearSelection();
           }
@@ -768,7 +889,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
             network:
               'Sem conexão com o servidor. Verifique a internet e tente novamente.',
             default: 'Não foi possível enviar os slips por WhatsApp.',
-          }).then((m) => this.formError.set(m));
+          }).then((m) => this.flash.error(m));
         },
       });
   }

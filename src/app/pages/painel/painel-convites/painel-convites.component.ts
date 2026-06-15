@@ -17,6 +17,7 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { FlashMessageService } from '../../../core/flash-message.service';
 import {
   formatBrPhoneDisplay,
   optionalBrMobilePhoneValidator,
@@ -51,6 +52,7 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly formatPendingExpiresAt = formatDateTimeDdMmYyyyHhMm;
 
   private readonly route = inject(ActivatedRoute);
+  private readonly flash = inject(FlashMessageService);
   private readonly api = inject(CondominiumManagementService);
   protected readonly navData = inject(CondominiumNavDataService);
   private readonly fb = inject(FormBuilder);
@@ -59,8 +61,6 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly pageError = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly lookupBusy = signal(false);
-  protected readonly actionError = signal<string | null>(null);
-  protected readonly actionOk = signal<string | null>(null);
 
   protected readonly historyLoading = signal(false);
   protected readonly historyError = signal<string | null>(null);
@@ -119,6 +119,9 @@ export class PainelConvitesComponent implements OnInit {
   protected readonly copiedInviteId = signal<string | null>(null);
 
   protected readonly removingInviteId = signal<string | null>(null);
+
+  /** Formulário «Novo convite» recolhido por defeito (como Fundos / Transações). */
+  protected readonly inviteFormExpanded = signal(false);
 
   private readonly groupingIdView = signal('');
   protected readonly unitOptions = computed<UnitRow[]>(() => {
@@ -194,6 +197,10 @@ export class PainelConvitesComponent implements OnInit {
     this.reloadHistory();
   }
 
+  protected toggleInviteForm(): void {
+    this.inviteFormExpanded.update((v) => !v);
+  }
+
   /** Só preenche quando ainda não há agrupamento escolhido (evita sobrescrever o usuário). */
   private maybePresetUnitFromTree(t: GroupingWithUnits[]): void {
     if (this.form.controls.groupingId.value) {
@@ -226,7 +233,6 @@ export class PainelConvitesComponent implements OnInit {
       'Remover este convite? O link deixará de funcionar e a pessoa precisará de um novo convite.',
     );
     if (!ok) return;
-    this.actionError.set(null);
     this.removingInviteId.set(id);
     this.api.deleteCondominiumInvitation(this.condominiumId, id).subscribe({
       next: () => {
@@ -235,7 +241,7 @@ export class PainelConvitesComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.removingInviteId.set(null);
-        this.actionError.set(this.msg(err));
+        this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
       },
     });
   }
@@ -253,7 +259,7 @@ export class PainelConvitesComponent implements OnInit {
         }, 2000);
       },
       () => {
-        this.actionError.set('Não foi possível copiar o link.');
+        this.flash.warning('Não foi possível copiar o link.');
       },
     );
   }
@@ -303,13 +309,11 @@ export class PainelConvitesComponent implements OnInit {
   }
 
   runLookup(): void {
-    this.actionOk.set(null);
-    this.actionError.set(null);
     this.lookup.set(null);
     const email = this.form.controls.email.value.trim();
     const phone = this.form.controls.phone.value.trim();
     if (email && phone) {
-      this.actionError.set(
+      this.flash.warning(
         'Preencha só o e-mail ou só o celular para “Identificar”, não os dois ao mesmo tempo.',
       );
       return;
@@ -317,7 +321,7 @@ export class PainelConvitesComponent implements OnInit {
     if (!email && !phone) {
       this.form.controls.email.markAsTouched();
       this.form.controls.phone.markAsTouched();
-      this.actionError.set('Informe o e-mail ou o celular (com DDD) para identificar.');
+      this.flash.warning('Informe o e-mail ou o celular (com DDD) para identificar.');
       return;
     }
     if (email && this.form.controls.email.invalid) {
@@ -346,19 +350,17 @@ export class PainelConvitesComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.lookupBusy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }
 
   sendInvite(): void {
-    this.actionOk.set(null);
-    this.actionError.set(null);
     const { groupingId, unitId, email, phone } = this.form.getRawValue();
     if (!groupingId || !unitId) {
       this.form.controls.groupingId.markAsTouched();
       this.form.controls.unitId.markAsTouched();
-      this.actionError.set('Selecione o agrupamento e a unidade.');
+      this.flash.warning('Selecione o agrupamento e a unidade.');
       return;
     }
     const emailTrim = email.trim();
@@ -366,7 +368,7 @@ export class PainelConvitesComponent implements OnInit {
     if (!emailTrim && !phoneTrim) {
       this.form.controls.email.markAsTouched();
       this.form.controls.phone.markAsTouched();
-      this.actionError.set('Informe o e-mail e/ou o celular (com DDD) de quem vai receber o convite.');
+      this.flash.warning('Informe o e-mail e/ou o celular (com DDD) de quem vai receber o convite.');
       return;
     }
     if (emailTrim && this.form.controls.email.invalid) {
@@ -379,7 +381,7 @@ export class PainelConvitesComponent implements OnInit {
     }
     const lu = this.lookup();
     if (!lu || !lu.canInvite) {
-      this.actionError.set(
+      this.flash.warning(
         'Use “Identificar” com o e-mail ou o celular usados acima e confirme que o convite é permitido.',
       );
       return;
@@ -387,7 +389,7 @@ export class PainelConvitesComponent implements OnInit {
     const fullName = this.form.controls.fullName.value.trim();
     if (!lu.found && fullName.length < 2) {
       this.form.controls.fullName.markAsTouched();
-      this.actionError.set(
+      this.flash.warning(
         'Indique o nome completo de quem vai receber o convite (contato ainda não cadastrado).',
       );
       return;
@@ -404,7 +406,7 @@ export class PainelConvitesComponent implements OnInit {
       .subscribe({
         next: (res) => {
           this.busy.set(false);
-          this.actionOk.set(
+          this.flash.success(
             res.sentEmail || res.sentSms
               ? res.sentEmail && res.sentSms
                 ? 'Convite enviado por e-mail e corretamente pelo WhatsApp.'
@@ -419,11 +421,12 @@ export class PainelConvitesComponent implements OnInit {
             fullName: '',
           });
           this.lookup.set(null);
+          this.inviteFormExpanded.set(false);
           this.reloadPending();
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          this.actionError.set(this.msg(err));
+          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
   }

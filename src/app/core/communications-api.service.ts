@@ -59,6 +59,7 @@ export interface CommunicationRecipientRow {
   smsError: string | null;
   whatsappStatus?: DeliveryChannelStatus;
   whatsappError?: string | null;
+  pdfStatus?: DeliveryChannelStatus;
   readAt: string | null;
   readSource: CommunicationReadSource | null;
   createdAt: string;
@@ -71,6 +72,8 @@ export interface RecipientDeliveryPrefPayload {
   email?: boolean;
   sms?: boolean;
   whatsapp?: boolean;
+  /** Só impressão/PDF — sem envio digital. */
+  pdf?: boolean;
 }
 
 export interface AudiencePreviewUser {
@@ -102,6 +105,7 @@ export interface Communication {
   channelEmailEnabled?: boolean;
   channelSmsEnabled?: boolean;
   channelWhatsappEnabled?: boolean;
+  channelPdfEnabled?: boolean;
   recipientDeliveryPrefs?: string | null;
   attachments?: CommunicationAttachmentRow[];
   recipients?: CommunicationRecipientRow[];
@@ -148,6 +152,7 @@ export class CommunicationsApiService {
       channelEmailEnabled?: boolean;
       channelSmsEnabled?: boolean;
       channelWhatsappEnabled?: boolean;
+      channelPdfEnabled?: boolean;
       recipientDeliveryPrefs?: RecipientDeliveryPrefPayload[];
     },
   ): Observable<Communication> {
@@ -216,6 +221,13 @@ export class CommunicationsApiService {
     return this.http.get(
       `${this.base}/condominiums/${condominiumId}/communications/${communicationId}/attachments/${attachmentId}/file`,
       { responseType: 'blob' },
+    );
+  }
+
+  /** Exclusão lógica — oculta da lista; registo mantido no servidor. */
+  remove(condominiumId: string, communicationId: string): Observable<{ ok: true }> {
+    return this.http.delete<{ ok: true }>(
+      `${this.base}/condominiums/${condominiumId}/communications/${communicationId}`,
     );
   }
 }

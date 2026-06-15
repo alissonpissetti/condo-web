@@ -1,75 +1,73 @@
-<section class="suporte" aria-labelledby="suporte-titulo">
-  <header class="suporte__hero">
-    <h1 id="suporte-titulo">Solicitações</h1>
-    <p class="suporte__lead">
-      Abra chamados para a plataforma ou para o seu condomínio, com descrição e anexos quando
-      precisar. Para algo urgente, use o WhatsApp — o link já traz o seu nome e o condomínio
-      selecionado no painel.
-    </p>
+<div class="page">
+  <header class="page__header">
+    <h1>Suporte</h1>
   </header>
 
   @if (loadError()) {
-    <div class="flash flash--error" role="alert">{{ loadError() }}</div>
+    <p class="error" role="alert">{{ loadError() }}</p>
   }
 
   @if (loading()) {
-    <div class="suporte__skeleton" aria-busy="true">
-      <div class="suporte__sk suporte__sk--title"></div>
-      <div class="suporte__sk suporte__sk--line"></div>
-      <div class="suporte__sk suporte__sk--line suporte__sk--short"></div>
+    <div class="suporte-skeleton" aria-busy="true" aria-label="Carregando">
+      <div class="suporte-skeleton__bar suporte-skeleton__bar--title"></div>
+      <div class="suporte-skeleton__bar"></div>
+      <div class="suporte-skeleton__bar suporte-skeleton__bar--short"></div>
     </div>
   } @else if (!loadError()) {
-    <div class="suporte__grid">
-      <article class="suporte__card suporte__card--wa" aria-labelledby="wa-suporte-titulo">
-        <h2 id="wa-suporte-titulo" class="suporte__card-title">WhatsApp</h2>
-        <p class="suporte__card-text muted">
-          <strong>(41) 99989-7602</strong> — o link abre o app com mensagem pré-preenchida (nome e
-          condomínio atual do painel, se houver).
-        </p>
-        <a
-          class="btn btn--wa"
-          [href]="whatsappSupportHref()"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Abrir conversa no WhatsApp
-        </a>
-      </article>
+    <div class="suporte-layout">
+      <section
+        class="form-card suporte-wa-card"
+        aria-labelledby="wa-suporte-titulo"
+      >
+        <div class="form-card__head">
+          <h2 id="wa-suporte-titulo" class="form-card__title">WhatsApp</h2>
+          <p class="form-card__lede">
+            <strong>(41) 99989-7602</strong> — o link abre o app com mensagem
+            pré-preenchida (nome e condomínio atual do painel, se houver).
+          </p>
+        </div>
+        <div class="suporte-wa-card__body">
+          <a
+            class="btn suporte-wa-btn"
+            [href]="whatsappSupportHref()"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir conversa no WhatsApp
+          </a>
+        </div>
+      </section>
 
-      <article class="suporte__card" aria-labelledby="nova-solicitacao">
-        <h2 id="nova-solicitacao" class="suporte__card-title">Nova solicitação</h2>
-        <p class="suporte__card-text muted">
-          Seja específico (passos, URL, telas). Pode anexar capturas, PDFs, áudio ou vídeo —           até
-          {{ maxOpenFiles }} arquivos, {{ formatBytes(maxOpenFileBytes) }} cada. Sem anexos, a
-          descrição precisa de pelo menos 10 caracteres.
-        </p>
-
-        @if (formError()) {
-          <div class="flash flash--error" role="alert">{{ formError() }}</div>
-        }
-        @if (formSuccess()) {
-          <div class="flash flash--ok" role="status">{{ formSuccess() }}</div>
-        }
+      <section class="form-card suporte-form-card" aria-labelledby="nova-solicitacao">
+        <div class="form-card__head">
+          <h2 id="nova-solicitacao" class="form-card__title">Nova solicitação</h2>
+          <p class="form-card__lede">
+            Seja específico (passos, URL, telas). Pode anexar capturas, PDFs, áudio ou
+            vídeo — até {{ maxOpenFiles }} arquivos,
+            {{ formatBytes(maxOpenFileBytes) }} cada. Sem anexos, a descrição precisa
+            de pelo menos 10 caracteres.
+          </p>
+        </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="suporte-form" novalidate>
           <div class="suporte-form__grid">
-            <label class="field">
+            <label class="field field--block">
               <span class="field__label">Tipo</span>
-              <select formControlName="target">
+              <select class="input input--lg" formControlName="target">
                 <option [ngValue]="null" disabled>Escolha…</option>
                 @for (opt of targetOptions; track opt.value) {
                   <option [ngValue]="opt.value">{{ opt.label }}</option>
                 }
               </select>
               @for (msg of fieldErrorsPt(form.controls.target); track msg) {
-                <small class="field-error">{{ msg }}</small>
+                <span class="field-err">{{ msg }}</span>
               }
             </label>
 
-            <label class="field">
+            <label class="field field--block">
               <span class="field__label">Categoria</span>
               @if (form.controls.target.value) {
-                <select formControlName="category">
+                <select class="input input--lg" formControlName="category">
                   <option [ngValue]="null" disabled>Escolha…</option>
                   @for (opt of categoryRows(); track opt.value) {
                     <option [ngValue]="opt.value">{{ opt.label }}</option>
@@ -79,11 +77,11 @@
                 <p class="muted sm field-hint">Selecione o tipo acima.</p>
               }
               @for (msg of fieldErrorsPt(form.controls.category); track msg) {
-                <small class="field-error">{{ msg }}</small>
+                <span class="field-err">{{ msg }}</span>
               }
             </label>
 
-            <label class="field">
+            <label class="field field--block">
               <span class="field__label">
                 @if (form.controls.target.value === 'condominium') {
                   Condomínio
@@ -91,7 +89,7 @@
                   Condomínio (opcional)
                 }
               </span>
-              <select formControlName="condominiumId">
+              <select class="input input--lg" formControlName="condominiumId">
                 @if (form.controls.target.value === 'condominium') {
                   <option value="" disabled>Selecione…</option>
                 } @else {
@@ -102,68 +100,80 @@
                 }
               </select>
               @if (form.controls.target.value === 'condominium') {
-                <small class="field-hint muted">Obrigatório. O síndico pode receber cópia por e-mail.</small>
+                <span class="field-hint muted"
+                  >Obrigatório. O síndico pode receber cópia por e-mail.</span
+                >
               } @else {
-                <small class="field-hint muted"
-                  >Opcional na solicitação à plataforma; o síndico pode ser copiado por e-mail.</small
+                <span class="field-hint muted"
+                  >Opcional na solicitação à plataforma; o síndico pode ser copiado
+                  por e-mail.</span
                 >
               }
               @for (msg of fieldErrorsPt(form.controls.condominiumId); track msg) {
-                <small class="field-error">{{ msg }}</small>
+                <span class="field-err">{{ msg }}</span>
               }
             </label>
 
-            <label class="field">
+            <label class="field field--block suporte-form__span-all">
               <span class="field__label">Assunto</span>
-              <input type="text" formControlName="title" maxlength="512" autocomplete="off" />
+              <input
+                type="text"
+                class="input input--lg"
+                formControlName="title"
+                maxlength="512"
+                autocomplete="off"
+              />
               @for (msg of fieldErrorsPt(form.controls.title); track msg) {
-                <small class="field-error">{{ msg }}</small>
+                <span class="field-err">{{ msg }}</span>
               }
             </label>
 
-            <label class="field">
+            <label class="field field--block suporte-form__span-all">
               <span class="field__label">Descrição</span>
               <textarea
+                class="input input--lg input--textarea"
                 formControlName="body"
                 rows="7"
                 spellcheck="true"
                 placeholder="Descreva o pedido, ou deixe curto se for enviar anexos."
               ></textarea>
               @for (msg of fieldErrorsPt(form.controls.body); track msg) {
-                <small class="field-error">{{ msg }}</small>
+                <span class="field-err">{{ msg }}</span>
               }
             </label>
           </div>
 
           <div
-            class="suporte__dropzone"
+            class="suporte-dropzone"
             (dragover)="onOpenDragOver($event)"
             (drop)="onOpenDropFiles($event)"
           >
             <input
               id="suporte-open-files"
-              class="suporte__file-input"
+              class="suporte-dropzone__input"
               type="file"
               multiple
               (change)="onOpenFilesSelected($event)"
             />
-            <label for="suporte-open-files" class="suporte__dropzone-label">
-              <span class="suporte__dropzone-title">Anexar arquivos</span>
-              <span class="suporte__dropzone-hint"
+            <label for="suporte-open-files" class="suporte-dropzone__label">
+              <span class="suporte-dropzone__title">Anexar arquivos</span>
+              <span class="suporte-dropzone__hint muted"
                 >Clique ou arraste para aqui (documentos, imagens, áudio, vídeo)</span
               >
             </label>
           </div>
 
           @if (pendingOpenFiles().length > 0) {
-            <ul class="suporte__pending" aria-label="Arquivos a enviar">
+            <ul class="suporte-pending" aria-label="Arquivos a enviar">
               @for (f of pendingOpenFiles(); track $index) {
-                <li class="suporte__pending-row">
-                  <span class="suporte__pending-name">{{ f.name }}</span>
-                  <span class="suporte__pending-meta">{{ formatBytes(f.size) }}</span>
+                <li class="suporte-pending__row">
+                  <span class="suporte-pending__name">{{ f.name }}</span>
+                  <span class="suporte-pending__meta muted">{{
+                    formatBytes(f.size)
+                  }}</span>
                   <button
                     type="button"
-                    class="suporte__pending-remove"
+                    class="suporte-pending__remove"
                     (click)="removeOpenFile($index)"
                     aria-label="Remover arquivo"
                   >
@@ -172,7 +182,7 @@
                 </li>
               }
             </ul>
-            <button type="button" class="btn btn--text" (click)="clearOpenFiles()">
+            <button type="button" class="btn btn--ghost sm" (click)="clearOpenFiles()">
               Limpar anexos
             </button>
           }
@@ -183,62 +193,75 @@
             </button>
           </div>
         </form>
-      </article>
+      </section>
 
-      <article class="suporte__card suporte__card--list" aria-labelledby="lista-solicitacoes">
-        <div class="suporte__list-head">
+      <section
+        class="form-card suporte-list-card"
+        aria-labelledby="lista-solicitacoes"
+      >
+        <div class="form-card__head suporte-list-card__head">
           <div>
-            <h2 id="lista-solicitacoes" class="suporte__card-title">Minhas solicitações</h2>
-            <p class="suporte__card-text muted">Clique em um cartão para abrir o chamado e a conversa.</p>
+            <h2 id="lista-solicitacoes" class="form-card__title">
+              Minhas solicitações
+            </h2>
+            <p class="form-card__lede">
+              Clique num cartão para abrir o chamado e a conversa.
+            </p>
           </div>
-          <button type="button" class="btn btn--ghost" (click)="refreshList()">Atualizar</button>
+          <button type="button" class="btn btn--ghost sm" (click)="refreshList()">
+            Atualizar
+          </button>
         </div>
 
-        @if (listError()) {
-          <div class="flash flash--error" role="alert">{{ listError() }}</div>
-        }
+        <div class="suporte-list-card__body">
+          @if (listError()) {
+            <p class="error" role="alert">{{ listError() }}</p>
+          }
 
-        @if (tickets().length === 0) {
-          <p class="suporte__empty muted">Você ainda não tem solicitações registradas.</p>
-        } @else {
-          <ul class="suporte__ticket-list">
-            @for (t of tickets(); track t.id) {
-              <li
-                class="suporte__ticket"
-                role="button"
-                tabindex="0"
-                (click)="openChamado(t.id)"
-                (keydown.enter)="openChamado(t.id)"
-                (keydown.space)="$event.preventDefault(); openChamado(t.id)"
-              >
-                <div class="suporte__ticket-top">
-                  <span class="suporte__badge" [attr.data-status]="t.status">{{
-                    statusLabelPt(t.status)
-                  }}</span>
-                  <time class="suporte__ticket-date" [attr.datetime]="t.createdAt">{{
-                    t.createdAt | date: 'short'
-                  }}</time>
-                </div>
-                <h3 class="suporte__ticket-title">{{ t.title }}</h3>
-                <dl class="suporte__ticket-facts">
-                  <div>
-                    <dt>Tipo</dt>
-                    <dd>{{ targetLabelShort(t.target) }}</dd>
+          @if (tickets().length === 0) {
+            <p class="suporte-list__empty muted">
+              Você ainda não tem solicitações registradas.
+            </p>
+          } @else {
+            <ul class="suporte-ticket-list">
+              @for (t of tickets(); track t.id) {
+                <li
+                  class="suporte-ticket"
+                  role="button"
+                  tabindex="0"
+                  (click)="openChamado(t.id)"
+                  (keydown.enter)="openChamado(t.id)"
+                  (keydown.space)="$event.preventDefault(); openChamado(t.id)"
+                >
+                  <div class="suporte-ticket__top">
+                    <span class="suporte-ticket__badge" [attr.data-status]="t.status">{{
+                      statusLabelPt(t.status)
+                    }}</span>
+                    <time class="suporte-ticket__date muted" [attr.datetime]="t.createdAt">{{
+                      t.createdAt | date: 'short'
+                    }}</time>
                   </div>
-                  <div>
-                    <dt>Categoria</dt>
-                    <dd>{{ categoryLabel(t.category) }}</dd>
-                  </div>
-                  <div>
-                    <dt>Condomínio</dt>
-                    <dd>{{ condoLabel(t.condominiumId) }}</dd>
-                  </div>
-                </dl>
-              </li>
-            }
-          </ul>
-        }
-      </article>
+                  <h3 class="suporte-ticket__title">{{ t.title }}</h3>
+                  <dl class="suporte-ticket__facts">
+                    <div>
+                      <dt>Tipo</dt>
+                      <dd>{{ targetLabelShort(t.target) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Categoria</dt>
+                      <dd>{{ categoryLabel(t.category) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Condomínio</dt>
+                      <dd>{{ condoLabel(t.condominiumId) }}</dd>
+                    </div>
+                  </dl>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </section>
     </div>
   }
-</section>
+</div>

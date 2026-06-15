@@ -1,157 +1,243 @@
-<section class="panel">
-  <h1>Seus condomínios</h1>
-  <p class="lead">
-    Condomínios associados à sua conta. Pode criar novos abaixo.
-  </p>
+<div class="page">
+  <header class="page__header">
+    <h1>Seus condomínios</h1>
+  </header>
 
   @if (loadError()) {
-    <div class="alert">{{ loadError() }}</div>
+    <p class="error" role="alert">{{ loadError() }}</p>
   }
   @if (deleteError()) {
-    <div class="alert" role="alert">{{ deleteError() }}</div>
+    <p class="error" role="alert">{{ deleteError() }}</p>
   }
 
-  @if (loadingList()) {
-    <p class="muted">Carregando…</p>
-  } @else if (!condominiums().length && !loadError()) {
-    <p class="muted">Nenhum condomínio encontrado no seu cadastro</p>
-  } @else {
-    <ul class="list" role="list">
-      @for (c of condominiums(); track c.id) {
-        <li
-          [class.is-selected]="isSelected(c.id)"
-          [class.is-clickable]="!deletingId()"
-          role="button"
-          tabindex="0"
-          [attr.aria-pressed]="isSelected(c.id)"
-          [attr.aria-label]="'Selecionar condomínio ' + c.name"
-          (click)="selectCondominiumFromRow(c.id)"
-          (keydown.enter)="selectCondominiumFromRow(c.id)"
-          (keydown.space)="$event.preventDefault(); selectCondominiumFromRow(c.id)"
-        >
-          <div class="row-main">
-            <span class="title">{{ c.name }}</span>
-            @if (c.billingPlanName != null && c.billingPricePerUnitCents != null) {
-              <div class="plan-block">
-                <p class="plan-block__line">
-                  <span class="plan-block__label">Plano atual</span>
-                  <span class="plan-block__value"
-                    >{{ c.billingPlanName }} —
-                    {{ formatBrl(c.billingPricePerUnitCents) }} por
-                    unidade/mês</span
-                  >
-                </p>
+  <section class="form-card condo-list-card" aria-label="Lista de condomínios">
+    <div class="form-card__head">
+      <h2 class="form-card__title">Condomínios da conta</h2>
+      <p class="form-card__lede">
+        Clique num condomínio para abrir o painel. Use a estrela para mantê-lo
+        selecionado ao fazer login.
+      </p>
+    </div>
+
+    <div class="condo-list-card__body">
+      @if (loadingList()) {
+        <p class="muted">Carregando…</p>
+      } @else if (!condominiums().length && !loadError()) {
+        <p class="condo-list__empty muted">Nenhum condomínio encontrado no seu cadastro.</p>
+      } @else {
+        <ul class="condo-list" role="list">
+          @for (c of condominiums(); track c.id) {
+            <li
+              class="condo-list__item"
+              [class.condo-list__item--selected]="isSelected(c.id)"
+              [class.condo-list__item--clickable]="!deletingId()"
+              role="button"
+              tabindex="0"
+              [attr.aria-pressed]="isSelected(c.id)"
+              [attr.aria-label]="'Selecionar condomínio ' + c.name"
+              (click)="selectCondominiumFromRow(c.id)"
+              (keydown.enter)="selectCondominiumFromRow(c.id)"
+              (keydown.space)="
+                $event.preventDefault(); selectCondominiumFromRow(c.id)
+              "
+            >
+              <div class="condo-list__main">
+                <span class="condo-list__name">{{ c.name }}</span>
                 @if (
-                  isCondominiumOwner(c) &&
-                  !plansLoading() &&
-                  !plansError()
+                  c.billingPlanName != null && c.billingPricePerUnitCents != null
                 ) {
+                  <div class="condo-list__plan">
+                    <p class="condo-list__plan-line">
+                      <span class="condo-list__plan-label">Plano atual</span>
+                      <span class="condo-list__plan-value"
+                        >{{ c.billingPlanName }} —
+                        {{ formatBrl(c.billingPricePerUnitCents) }} por
+                        unidade/mês</span
+                      >
+                    </p>
+                    @if (
+                      isCondominiumOwner(c) &&
+                      !plansLoading() &&
+                      !plansError()
+                    ) {
+                      <button
+                        type="button"
+                        class="condo-list__plan-link"
+                        (click)="openPlanEditor(c); $event.stopPropagation()"
+                        [disabled]="
+                          deletingId() !== null || planSaveBusyId() === c.id
+                        "
+                      >
+                        Alterar plano
+                      </button>
+                    }
+                  </div>
+                }
+                <span class="condo-list__meta muted">
+                  @if (c.hasSyndic && c.syndicName) {
+                    Síndico: {{ c.syndicName }}
+                  } @else if (c.hasSyndic) {
+                    Síndico: nome ainda não informado no perfil
+                  } @else {
+                    Sem síndico definido
+                  }
+                </span>
+              </div>
+              <div class="condo-list__actions" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="condo-list__pin"
+                  [class.condo-list__pin--on]="isSelected(c.id)"
+                  (click)="selectCondominium(c.id); $event.stopPropagation()"
+                  [disabled]="!!deletingId()"
+                  [attr.aria-pressed]="isSelected(c.id)"
+                  [attr.aria-label]="
+                    isSelected(c.id)
+                      ? 'Remover seleção salva para este condomínio'
+                      : 'Salvar este condomínio como selecionado ao fazer login'
+                  "
+                  title="Manter selecionado ao fazer login"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="22"
+                    height="22"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                    />
+                  </svg>
+                </button>
+                @if (isCondominiumOwner(c)) {
                   <button
                     type="button"
-                    class="btn-text"
-                    (click)="openPlanEditor(c); $event.stopPropagation()"
-                    [disabled]="deletingId() !== null || planSaveBusyId() === c.id"
+                    class="condo-list__remove"
+                    (click)="remove(c); $event.stopPropagation()"
+                    [disabled]="deletingId() !== null"
+                    [attr.aria-busy]="isDeleting(c.id)"
+                    [attr.aria-label]="'Excluir condomínio ' + c.name"
+                    title="Excluir condomínio"
                   >
-                    Alterar plano
+                    @if (isDeleting(c.id)) {
+                      <span class="sr-only">Excluindo…</span>
+                    }
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
                   </button>
                 }
               </div>
-            }
-            <span class="meta">
-              @if (c.hasSyndic && c.syndicName) {
-                Síndico: {{ c.syndicName }}
-              } @else if (c.hasSyndic) {
-                Síndico: nome ainda não informado no perfil
-              } @else {
-                Sem síndico definido
-              }
-            </span>
-          </div>
-          <div class="row-actions" (click)="$event.stopPropagation()">
-            <button
-              type="button"
-              class="pin"
-              [class.pin--on]="isSelected(c.id)"
-              (click)="selectCondominium(c.id); $event.stopPropagation()"
-              [disabled]="!!deletingId()"
-              [attr.aria-pressed]="isSelected(c.id)"
-              [attr.aria-label]="
-                isSelected(c.id)
-                  ? 'Remover seleção salva para este condomínio'
-                  : 'Salvar este condomínio como selecionado ao fazer login'
-              "
-              title="Manter selecionado ao fazer login"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="22"
-                height="22"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path
-                  fill="currentColor"
-                  d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-                />
-              </svg>
-            </button>
-            @if (isCondominiumOwner(c)) {
-              <button
-                type="button"
-                class="btn-remove"
-                (click)="remove(c); $event.stopPropagation()"
-                [disabled]="deletingId() !== null"
-                [attr.aria-busy]="isDeleting(c.id)"
-                [attr.aria-label]="'Excluir condomínio ' + c.name"
-                title="Excluir condomínio"
-              >
-                @if (isDeleting(c.id)) {
-                  <span class="sr-only">Eliminando…</span>
-                }
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <path
-                    fill="currentColor"
-                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                  />
-                </svg>
-              </button>
-            }
-          </div>
-        </li>
+            </li>
+          }
+        </ul>
       }
-    </ul>
-  }
-</section>
+    </div>
+  </section>
+
+  <section class="form-card condo-create-card" aria-label="Novo condomínio">
+    <div class="form-card__head">
+      <h2 class="form-card__title">Novo condomínio</h2>
+      <p class="form-card__lede">
+        Crie um condomínio e escolha o plano SaaS. Depois configure unidades e
+        equipe no painel do condomínio.
+      </p>
+    </div>
+
+    @if (plansError()) {
+      <p class="error condo-create-card__error" role="alert">{{ plansError() }}</p>
+    }
+
+    <form
+      class="condo-create-form"
+      [formGroup]="form"
+      (ngSubmit)="create()"
+      novalidate
+    >
+      <label class="field field--block">
+        <span class="field__label">Nome</span>
+        <input
+          type="text"
+          class="input input--lg"
+          formControlName="name"
+          placeholder="Ex.: Residencial Alpha"
+          autocomplete="organization"
+        />
+        @for (msg of fieldErrorsPt(form.controls.name); track msg) {
+          <span class="field-err">{{ msg }}</span>
+        }
+      </label>
+      <label class="field field--block">
+        <span class="field__label">Plano SaaS</span>
+        <select
+          class="input input--lg"
+          formControlName="planId"
+          [disabled]="plansLoading() || !!plansError()"
+        >
+          @if (plansLoading()) {
+            <option [ngValue]="null">Carregando planos…</option>
+          } @else {
+            @for (p of plans(); track p.id) {
+              <option [ngValue]="p.id">
+                {{ p.name }} — {{ formatUnitPrice(p) }}
+                @if (p.isDefault) {
+                  (padrão)
+                }
+              </option>
+            }
+          }
+        </select>
+        @for (msg of fieldErrorsPt(form.controls.planId); track msg) {
+          <span class="field-err">{{ msg }}</span>
+        }
+      </label>
+      <div class="condo-create-form__actions">
+        <button
+          type="submit"
+          class="btn primary"
+          [disabled]="saving() || plansLoading() || !!plansError()"
+        >
+          {{ saving() ? 'Criando…' : 'Criar condomínio' }}
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
 
 @if (planStudioCondo(); as studioCondo) {
   <div
-    class="plan-studio-backdrop"
+    class="modal-backdrop plan-studio-backdrop"
     (click)="onStudioBackdropClick($event)"
     role="presentation"
   >
     <div
-      class="plan-studio"
+      class="modal modal--wide plan-studio"
       role="dialog"
       aria-modal="true"
       aria-labelledby="plan-studio-title"
       (click)="$event.stopPropagation()"
     >
-      <header class="plan-studio__header">
+      <header class="modal__head plan-studio__header">
         <div class="plan-studio__heading">
           <h2 id="plan-studio-title" class="plan-studio__title">
             Alterar plano e voucher
           </h2>
-          <p class="plan-studio__subtitle">{{ studioCondo.name }}</p>
+          <p class="plan-studio__subtitle muted">{{ studioCondo.name }}</p>
         </div>
         <button
           type="button"
-          class="plan-studio__close"
+          class="modal__close plan-studio__close"
           (click)="closePlanStudio()"
           aria-label="Fechar"
         >
@@ -160,26 +246,24 @@
       </header>
 
       @if (planPatchError()) {
-        <div class="plan-studio__alert" role="alert">{{ planPatchError() }}</div>
+        <p class="error plan-studio__alert" role="alert">{{ planPatchError() }}</p>
       }
 
-      <div class="plan-studio__body">
+      <div class="modal__body plan-studio__body">
         @if (planStudioPreviewLoading() && !planStudioPreview()) {
           <p class="muted">Carregando pré-visualização…</p>
         }
         @if (planStudioPreviewError()) {
-          <div class="plan-studio__alert" role="alert">
-            {{ planStudioPreviewError() }}
-          </div>
+          <p class="error" role="alert">{{ planStudioPreviewError() }}</p>
         }
 
         @if (planStudioPreview(); as pr) {
           <div class="plan-studio__ref">
-            <label class="plan-studio__ref-label">
-              <span>Mês de referência (voucher e desconto)</span>
+            <label class="field field--block plan-studio__ref-field">
+              <span class="field__label">Mês de referência (voucher e desconto)</span>
               <input
                 type="month"
-                class="plan-studio__month"
+                class="input input--lg plan-studio__month"
                 [value]="planStudioRefMonth()"
                 (change)="onStudioRefMonthChange($event)"
               />
@@ -203,13 +287,15 @@
         }
 
         <section class="plan-studio__voucher" aria-labelledby="voucher-heading">
-          <h3 id="voucher-heading" class="plan-studio__section-title">Voucher</h3>
+          <h3 id="voucher-heading" class="plan-studio__section-title">
+            Voucher
+          </h3>
           <p class="plan-studio__section-lead muted">
             Se tiver um código promocional, insira abaixo. O desconto aplica-se
             quando o mês de referência intersecta a validade do voucher.
           </p>
           @if (voucherError()) {
-            <div class="plan-studio__alert" role="alert">{{ voucherError() }}</div>
+            <p class="error" role="alert">{{ voucherError() }}</p>
           }
           @if (studioVoucher(); as v) {
             <div class="plan-studio__voucher-active">
@@ -226,7 +312,7 @@
               </p>
               <button
                 type="button"
-                class="btn outline sm"
+                class="btn btn--ghost sm"
                 (click)="removeStudioVoucher()"
                 [disabled]="voucherBusy()"
               >
@@ -237,7 +323,7 @@
             <div class="plan-studio__voucher-form">
               <input
                 type="text"
-                class="plan-studio__voucher-input"
+                class="input input--lg plan-studio__voucher-input"
                 placeholder="Código do voucher"
                 autocomplete="off"
                 [value]="voucherCodeInput()"
@@ -259,14 +345,17 @@
         @if (!plansError() && plans().length) {
           <div class="plan-studio__sim" aria-labelledby="studio-sim-label">
             <div class="plan-studio__sim-header">
-              <label id="studio-sim-label" class="plan-studio__sim-label" for="studio-sim-range"
+              <label
+                id="studio-sim-label"
+                class="plan-studio__sim-label field__label"
+                for="studio-sim-range"
                 >Simular total mensal (unidades)</label
               >
               <div class="plan-studio__sim-readout">
                 <output class="plan-studio__sim-output" for="studio-sim-range">{{
                   planStudioSimulatedUnits()
                 }}</output>
-                <span class="plan-studio__sim-unit-word">unidades</span>
+                <span class="plan-studio__sim-unit-word muted">unidades</span>
               </div>
             </div>
             <input
@@ -311,7 +400,7 @@
                     <span class="plan-card__amount">{{
                       formatBrl(studioUnitPriceForDisplay(p))
                     }}</span>
-                    <span class="plan-card__per"
+                    <span class="plan-card__per muted"
                       >por unidade / mês (simulação)</span
                     >
                   </p>
@@ -331,7 +420,7 @@
                       }
                     </ul>
                   } @else {
-                    <p class="plan-card__fallback">
+                    <p class="plan-card__fallback muted">
                       Destaques podem ser configurados pela equipe para este plano.
                     </p>
                   }
@@ -342,10 +431,10 @@
         }
       </div>
 
-      <footer class="plan-studio__footer">
+      <footer class="modal__foot plan-studio__footer">
         <button
           type="button"
-          class="btn-text"
+          class="btn btn--ghost"
           (click)="closePlanStudio()"
           [disabled]="isSavingPlanInStudio()"
         >
@@ -363,53 +452,3 @@
     </div>
   </div>
 }
-
-<section class="panel">
-  <h2>Novo condomínio</h2>
-  @if (plansError()) {
-    <div class="alert" role="alert">{{ plansError() }}</div>
-  }
-  @if (formError()) {
-    <div class="alert">{{ formError() }}</div>
-  }
-  <form [formGroup]="form" (ngSubmit)="create()" novalidate>
-    <label>
-      <span>Nome</span>
-      <input
-        type="text"
-        formControlName="name"
-        placeholder="Ex.: Residencial Alpha"
-      />
-      @for (msg of fieldErrorsPt(form.controls.name); track msg) {
-        <small class="field-error">{{ msg }}</small>
-      }
-    </label>
-    <label>
-      <span>Plano SaaS</span>
-      <select formControlName="planId" [disabled]="plansLoading() || !!plansError()">
-        @if (plansLoading()) {
-          <option [ngValue]="null">Carregando planos…</option>
-        } @else {
-          @for (p of plans(); track p.id) {
-            <option [ngValue]="p.id">
-              {{ p.name }} — {{ formatUnitPrice(p) }}
-              @if (p.isDefault) {
-                (padrão)
-              }
-            </option>
-          }
-        }
-      </select>
-      @for (msg of fieldErrorsPt(form.controls.planId); track msg) {
-        <small class="field-error">{{ msg }}</small>
-      }
-    </label>
-    <button
-      type="submit"
-      class="btn primary"
-      [disabled]="saving() || plansLoading() || !!plansError()"
-    >
-      {{ saving() ? 'Criando…' : 'Criar' }}
-    </button>
-  </form>
-</section>

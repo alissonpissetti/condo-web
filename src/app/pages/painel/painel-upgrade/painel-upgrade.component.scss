@@ -4,7 +4,9 @@
 }
 
 .upgrade-page {
-  max-width: 44rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0 0 2.5rem;
   display: flex;
   flex-direction: column;
