@@ -1,0 +1,196 @@
+<div class="page">
+  <header class="page__header">
+    <div class="page__title-row">
+      <h1>Fornecedores</h1>
+      @if (condoName(); as cn) {
+        <span class="condo-pill">{{ cn }}</span>
+      }
+    </div>
+    <p class="page__intro">
+      Cadastro de fornecedores do condomínio, com categorias sugeridas pela plataforma e categorias
+      que você criar (visíveis em todos os condomínios em que participa). Poucos campos são
+      obrigatórios; CPF/CNPJ e PIX são opcionais.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else if (loadError()) {
+    <p class="banner banner--error" role="alert">{{ loadError() }}</p>
+  } @else {
+    @if (formError()) {
+      <p class="banner banner--error" role="alert">{{ formError() }}</p>
+    }
+
+    <div class="toolbar">
+      <label class="filter">
+        <span class="filter__label">Categoria</span>
+        <select
+          class="filter__select"
+          [value]="filterCategoryId()"
+          (change)="onFilterChange($event)"
+        >
+          <option value="">Todas</option>
+          @for (c of categoryRows(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="btn primary" (click)="openCreate()">
+        Novo fornecedor
+      </button>
+    </div>
+
+    @if (formExpanded()) {
+      <section class="card form-card">
+        <h2 class="card__title">{{ editingId() ? 'Editar fornecedor' : 'Novo fornecedor' }}</h2>
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="grid2">
+            <label>
+              <span>Categoria *</span>
+              <select formControlName="categoryId">
+                <option value="" disabled>Selecione…</option>
+                @for (c of categoryRows(); track c.id) {
+                  <option [value]="c.id">{{ c.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Nome *</span>
+              <input type="text" formControlName="name" autocomplete="organization" />
+            </label>
+            <label>
+              <span>Razão social / nome completo</span>
+              <input type="text" formControlName="legalName" />
+            </label>
+            <label>
+              <span>CPF ou CNPJ (somente números)</span>
+              <input type="text" formControlName="documentCnpjCpf" inputmode="numeric" />
+            </label>
+            <label>
+              <span>Tipo de chave PIX</span>
+              <select formControlName="pixKeyType">
+                <option value="">Não informar PIX</option>
+                @for (opt of pixTypeOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Valor da chave PIX</span>
+              <input type="text" formControlName="pixKeyValue" autocomplete="off" />
+            </label>
+            <label>
+              <span>Telefone</span>
+              <input type="tel" formControlName="phone" />
+            </label>
+            <label>
+              <span>E-mail</span>
+              <input type="email" formControlName="email" />
+            </label>
+            <label class="full">
+              <span>Endereço (texto livre)</span>
+              <input type="text" formControlName="addressLine" />
+            </label>
+            <label class="full">
+              <span>Observações</span>
+              <textarea formControlName="notes" rows="3"></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" (click)="cancelForm()">Cancelar</button>
+            <button type="submit" class="btn primary" [disabled]="saving()">
+              {{ saving() ? 'Salvando…' : 'Salvar' }}
+            </button>
+          </div>
+        </form>
+
+        <div class="new-cat">
+          <h3 class="new-cat__title">Nova categoria</h3>
+          <p class="new-cat__hint">
+            Fica disponível para você em todos os condomínios em que participa, ao cadastrar
+            fornecedores.
+          </p>
+          <div class="new-cat__row">
+            <input
+              type="text"
+              [formControl]="newCategoryName"
+              placeholder="Ex.: Piscina e lazer"
+            />
+            <button
+              type="button"
+              class="btn secondary"
+              [disabled]="newCategoryBusy()"
+              (click)="addCategory()"
+            >
+              {{ newCategoryBusy() ? 'Salvando…' : 'Adicionar categoria' }}
+            </button>
+          </div>
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <h2 class="card__title">Lista</h2>
+      @if (!suppliers().length) {
+        <p class="muted">Nenhum fornecedor cadastrado.</p>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Doc.</th>
+                <th>PIX</th>
+                <th>Contato</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of suppliers(); track s.id) {
+                <tr>
+                  <td>
+                    <strong>{{ s.name }}</strong>
+                    @if (s.legalName) {
+                      <div class="sub">{{ s.legalName }}</div>
+                    }
+                  </td>
+                  <td>{{ s.category?.name ?? '—' }}</td>
+                  <td>{{ s.documentCnpjCpf ?? '—' }}</td>
+                  <td>
+                    @if (s.pixKeyType && s.pixKeyValue) {
+                      <span class="pix">{{ pixTypeLabel(s.pixKeyType) }}</span>
+                      <div class="sub mono">{{ s.pixKeyValue }}</div>
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td>
+                    @if (s.email) {
+                      <div>{{ s.email }}</div>
+                    }
+                    @if (s.phone) {
+                      <div>{{ s.phone }}</div>
+                    }
+                    @if (!s.email && !s.phone) {
+                      —
+                    }
+                  </td>
+                  <td class="actions">
+                    <button type="button" class="btn linkish" (click)="startEdit(s)">
+                      Editar
+                    </button>
+                    <button type="button" class="btn linkish danger" (click)="confirmDelete(s)">
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

@@ -233,9 +233,14 @@ export class AuthService {
     });
   }
 
-  logout(): void {
+  /** Remove token local sem navegar (ex.: 401 em requisição autenticada). */
+  clearStoredCredentials(): void {
     localStorage.removeItem(TOKEN_KEY);
     this.tokenSignal.set(null);
+  }
+
+  logout(): void {
+    this.clearStoredCredentials();
     void this.router.navigateByUrl('/');
   }
 

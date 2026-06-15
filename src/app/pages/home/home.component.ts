@@ -1,5 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { formatBrlFromCents } from '../../core/format-brl';
 import {
@@ -10,21 +11,56 @@ import {
   SaasPlansApiService,
   type SaasPlanCatalogEntry,
 } from '../../core/saas-plans-api.service';
+import { LoginComponent } from '../login/login.component';
 
 @Component({
   selector: 'app-home',
-  imports: [RouterLink],
+  imports: [RouterLink, LoginComponent],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
 })
 export class HomeComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   private readonly saasPlansApi = inject(SaasPlansApiService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
   protected readonly year = new Date().getFullYear();
   protected readonly plans = signal<SaasPlanCatalogEntry[]>([]);
   protected readonly plansError = signal<string | null>(null);
   /** Simulação de unidades para custo total mensal (1–1000). */
   protected readonly simulatedUnits = signal(30);
+  protected readonly showLoginModal = signal(false);
+  protected readonly loginModalBanner = signal<string | null>(null);
+  protected readonly loginReturnUrl = signal<string | null>(null);
+
+  constructor() {
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed())
+      .subscribe((params) => {
+        if (params.get('login') === '1') {
+          this.showLoginModal.set(true);
+          const ru = params.get('returnUrl');
+          this.loginReturnUrl.set(
+            ru?.startsWith('/') && !ru.startsWith('//') ? ru : null,
+          );
+          const session = params.get('session');
+          if (session === 'expired') {
+            this.loginModalBanner.set(
+              'Sua sessão expirou ou deixou de ser válida. Entre novamente para continuar.',
+            );
+          } else if (session === 'required') {
+            this.loginModalBanner.set('Faça login para acessar o painel.');
+          } else {
+            this.loginModalBanner.set(null);
+          }
+        } else {
+          this.showLoginModal.set(false);
+          this.loginModalBanner.set(null);
+          this.loginReturnUrl.set(null);
+        }
+      });
+  }
 
   ngOnInit(): void {
     this.saasPlansApi.listCatalog().subscribe({
@@ -85,5 +121,9 @@ export class HomeComponent implements OnInit {
     }
     const d = Math.round(pEff - min);
     return `+ ${formatBrlFromCents(d)} por unidade vs o mais econômico (nesta simulação)`;
+  }
+
+  protected closeLoginModal(): void {
+    void this.router.navigateByUrl('/', { replaceUrl: true });
   }
 }

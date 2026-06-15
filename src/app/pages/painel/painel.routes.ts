@@ -132,6 +132,18 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/fornecedores',
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('suppliers'),
+        ],
+        loadComponent: () =>
+          import('./painel-fornecedores/painel-fornecedores.component').then(
+            (m) => m.PainelFornecedoresComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/taxas-condominiais',
         canActivate: [selectedCondominiumGuard, planFeatureGuard('condoFees')],
         loadComponent: () =>
@@ -153,6 +165,14 @@ export const painelRoutes: Routes = [
         loadComponent: () =>
           import('./painel-planejamento/painel-planejamento.component').then(
             (m) => m.PainelPlanejamentoComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/obras',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
+        loadComponent: () =>
+          import('./painel-obras/painel-obras.component').then(
+            (m) => m.PainelObrasComponent,
           ),
       },
       {

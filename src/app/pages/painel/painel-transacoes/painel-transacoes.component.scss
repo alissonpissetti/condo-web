@@ -1024,6 +1024,41 @@
   }
 }
 
+.settle-pix {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.settle-pix__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.settle-pix__row {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.settle-pix__key {
+  overflow-wrap: anywhere;
+}
+
+.supplier-pix-line {
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
 .settle-attach {
   display: flex;
   flex-direction: column;

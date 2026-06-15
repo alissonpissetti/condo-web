@@ -6,7 +6,7 @@
       quando aplicável. Cada lançamento tem estado de quitação:
       <strong>aguardando</strong> (entra na taxa condominial da competência),
       <strong>pago</strong> ou <strong>cancelado</strong> (desactivado, fora de saldos e taxas).
-      Receitas podem ser sem repartição. Opcionalmente anexe documento e comprovante (PDF ou imagem). Com
+      Receitas podem ser sem repartição. Opcionalmente associe um fornecedor (chave PIX ao quitar) e anexe documento e comprovante (PDF ou imagem). Com
       <strong>filtro por fundo</strong>, a coluna «Saldo após» é o saldo do fundo após
       cada lançamento, em ordem cronológica (só os movimentos listados), exibido em
       valor absoluto (sempre positivo).
@@ -274,7 +274,7 @@
                   Opcional: defina um valor único para todas as parcelas. Caso contrário,
                   mantêm-se os valores já lançados. Fundo opcional.
                 } @else if (editingId() || entryMode() === 'single') {
-                  Valor da transação e data. Fundo opcional para filtrar no painel.
+                  Valor da transação e data. Fundo e fornecedor opcionais (fornecedor exige plano com «Fornecedores»).
                 } @else {
                   Série mensal a partir da data indicada (cada mês, mesmo rateio e
                   fundo). Fundo opcional.
@@ -471,6 +471,38 @@
                 }
               </select>
             </label>
+            @if (!planFeatures.isBlocked('suppliers')) {
+              <label class="field field--block">
+                <span class="field__label">Fornecedor (opcional)</span>
+                <select
+                  class="input input--lg"
+                  [value]="supplierIdForm()"
+                  (change)="supplierIdForm.set($any($event.target).value)"
+                >
+                  <option value="">— Nenhum —</option>
+                  @for (s of suppliersList(); track s.id) {
+                    <option [value]="s.id">{{ s.name }}</option>
+                  }
+                </select>
+              </label>
+              @if (selectedSupplier(); as sup) {
+                @if (sup.pixKeyValue) {
+                  <p class="muted small supplier-pix-line">
+                    Chave PIX ({{ supplierPixTypeLabel(sup.pixKeyType) }}):
+                    <strong>{{ sup.pixKeyValue }}</strong>
+                    <button
+                      type="button"
+                      class="btn btn--ghost sm"
+                      (click)="copyTextToClipboard(sup.pixKeyValue)"
+                    >
+                      Copiar
+                    </button>
+                  </p>
+                } @else {
+                  <p class="muted small">Este fornecedor ainda não tem chave PIX cadastrada.</p>
+                }
+              }
+            }
           </div>
 
           @if (
@@ -705,7 +737,7 @@
           class="input input--lg"
           [value]="searchTerm()"
           (input)="setSearchTerm($any($event.target).value)"
-          placeholder="Título, descrição, tipo, fundo ou data"
+          placeholder="Título, descrição, fornecedor, tipo, fundo ou data"
           autocomplete="off"
         />
       </label>
@@ -842,6 +874,12 @@
                 <span class="tx-main-cell__badge" [attr.data-kind]="t.kind">{{
                   transactionKindLabelPt(t.kind)
                 }}</span>
+                @if (t.supplier?.name) {
+                  <br />
+                  <small class="muted tx-main-cell__supplier"
+                    >Fornecedor: {{ t.supplier!.name }}</small
+                  >
+                }
               </td>
               <td data-label="Estado">
                 <span
@@ -1147,6 +1185,32 @@
               <dd>{{ transactionKindLabelPt(st.kind) }}</dd>
             </div>
           </dl>
+
+          @if (st.supplier) {
+            <div class="settle-pix" role="region" aria-label="Dados para pagamento PIX">
+              <h3 class="settle-pix__title">Dados para pagamento</h3>
+              <p class="muted small">{{ st.supplier.name }}</p>
+              @if (st.supplier.pixKeyValue) {
+                <p class="settle-pix__row">
+                  <span class="muted small"
+                    >{{ supplierPixTypeLabel(st.supplier.pixKeyType) }}:</span
+                  >
+                  <strong class="settle-pix__key">{{ st.supplier.pixKeyValue }}</strong>
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="copyTextToClipboard(st.supplier.pixKeyValue)"
+                  >
+                    Copiar chave
+                  </button>
+                </p>
+              } @else {
+                <p class="muted small">
+                  O fornecedor não tem chave PIX no cadastro. Pode editá-la em Financeiro → Fornecedores.
+                </p>
+              }
+            </div>
+          }
 
           <div class="settle-attach">
             <label class="settle-attach__label" for="tx-settle-receipt-file">

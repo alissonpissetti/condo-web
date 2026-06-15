@@ -16,7 +16,12 @@
           Sair
         </button>
       } @else {
-        <a routerLink="/auth/login" class="btn ghost">Entrar</a>
+        <a
+          [routerLink]="['/']"
+          [queryParams]="{ login: '1' }"
+          class="btn ghost"
+          >Entrar</a
+        >
         <a routerLink="/auth/register" class="btn primary">Criar conta</a>
       }
     </nav>
@@ -37,7 +42,12 @@
           <a routerLink="/auth/register" class="btn primary lg"
             >Começar gratuitamente</a
           >
-          <a routerLink="/auth/login" class="btn outline lg">Já tenho conta</a>
+          <a
+            [routerLink]="['/']"
+            [queryParams]="{ login: '1' }"
+            class="btn outline lg"
+            >Já tenho conta</a
+          >
         } @else {
           <a routerLink="/painel" class="btn primary lg">Ir para o painel</a>
         }
@@ -200,3 +210,24 @@
     </div>
   </div>
 </footer>
+
+@if (showLoginModal()) {
+  <div
+    class="login-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Entrar na conta"
+    (click)="closeLoginModal()"
+  >
+    <div class="login-modal-shell" (click)="$event.stopPropagation()">
+      @if (loginModalBanner(); as bannerText) {
+        <p class="login-modal-banner" role="status">{{ bannerText }}</p>
+      }
+      <app-login
+        embedded
+        [returnAfterLogin]="loginReturnUrl()"
+        (closed)="closeLoginModal()"
+      />
+    </div>
+  </div>
+}

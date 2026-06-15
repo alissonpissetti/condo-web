@@ -1,5 +1,13 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import {
+  booleanAttribute,
+  Component,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -15,11 +23,20 @@ type LoginMode = 'email' | 'whatsapp';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, RouterLink, BrPhoneMaskDirective],
+  imports: [ReactiveFormsModule, RouterLink, BrPhoneMaskDirective, NgTemplateOutlet],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
+  host: {
+    '[class.login-embed]': 'embedded()',
+  },
 })
 export class LoginComponent {
+  /** Quando true, mostra só o cartão (ex.: modal na página inicial). */
+  readonly embedded = input(false, { transform: booleanAttribute });
+  /** Destino pós-login vindo do componente pai (ex.: query `returnUrl` na home). */
+  readonly returnAfterLogin = input<string | null>(null);
+  readonly closed = output<void>();
+
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
 
   private readonly fb = inject(FormBuilder);
@@ -136,6 +153,10 @@ export class LoginComponent {
     this.resetSmsFlow();
   }
 
+  protected onCloseEmbedded(): void {
+    this.closed.emit();
+  }
+
   private resetSmsFlow(): void {
     this.smsAwaitingCode.set(false);
     this.smsInfo.set(null);
@@ -146,6 +167,11 @@ export class LoginComponent {
   }
 
   private navigateAfterLogin(): void {
+    const fromParent = this.returnAfterLogin();
+    if (fromParent?.startsWith('/') && !fromParent.startsWith('//')) {
+      void this.router.navigateByUrl(fromParent);
+      return;
+    }
     const raw = this.route.snapshot.queryParamMap.get('returnUrl');
     if (raw?.startsWith('/') && !raw.startsWith('//')) {
       void this.router.navigateByUrl(raw);

@@ -9,6 +9,40 @@
     var(--bg);
 }
 
+:host(.login-embed) {
+  min-height: 0;
+  background: transparent;
+}
+
+.embed-root {
+  position: relative;
+}
+
+.embed-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    color: var(--text);
+    background: var(--surface);
+  }
+}
+
 .page {
   max-width: 420px;
   margin: 0 auto;

@@ -5,7 +5,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+ENV NODE_OPTIONS=--max-old-space-size=4096
+RUN npm run build -- --configuration production
 
 FROM nginx:1.27-alpine AS runner
 COPY nginx.conf /etc/nginx/conf.d/default.conf

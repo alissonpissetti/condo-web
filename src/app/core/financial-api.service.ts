@@ -40,10 +40,20 @@ export type FinancialTransactionPaymentStatus =
   | 'paid'
   | 'cancelled';
 
+/** Dados do fornecedor quando a API inclui a relação (listagem/detalhe). */
+export interface FinancialTransactionSupplierEmbed {
+  id: string;
+  name: string;
+  pixKeyType: string | null;
+  pixKeyValue: string | null;
+}
+
 export interface FinancialTransaction {
   id: string;
   condominiumId: string;
   fundId: string | null;
+  supplierId?: string | null;
+  supplier?: FinancialTransactionSupplierEmbed | null;
   kind: 'expense' | 'income' | 'investment';
   amountCents: string;
   occurredOn: string;
@@ -243,6 +253,7 @@ export class FinancialApiService {
       title: string;
       description?: string | null;
       fundId?: string | null;
+      supplierId?: string | null;
       allocationRule: AllocationRule;
       documentStorageKey?: string;
       documentStorageKeys?: string[];
@@ -266,6 +277,7 @@ export class FinancialApiService {
       title: string;
       description: string | null;
       fundId: string | null;
+      supplierId: string | null;
       allocationRule: AllocationRule;
       documentStorageKey: string | null;
       documentStorageKeys: string[] | null;
@@ -320,6 +332,7 @@ export class FinancialApiService {
       titleBase?: string;
       description?: string | null;
       fundId?: string | null;
+      supplierId?: string | null;
       allocationRule?: AllocationRule;
       amountCents?: number;
       documentStorageKey?: string | null;

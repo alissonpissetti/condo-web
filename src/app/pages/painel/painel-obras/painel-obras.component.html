@@ -1,0 +1,245 @@
+<div class="page">
+  <header class="page__header">
+    <h1>Obras</h1>
+    <p class="page__intro">
+      Acompanhamento transparente de obras e reformas no condomínio. Todos os
+      moradores com acesso ao condomínio podem ver o histórico; apenas a gestão
+      pode criar ou editar registos.
+      @if (condoName(); as cn) {
+        <strong>{{ cn }}</strong>
+      }
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Carregando…</p>
+  } @else {
+    @if (loadError()) {
+      <p class="error" role="alert">{{ loadError() }}</p>
+    } @else {
+      @if (formError()) {
+        <p class="error error--inline" role="alert">{{ formError() }}</p>
+      }
+
+    <div class="layout">
+      <aside class="layout__list">
+        <div class="list-head">
+          <h2 class="list-head__title">Obras</h2>
+          @if (condoAccess.canManage()) {
+            <button type="button" class="btn btn--ghost sm" (click)="startNewProject()">
+              Nova obra
+            </button>
+          }
+        </div>
+        @if (projects().length === 0) {
+          <p class="muted">Nenhuma obra registada.</p>
+        } @else {
+          <ul class="project-list">
+            @for (p of projects(); track p.id) {
+              <li>
+                <button
+                  type="button"
+                  class="project-list__btn"
+                  [class.project-list__btn--active]="selectedId() === p.id"
+                  (click)="selectProject(p)"
+                >
+                  <span class="project-list__title">{{ p.title }}</span>
+                  <span class="project-list__meta">{{ statusLabel(p.status) }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+
+      <section class="layout__detail">
+        @if (editingProject() && condoAccess.canManage()) {
+          <div class="card">
+            <h2 class="card__title">
+              {{ selectedId() ? 'Editar obra' : 'Nova obra' }}
+            </h2>
+            <form [formGroup]="projectForm" (ngSubmit)="saveProject()" class="stack">
+              <label class="field">
+                <span class="field__label">Título</span>
+                <input class="input" type="text" formControlName="title" />
+              </label>
+              <label class="field">
+                <span class="field__label">Descrição</span>
+                <textarea class="input input--textarea" rows="3" formControlName="description"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Estado</span>
+                <select class="input" formControlName="status">
+                  @for (o of statusOptions; track o.value) {
+                    <option [value]="o.value">{{ o.label }}</option>
+                  }
+                </select>
+              </label>
+              <div class="dates-row">
+                <label class="field">
+                  <span class="field__label">Início</span>
+                  <input class="input" type="date" formControlName="startedOn" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Previsão fim</span>
+                  <input class="input" type="date" formControlName="expectedEndOn" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Conclusão</span>
+                  <input class="input" type="date" formControlName="completedOn" />
+                </label>
+              </div>
+              @if (!planFeatures.isBlocked('suppliers')) {
+                <label class="field">
+                  <span class="field__label">Fornecedor (opcional)</span>
+                  <select class="input" formControlName="supplierId">
+                    <option value="">—</option>
+                    @for (s of suppliers(); track s.id) {
+                      <option [value]="s.id">{{ s.name }}</option>
+                    }
+                  </select>
+                </label>
+              }
+              <div class="btn-row">
+                <button type="button" class="btn btn--ghost" (click)="cancelProjectEdit()">
+                  Cancelar
+                </button>
+                <button type="submit" class="btn primary" [disabled]="saving()">
+                  {{ saving() ? 'A gravar…' : 'Guardar obra' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        } @else {
+          @if (detail(); as d) {
+          <div class="card">
+            <div class="detail-head">
+              <div>
+                <h2 class="card__title">{{ d.title }}</h2>
+                <p class="muted detail-head__status">{{ statusLabel(d.status) }}</p>
+                @if (d.description) {
+                  <p class="detail-desc">{{ d.description }}</p>
+                }
+                <dl class="detail-dates">
+                  @if (d.startedOn) {
+                    <div>
+                      <dt>Início</dt>
+                      <dd>{{ formatDateDdMmYyyy(d.startedOn) }}</dd>
+                    </div>
+                  }
+                  @if (d.expectedEndOn) {
+                    <div>
+                      <dt>Previsão</dt>
+                      <dd>{{ formatDateDdMmYyyy(d.expectedEndOn) }}</dd>
+                    </div>
+                  }
+                  @if (d.completedOn) {
+                    <div>
+                      <dt>Concluída</dt>
+                      <dd>{{ formatDateDdMmYyyy(d.completedOn) }}</dd>
+                    </div>
+                  }
+                  @if (d.supplier?.name) {
+                    <div>
+                      <dt>Fornecedor</dt>
+                      <dd>{{ d.supplier!.name }}</dd>
+                    </div>
+                  }
+                </dl>
+              </div>
+              @if (condoAccess.canManage()) {
+                <div class="detail-head__actions">
+                  <button type="button" class="btn btn--ghost sm" (click)="startEditProject()">
+                    Editar obra
+                  </button>
+                  <button type="button" class="btn btn--ghost sm danger" (click)="deleteProject()">
+                    Excluir obra
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+
+          @if (condoAccess.canManage()) {
+            <div class="card">
+              <h3 class="card__subtitle">
+                {{ editingUpdateId() ? 'Editar atualização' : 'Nova atualização' }}
+              </h3>
+              <form [formGroup]="updateForm" (ngSubmit)="onUpdateSubmit($event)" class="stack">
+                <label class="field">
+                  <span class="field__label">Data do facto</span>
+                  <input class="input" type="date" formControlName="occurredOn" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Texto</span>
+                  <textarea class="input input--textarea" rows="4" formControlName="body"></textarea>
+                </label>
+                <label class="field">
+                  <span class="field__label">Anexos (opcional)</span>
+                  <input
+                    #updateFileInput
+                    type="file"
+                    class="input"
+                    multiple
+                    accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+                  />
+                </label>
+                <div class="btn-row">
+                  @if (editingUpdateId()) {
+                    <button type="button" class="btn btn--ghost" (click)="cancelUpdateEdit()">
+                      Cancelar edição
+                    </button>
+                  }
+                  <button type="submit" class="btn primary" [disabled]="saving()">
+                    {{ saving() ? 'A gravar…' : editingUpdateId() ? 'Guardar' : 'Publicar' }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          }
+
+          <div class="card">
+            <h3 class="card__subtitle">Linha do tempo</h3>
+            @if (!d.updates?.length) {
+              <p class="muted">Sem atualizações ainda.</p>
+            } @else {
+              <ol class="timeline">
+                @for (u of d.updates; track u.id) {
+                  <li class="timeline__item">
+                    <div class="timeline__date">{{ formatDateDdMmYyyy(u.occurredOn) }}</div>
+                    <div class="timeline__body">{{ u.body }}</div>
+                    @if (attachmentKeys(u).length > 0) {
+                      <div class="timeline__files">
+                        @for (k of attachmentKeys(u); track k) {
+                          <button type="button" class="btn btn--ghost sm" (click)="downloadAttachment(k)">
+                            Anexo
+                          </button>
+                        }
+                      </div>
+                    }
+                    @if (condoAccess.canManage()) {
+                      <div class="timeline__actions">
+                        <button type="button" class="btn btn--ghost sm" (click)="startEditUpdate(u)">
+                          Editar
+                        </button>
+                        <button type="button" class="btn btn--ghost sm danger" (click)="deleteUpdate(u)">
+                          Remover
+                        </button>
+                      </div>
+                    }
+                  </li>
+                }
+              </ol>
+            }
+          </div>
+          } @else {
+          <p class="muted muted--pad">
+            Seleccione uma obra à esquerda ou crie uma nova (se tiver permissão de gestão).
+          </p>
+          }
+        }
+      </section>
+    </div>
+    }
+  }
+</div>

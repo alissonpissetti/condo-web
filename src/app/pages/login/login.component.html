@@ -1,22 +1,41 @@
-<div class="page">
-  <a
-    routerLink="/"
-    class="auth-brand"
-    aria-label="Meu Condomínio — início"
-  >
-    <img
-      class="auth-brand-logo"
-      src="/logo-dark.png"
-      width="360"
-      height="96"
-      alt=""
-    />
-  </a>
-  <a routerLink="/" class="back">← Início</a>
+@if (embedded()) {
+  <div class="embed-root">
+    <button
+      type="button"
+      class="embed-close"
+      (click)="onCloseEmbedded()"
+      aria-label="Fechar"
+    >
+      ×
+    </button>
+    <ng-container *ngTemplateOutlet="loginCard" />
+  </div>
+} @else {
+  <div class="page">
+    <a
+      routerLink="/"
+      class="auth-brand"
+      aria-label="Meu Condomínio — início"
+    >
+      <img
+        class="auth-brand-logo"
+        src="/logo-dark.png"
+        width="360"
+        height="96"
+        alt=""
+      />
+    </a>
+    <a routerLink="/" class="back">← Início</a>
+    <ng-container *ngTemplateOutlet="loginCard" />
+  </div>
+}
 
+<ng-template #loginCard>
   <div class="card">
     <h1>Entrar</h1>
-    <p class="sub">E-mail e senha, ou código enviado pelo WhatsApp ao seu número cadastrado.</p>
+    <p class="sub">
+      E-mail e senha, ou código enviado pelo WhatsApp ao seu número cadastrado.
+    </p>
 
     <div class="mode-tabs" role="tablist" aria-label="Forma de login">
       <button
@@ -161,4 +180,4 @@
       <a routerLink="/termos">Termos de uso</a>
     </nav>
   </div>
-</div>
+</ng-template>

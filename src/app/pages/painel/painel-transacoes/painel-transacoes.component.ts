@@ -18,6 +18,7 @@ import {
   CondominiumManagementService,
   type GroupingWithUnits,
 } from '../../../core/condominium-management.service';
+import { CondominiumPlanFeaturesStore } from '../../../core/condominium-plan-features.store';
 import {
   FinancialApiService,
   type AllocationRule,
@@ -25,6 +26,11 @@ import {
   type FinancialTransaction,
   type FinancialTransactionPaymentStatus,
 } from '../../../core/financial-api.service';
+import {
+  SUPPLIER_PIX_TYPE_OPTIONS,
+  SuppliersApiService,
+  type Supplier,
+} from '../../../core/suppliers-api.service';
 import {
   firstDayOfMonthLocalIsoDate,
   formatDateDdMmYyyy,
@@ -52,6 +58,8 @@ export class PainelTransacoesComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(FinancialApiService);
   private readonly condoApi = inject(CondominiumManagementService);
+  protected readonly planFeatures = inject(CondominiumPlanFeaturesStore);
+  private readonly suppliersApi = inject(SuppliersApiService);
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
@@ -84,6 +92,9 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly titleTx = signal('');
   protected readonly descriptionTx = signal('');
   protected readonly fundIdForm = signal<string>('');
+  /** UUID do fornecedor ou vazio (sem vínculo). */
+  protected readonly supplierIdForm = signal<string>('');
+  protected readonly suppliersList = signal<Supplier[]>([]);
   protected readonly allocKind = signal<AllocKind>('all_units_equal');
   protected readonly selectedUnitIds = signal<string[]>([]);
   protected readonly selectedGroupingIds = signal<string[]>([]);
@@ -419,6 +430,14 @@ export class PainelTransacoesComponent implements OnInit {
     this.removeSeries(seriesId);
   }
 
+  protected readonly selectedSupplier = computed(() => {
+    const id = this.supplierIdForm().trim();
+    if (!id) {
+      return null;
+    }
+    return this.suppliersList().find((s) => s.id === id) ?? null;
+  });
+
   protected readonly flatUnits = computed(() => {
     const out: { id: string; identifier: string; groupingName: string }[] =
       [];
@@ -446,6 +465,8 @@ export class PainelTransacoesComponent implements OnInit {
       const title = (t.title ?? '').toLowerCase();
       const description = (t.description ?? '').toLowerCase();
       const fund = (t.fund?.name ?? '').toLowerCase();
+      const supplierName = (t.supplier?.name ?? '').toLowerCase();
+      const pixVal = (t.supplier?.pixKeyValue ?? '').toLowerCase();
       const statusLabel = this.transactionPaymentStatusLabelPt(
         t.paymentStatus,
       ).toLowerCase();
@@ -453,6 +474,8 @@ export class PainelTransacoesComponent implements OnInit {
         title.includes(term) ||
         description.includes(term) ||
         fund.includes(term) ||
+        supplierName.includes(term) ||
+        pixVal.includes(term) ||
         kindLabel.includes(term) ||
         statusLabel.includes(term) ||
         dateLabel.includes(term) ||
@@ -554,12 +577,14 @@ export class PainelTransacoesComponent implements OnInit {
   reloadAll(): void {
     this.loadError.set(null);
     this.loading.set(true);
+    this.planFeatures.ensureLoaded(this.condoId);
     this.condoApi.loadGroupingsWithUnits(this.condoId).subscribe({
       next: (t) => {
         this.tree.set(t);
         this.api.listFunds(this.condoId).subscribe({
           next: (f) => {
             this.funds.set(f);
+            this.loadSuppliersForForm();
             this.refreshList();
           },
           error: () => {
@@ -573,6 +598,36 @@ export class PainelTransacoesComponent implements OnInit {
         this.loadError.set(this.msg(err));
       },
     });
+  }
+
+  private loadSuppliersForForm(): void {
+    if (!this.condoId || this.planFeatures.isBlocked('suppliers')) {
+      this.suppliersList.set([]);
+      return;
+    }
+    this.suppliersApi.listSuppliers(this.condoId).subscribe({
+      next: (rows) => this.suppliersList.set(rows),
+      error: () => this.suppliersList.set([]),
+    });
+  }
+
+  protected supplierPixTypeLabel(
+    t: string | null | undefined,
+  ): string {
+    if (!t) {
+      return 'PIX';
+    }
+    return (
+      SUPPLIER_PIX_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? 'PIX'
+    );
+  }
+
+  protected copyTextToClipboard(text: string): void {
+    const v = text.trim();
+    if (!v || typeof navigator === 'undefined' || !navigator.clipboard) {
+      return;
+    }
+    void navigator.clipboard.writeText(v);
   }
 
   refreshList(): void {
@@ -765,6 +820,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set('');
     this.descriptionTx.set('');
     this.fundIdForm.set('');
+    this.supplierIdForm.set('');
     this.allocKind.set('all_units_equal');
     this.selectedUnitIds.set([]);
     this.selectedGroupingIds.set([]);
@@ -805,6 +861,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set(t.title);
     this.descriptionTx.set(t.description ?? '');
     this.fundIdForm.set(t.fundId ?? '');
+    this.supplierIdForm.set((t.supplierId ?? t.supplier?.id ?? '').trim());
     const r = t.allocationRule;
     if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
     else if (r.kind === 'none') this.allocKind.set('none');
@@ -862,6 +919,12 @@ export class PainelTransacoesComponent implements OnInit {
     this.titleTx.set(this.titleBaseFromTransactionTitle(first.title));
     this.descriptionTx.set(first.description ?? '');
     this.fundIdForm.set(first.fundId ?? '');
+    const supplierIds = new Set(
+      members.map((m) => (m.supplierId ?? m.supplier?.id ?? '').trim()),
+    );
+    this.supplierIdForm.set(
+      supplierIds.size === 1 ? [...supplierIds][0] ?? '' : '',
+    );
     const r = first.allocationRule;
     if (r.kind === 'all_units_equal') this.allocKind.set('all_units_equal');
     else if (r.kind === 'none') this.allocKind.set('none');
@@ -1120,7 +1183,10 @@ export class PainelTransacoesComponent implements OnInit {
               ...uploadedDocumentKeys,
             ];
             const receiptKey = uploads.receiptUpload?.receiptStorageKey;
-          if (editSeriesId) {
+            const supplierFormId = this.supplierIdForm().trim();
+            const supplierPatch =
+              supplierFormId === '' ? null : supplierFormId;
+            if (editSeriesId) {
             const patch: Parameters<
               FinancialApiService['updateRecurringSeries']
             >[2] = {
@@ -1140,6 +1206,7 @@ export class PainelTransacoesComponent implements OnInit {
             } else if (this.receiptRemoved()) {
               patch.receiptStorageKey = null;
             }
+            patch.supplierId = supplierPatch;
             return this.api.updateRecurringSeries(
               this.condoId,
               editSeriesId,
@@ -1166,6 +1233,7 @@ export class PainelTransacoesComponent implements OnInit {
             } else if (this.receiptRemoved()) {
               patch.receiptStorageKey = null;
             }
+            patch.supplierId = supplierPatch;
             return this.api.updateTransaction(this.condoId, editId, patch);
           }
           if (isRecurring) {
@@ -1176,6 +1244,7 @@ export class PainelTransacoesComponent implements OnInit {
               finalDocumentKeys,
               receiptKey,
               recurringSeriesId,
+              supplierFormId || undefined,
             );
             return from(payloads).pipe(
               concatMap((body) =>
@@ -1196,6 +1265,9 @@ export class PainelTransacoesComponent implements OnInit {
             fundId: this.fundIdForm() || null,
             allocationRule: rule,
           };
+          if (supplierFormId) {
+            createBody.supplierId = supplierFormId;
+          }
           if (finalDocumentKeys.length > 0) {
             createBody.documentStorageKeys = finalDocumentKeys;
           }
@@ -1244,6 +1316,7 @@ export class PainelTransacoesComponent implements OnInit {
     documentKeys: string[],
     receiptKey: string | undefined,
     recurringSeriesId: string,
+    supplierId?: string,
   ): Parameters<FinancialApiService['createTransaction']>[1][] {
     const n = Math.floor(this.recurringCount());
     const start = this.occurredOn();
@@ -1273,6 +1346,10 @@ export class PainelTransacoesComponent implements OnInit {
         allocationRule: rule,
         recurringSeriesId,
       };
+      const sid = supplierId?.trim();
+      if (sid) {
+        body.supplierId = sid;
+      }
       if (i === 0 && documentKeys.length > 0) {
         body.documentStorageKeys = documentKeys;
       }

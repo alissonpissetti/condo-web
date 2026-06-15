@@ -116,7 +116,7 @@ export class PainelShellComponent {
           }
         }
         if (
-          /\/painel\/condominio\/[^/]+\/(transacoes|extrato|fundos|taxas-condominiais)(\/|$|\?|#)/.test(
+          /\/painel\/condominio\/[^/]+\/(transacoes|extrato|fundos|fornecedores|taxas-condominiais)(\/|$|\?|#)/.test(
             url,
           )
         ) {
