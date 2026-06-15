@@ -531,6 +531,14 @@
   }
 }
 
+.plan-create-collapsed-draft {
+  margin: 0;
+  padding: 0.55rem 1.25rem 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+
 .plan-create-panel {
   &__lede {
     margin: 0.85rem 0 1rem;
@@ -883,6 +891,19 @@
     margin-top: 1rem;
     padding-top: 0.25rem;
   }
+
+  &__archived {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0.85rem 0 0;
+    font-size: 0.88rem;
+    cursor: pointer;
+
+    input {
+      margin: 0;
+    }
+  }
 }
 
 .plan-list-card__loading {
@@ -1037,6 +1058,24 @@
   &--decided {
     background: color-mix(in srgb, var(--accent) 22%, var(--surface));
     color: var(--text);
+  }
+
+  &--postponed {
+    background: color-mix(in srgb, #6366f1 20%, var(--surface));
+    color: color-mix(in srgb, #6366f1 88%, var(--text));
+  }
+
+  &--withdrawn {
+    background: color-mix(in srgb, var(--muted) 28%, var(--surface));
+    color: var(--muted);
+  }
+
+  &--archived {
+    background: color-mix(in srgb, #64748b 22%, var(--surface));
+    color: color-mix(in srgb, #64748b 90%, var(--text));
+    text-transform: none;
+    font-weight: 600;
+    letter-spacing: 0;
   }
 
   &--neutral {
@@ -1586,6 +1625,35 @@
     flex: 1 1 100%;
     margin-top: 0.25rem;
   }
+
+  &__danger {
+    flex: 1 1 100%;
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  }
+
+  &__danger-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+
+  &__danger-hint {
+    margin: 0 0 0.65rem;
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+
+  &__danger-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  &__danger-delete {
+    color: color-mix(in srgb, #b91c1c 88%, var(--text));
+  }
 }
 
 .plan-decide {
@@ -1605,6 +1673,46 @@
   .field--grow {
     width: 100%;
     min-width: 0;
+  }
+}
+
+.plan-final-resolution {
+  &__body {
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    font-size: 0.92rem;
+  }
+}
+
+.plan-final-resolution-form {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+
+  &__title {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  &__hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 }
 

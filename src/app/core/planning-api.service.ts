@@ -35,7 +35,15 @@ export interface GovernanceEligibleAccount {
   responsibleUnitLabels: string[];
 }
 
-export type PollStatus = 'draft' | 'open' | 'closed' | 'decided';
+export type PollStatus =
+  | 'draft'
+  | 'open'
+  | 'closed'
+  | 'decided'
+  | 'postponed'
+  | 'withdrawn';
+
+export type PollFinalResolutionOutcome = 'postpone' | 'withdraw';
 export type AssemblyType = 'ordinary' | 'election' | 'ata';
 
 export interface VotableUnit {
@@ -114,6 +122,8 @@ export interface PlanningPoll {
   /** Escolha múltipla por unidade (assembleias ordinárias). */
   allowMultiple?: boolean;
   decidedOptionId: string | null;
+  /** Parecer quando a reunião foi inconclusiva (prorrogação ou cancelamento). */
+  finalOpinion?: string | null;
   createdByUserId: string;
   /** Deliberações / votações desta pauta. */
   questions?: PlanningPollQuestion[];
@@ -122,6 +132,8 @@ export interface PlanningPoll {
   attachments?: PlanningPollAttachment[];
   createdAt: string;
   updatedAt: string;
+  /** Preenchido quando a pauta foi arquivada (oculta na lista padrão). */
+  archivedAt?: string | null;
   /** Só com `includeMyVotes`: voto(s) nas unidades em que a conta é titular/responsável (não o alargamento de síndico). */
   myVote?: PollMyUnitVotes;
 }
@@ -264,6 +276,8 @@ export class PlanningApiService {
       limit?: number;
       /** Inclui `myVote` em cada pauta (voto das unidades do utilizador). */
       includeMyVotes?: boolean;
+      /** Inclui pautas arquivadas (síndico/titular). */
+      includeArchived?: boolean;
     },
   ): Observable<PlanningPoll[]> {
     let httpParams = new HttpParams();
@@ -284,6 +298,9 @@ export class PlanningApiService {
     }
     if (p.includeMyVotes) {
       httpParams = httpParams.set('includeMyVotes', 'true');
+    }
+    if (p.includeArchived) {
+      httpParams = httpParams.set('includeArchived', 'true');
     }
     return this.http.get<PlanningPoll[]>(
       `${this.base}/condominiums/${condominiumId}/planning/polls`,
@@ -401,6 +418,51 @@ export class PlanningApiService {
     return this.http.post<PlanningPoll>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/decide`,
       body,
+    );
+  }
+
+  registerPollFinalResolution(
+    condominiumId: string,
+    pollId: string,
+    body: {
+      outcome: PollFinalResolutionOutcome;
+      opinion: string;
+      opensAt?: string;
+      closesAt?: string;
+    },
+  ): Observable<PlanningPoll> {
+    return this.http.post<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/final-resolution`,
+      body,
+    );
+  }
+
+  resumePostponedPoll(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<PlanningPoll> {
+    return this.http.post<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/resume-postponed`,
+      {},
+    );
+  }
+
+  archivePoll(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<PlanningPoll> {
+    return this.http.post<PlanningPoll>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/archive`,
+      {},
+    );
+  }
+
+  deleteDraftPoll(
+    condominiumId: string,
+    pollId: string,
+  ): Observable<{ ok: true }> {
+    return this.http.delete<{ ok: true }>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}`,
     );
   }
 

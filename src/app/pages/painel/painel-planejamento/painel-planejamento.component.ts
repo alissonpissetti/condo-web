@@ -22,7 +22,7 @@ import {
   SafeHtml,
   type SafeResourceUrl,
 } from '@angular/platform-browser';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import { FlashMessageService } from '../../../core/flash-message.service';
 import {
@@ -30,6 +30,7 @@ import {
   localIsoDateDaysAgo,
   todayLocalIsoDate,
 } from '../../../core/date-display';
+import { dateToDatetimeLocalValue } from '../../../core/filename-recorded-on.util';
 import {
   PlanningApiService,
   type AssemblyType,
@@ -38,6 +39,7 @@ import {
   type PlanningPoll,
   type PlanningPollAttachment,
   type PlanningPollQuestion,
+  type PollFinalResolutionOutcome,
   type PollMyUnitVotes,
   type PollResults,
   type PollUnitVoteRow,
@@ -64,7 +66,6 @@ type LocalMinutesDraftV1 = {
 type LocalCreateDraftV1 = {
   v: 1;
   aiBrief: string;
-  expanded: boolean;
   form: {
     title: string;
     body: string;
@@ -83,7 +84,6 @@ type LocalCreateDraftV1 = {
 
 const LIVE_BODY_DEBOUNCE_MS = 400;
 const LIVE_CREATE_DEBOUNCE_MS = 400;
-const MEETING_AI_DEBOUNCE_MS = 1600;
 const MINUTES_DRAFT_STORAGE_PREFIX = 'condo.planning.minutesDraft.v1:';
 /** Legado: rascunhos gravados no campo `body` antes da separação pauta/ata. */
 const LEGACY_BODY_DRAFT_STORAGE_PREFIX = 'condo.planning.bodyDraft.v1:';
@@ -103,6 +103,7 @@ const CREATE_DRAFT_STORAGE_PREFIX = 'condo.planning.createDraft.v1:';
 })
 export class PainelPlanejamentoComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly flash = inject(FlashMessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(PlanningApiService);
@@ -198,6 +199,12 @@ export class PainelPlanejamentoComponent implements OnInit {
     competenceDate: ['', Validators.required],
   });
 
+  protected readonly finalResolutionForm = this.fb.nonNullable.group({
+    opinion: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(12000)]],
+    opensAt: [''],
+    closesAt: [''],
+  });
+
   /** Rascunho: alterar tipo de assembleia (incl. Ata) e deliberações. */
   protected readonly typeSettingsForm = this.fb.nonNullable.group({
     assemblyType: this.fb.nonNullable.control<AssemblyType>(
@@ -232,6 +239,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     registeredFrom: [localIsoDateDaysAgo(29)],
     registeredTo: [todayLocalIsoDate()],
     titleQuery: ['', Validators.maxLength(200)],
+    includeArchived: [false],
   });
 
   protected condominiumId = '';
@@ -707,13 +715,23 @@ export class PainelPlanejamentoComponent implements OnInit {
     if (myv && myv.byUnit.length > 0) {
       return true;
     }
-    if (
-      (p.status === 'closed' || p.status === 'decided') &&
-      this.minutesDraftDocumentIdFor(p)
-    ) {
+    if (this.pollAfterMeeting(p) && this.minutesDraftDocumentIdFor(p)) {
+      return true;
+    }
+    if (p.finalOpinion?.trim() && (p.status === 'postponed' || p.status === 'withdrawn')) {
       return true;
     }
     return false;
+  }
+
+  /** Pauta já passou pela fase de reunião/votação (encerrada ou com desfecho). */
+  protected pollAfterMeeting(p: PlanningPoll): boolean {
+    return (
+      p.status === 'closed' ||
+      p.status === 'decided' ||
+      p.status === 'postponed' ||
+      p.status === 'withdrawn'
+    );
   }
 
   protected canShowVotePanel(p: PlanningPoll): boolean {
@@ -807,7 +825,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         : null,
     );
     this.attachLiveMinutesAutosave();
-    this.attachMeetingNotesAiMerge();
+    this.attachMeetingNotesDraftPersist();
   }
 
   protected restoreConflictDraft(): void {
@@ -966,8 +984,8 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.liveMinutesSaveUnsub?.();
   }
 
-  private attachMeetingNotesAiMerge(): void {
-    this.detachMeetingNotesAiMerge();
+  private attachMeetingNotesDraftPersist(): void {
+    this.detachMeetingNotesDraftPersist();
     const persistSub = this.meetingNotesControl.valueChanges
       .pipe(debounceTime(LIVE_BODY_DEBOUNCE_MS), distinctUntilChanged())
       .subscribe(() => {
@@ -983,59 +1001,31 @@ export class PainelPlanejamentoComponent implements OnInit {
           this.minutesEditForm.getRawValue().minutesBody ?? '',
         );
       });
-    const mergeSub = this.meetingNotesControl.valueChanges
-      .pipe(debounceTime(MEETING_AI_DEBOUNCE_MS), distinctUntilChanged())
-      .subscribe((raw) => {
-        const note = raw.trim();
-        if (
-          note.length < 2 ||
-          !this.liveMode() ||
-          this.meetingMinutesAiLoading()
-        ) {
-          return;
-        }
-        const poll = this.selected();
-        if (!poll) {
-          return;
-        }
-        this.mergeMeetingNoteIntoBody(poll, note, {
-          clearNote: true,
-          quiet: true,
-        });
-      });
     this.meetingAiMergeUnsub = () => {
       persistSub.unsubscribe();
-      mergeSub.unsubscribe();
       this.meetingAiMergeUnsub = undefined;
     };
   }
 
-  private detachMeetingNotesAiMerge(): void {
+  private detachMeetingNotesDraftPersist(): void {
     this.meetingAiMergeUnsub?.();
   }
 
   private handleAiVotesApplied(
     p: PlanningPoll,
     votesApplied: { unitIdentifier: string; ok: boolean; message?: string }[] | undefined,
-    quiet?: boolean,
   ): void {
     if (!votesApplied?.length) {
-      if (!quiet) {
-        this.flash.success('Anotação incorporada ao rascunho da ata.');
-      }
+      this.flash.success('Anotação incorporada ao rascunho da ata.');
       return;
     }
     const okVotes = votesApplied.filter((v) => v.ok);
     const failed = votesApplied.filter((v) => !v.ok);
     if (okVotes.length > 0) {
       const labels = okVotes.map((v) => v.unitIdentifier).join(', ');
-      if (!quiet) {
-        this.flash.success(
-          `Anotação incorporada. Voto(s) registado(s): ${labels}.`,
-        );
-      } else {
-        this.flash.success(`Voto(s) registado(s): ${labels}.`);
-      }
+      this.flash.success(
+        `Anotação incorporada. Voto(s) registado(s): ${labels}.`,
+      );
       const currentUnitId = this.voteForm.getRawValue().unitId;
       const refreshUnitId =
         currentUnitId ||
@@ -1048,7 +1038,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         )?.id ||
         '';
       this.refreshVoteFormAfterCast(p, refreshUnitId);
-    } else if (!quiet) {
+    } else {
       this.flash.success('Anotação incorporada ao rascunho da ata.');
     }
     for (const f of failed) {
@@ -1061,7 +1051,7 @@ export class PainelPlanejamentoComponent implements OnInit {
   private mergeMeetingNoteIntoBody(
     p: PlanningPoll,
     note: string,
-    opts: { clearNote?: boolean; quiet?: boolean } = {},
+    opts: { clearNote?: boolean } = {},
   ): void {
     if (this.meetingMinutesAiLoading()) {
       return;
@@ -1084,7 +1074,7 @@ export class PainelPlanejamentoComponent implements OnInit {
           }
           this.lastMeetingAiMergeAt.set(Date.now());
           this.writeMinutesDraftToStorage(p, res.body);
-          this.handleAiVotesApplied(p, res.votesApplied, opts.quiet);
+          this.handleAiVotesApplied(p, res.votesApplied);
         },
         error: (err: HttpErrorResponse) => {
           this.meetingMinutesAiLoading.set(false);
@@ -1106,7 +1096,7 @@ export class PainelPlanejamentoComponent implements OnInit {
     this.lastMeetingAiMergeAt.set(null);
     this.meetingNotesControl.reset('', { emitEvent: false });
     this.detachLiveMinutesAutosave();
-    this.detachMeetingNotesAiMerge();
+    this.detachMeetingNotesDraftPersist();
   }
 
   private lockMeetingFullscreenScroll(lock: boolean): void {
@@ -1469,8 +1459,91 @@ export class PainelPlanejamentoComponent implements OnInit {
       open: 'Aberta',
       closed: 'Encerrada',
       decided: 'Decidida',
+      postponed: 'Prorrogada',
+      withdrawn: 'Sem necessidade',
     };
     return m[status] ?? status;
+  }
+
+  protected finalResolutionHeadline(p: PlanningPoll): string {
+    if (p.status === 'postponed') {
+      return 'Pauta prorrogada';
+    }
+    if (p.status === 'withdrawn') {
+      return 'Pauta sem necessidade';
+    }
+    return 'Parecer final';
+  }
+
+  protected registerFinalResolution(
+    p: PlanningPoll,
+    outcome: PollFinalResolutionOutcome,
+  ): void {
+    if (this.finalResolutionForm.invalid) {
+      this.finalResolutionForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.finalResolutionForm.getRawValue();
+    const body: {
+      outcome: PollFinalResolutionOutcome;
+      opinion: string;
+      opensAt?: string;
+      closesAt?: string;
+    } = {
+      outcome,
+      opinion: raw.opinion.trim(),
+    };
+    if (outcome === 'postpone') {
+      if (raw.opensAt?.trim()) {
+        body.opensAt = new Date(raw.opensAt).toISOString();
+      }
+      if (raw.closesAt?.trim()) {
+        body.closesAt = new Date(raw.closesAt).toISOString();
+      }
+      if (body.opensAt && body.closesAt) {
+        const t0 = new Date(body.opensAt).getTime();
+        const t1 = new Date(body.closesAt).getTime();
+        if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) {
+          this.flash.warning('«Encerra em» deve ser posterior a «Abre em».');
+          return;
+        }
+      }
+    }
+    this.busy.set(true);
+    this.api
+      .registerPollFinalResolution(this.condominiumId, p.id, body)
+      .subscribe({
+        next: (x) => {
+          this.busy.set(false);
+          this.upsertPollInList(x);
+          this.applySelectedPoll(x);
+          this.flash.success(
+            outcome === 'postpone'
+              ? 'Pauta prorrogada com parecer registado.'
+              : 'Necessidade da pauta cancelada com parecer registado.',
+          );
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível registar o parecer.');
+        },
+      });
+  }
+
+  protected resumePostponedPoll(p: PlanningPoll): void {
+    this.busy.set(true);
+    this.api.resumePostponedPoll(this.condominiumId, p.id).subscribe({
+      next: (x) => {
+        this.busy.set(false);
+        this.upsertPollInList(x);
+        this.applySelectedPoll(x);
+        this.flash.success('Pauta retomada para rascunho.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível retomar a pauta.');
+      },
+    });
   }
 
   /** Rótulo curto do tipo de assembleia (listas e detalhe). */
@@ -1881,18 +1954,28 @@ export class PainelPlanejamentoComponent implements OnInit {
   }
 
   private getListPollParams():
-    | { q: string; limit: number; includeMyVotes: true }
+    | {
+        q: string;
+        limit: number;
+        includeMyVotes: true;
+        includeArchived?: boolean;
+      }
     | {
         registeredFrom: string;
         registeredTo: string;
         limit: number;
         includeMyVotes: true;
+        includeArchived?: boolean;
       } {
     const lim = 100;
     const raw = this.listFilterForm.getRawValue();
+    const archivedOpt =
+      raw.includeArchived && this.isSyndicOrOwner()
+        ? { includeArchived: true as const }
+        : {};
     const tq = raw.titleQuery?.trim() ?? '';
     if (tq) {
-      return { q: tq, limit: lim, includeMyVotes: true };
+      return { q: tq, limit: lim, includeMyVotes: true, ...archivedOpt };
     }
     const rf = raw.registeredFrom.trim().slice(0, 10);
     const rt = raw.registeredTo.trim().slice(0, 10);
@@ -1902,6 +1985,7 @@ export class PainelPlanejamentoComponent implements OnInit {
         registeredTo: todayLocalIsoDate(),
         limit: lim,
         includeMyVotes: true,
+        ...archivedOpt,
       };
     }
     return {
@@ -1909,7 +1993,70 @@ export class PainelPlanejamentoComponent implements OnInit {
       registeredTo: rt,
       limit: lim,
       includeMyVotes: true,
+      ...archivedOpt,
     };
+  }
+
+  protected isPollArchived(p: PlanningPoll): boolean {
+    return !!p.archivedAt?.trim();
+  }
+
+  protected archivePoll(p: PlanningPoll): void {
+    if (this.isPollArchived(p)) {
+      return;
+    }
+    const title = p.title?.trim() || 'esta pauta';
+    if (
+      !confirm(
+        `Arquivar «${title}»?\n\nDeixará de aparecer na lista padrão; o histórico permanece no sistema.`,
+      )
+    ) {
+      return;
+    }
+    this.busy.set(true);
+    this.api.archivePoll(this.condominiumId, p.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.flash.success('Pauta arquivada.');
+        void this.router.navigateByUrl(this.planejamentoListUrl());
+        this.reload();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível arquivar a pauta.');
+      },
+    });
+  }
+
+  protected deleteDraftPoll(p: PlanningPoll): void {
+    if (p.status !== 'draft') {
+      return;
+    }
+    const title = p.title?.trim() || 'este rascunho';
+    if (
+      !confirm(
+        `Excluir permanentemente o rascunho «${title}»?\n\nEsta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+    this.busy.set(true);
+    this.api.deleteDraftPoll(this.condominiumId, p.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.flash.success('Rascunho excluído.');
+        void this.router.navigateByUrl(this.planejamentoListUrl());
+        this.reload();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível excluir o rascunho.');
+      },
+    });
+  }
+
+  private planejamentoListUrl(): string {
+    return `/painel/condominio/${this.condominiumId}/planejamento`;
   }
 
   protected applyListFilters(): void {
@@ -1936,6 +2083,7 @@ export class PainelPlanejamentoComponent implements OnInit {
       registeredFrom: localIsoDateDaysAgo(29),
       registeredTo: todayLocalIsoDate(),
       titleQuery: '',
+      includeArchived: false,
     });
     this.reload();
   }
@@ -1971,9 +2119,9 @@ export class PainelPlanejamentoComponent implements OnInit {
       this.applySelectedPoll(cached);
       return;
     }
+    this.detailLoading.set(true);
     this.selected.set(null);
     this.results.set(null);
-    this.detailLoading.set(true);
     this.api.getPoll(this.condominiumId, pollId).subscribe({
       next: (p) => {
         this.detailLoading.set(false);
@@ -2014,6 +2162,14 @@ export class PainelPlanejamentoComponent implements OnInit {
       }
     }
     this.decideOptionByQuestion.set(decideMap);
+    this.finalResolutionForm.patchValue(
+      {
+        opinion: p.finalOpinion?.trim() ?? '',
+        opensAt: p.opensAt ? dateToDatetimeLocalValue(new Date(p.opensAt)) : '',
+        closesAt: p.closesAt ? dateToDatetimeLocalValue(new Date(p.closesAt)) : '',
+      },
+      { emitEvent: false },
+    );
     this.syncAndPrefetchAttachmentPreviews(p);
     this.tryLoadResultsForCurrentDetail();
     this.refreshPlanningDocumentIndices();
@@ -2030,7 +2186,13 @@ export class PainelPlanejamentoComponent implements OnInit {
       this.results.set(null);
       return;
     }
-    if (!this.isMgmt() && p.status !== 'closed' && p.status !== 'decided') {
+    if (
+      !this.isMgmt() &&
+      p.status !== 'closed' &&
+      p.status !== 'decided' &&
+      p.status !== 'postponed' &&
+      p.status !== 'withdrawn'
+    ) {
       this.results.set(null);
       return;
     }
@@ -2141,7 +2303,6 @@ export class PainelPlanejamentoComponent implements OnInit {
     return {
       v: 1,
       aiBrief: this.aiBriefControl.value,
-      expanded: this.createExpanded(),
       form: {
         title: v.title,
         body: v.body,
@@ -2272,9 +2433,6 @@ export class PainelPlanejamentoComponent implements OnInit {
             this.createQuestionsArray.push(g);
           }
         }
-      }
-      if (draft.expanded || !this.isCreateDraftEmpty(draft)) {
-        this.createExpanded.set(true);
       }
       const at = draft.lastLocalAt ? Date.parse(draft.lastLocalAt) : NaN;
       this.lastLocalCreateSaveAt.set(Number.isFinite(at) ? at : Date.now());

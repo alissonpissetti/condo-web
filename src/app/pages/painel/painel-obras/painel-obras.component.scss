@@ -1596,38 +1596,102 @@
 }
 
 .obras-tl__edit-form {
-  display: grid;
-  gap: 0.65rem;
-  padding: 0.15rem 0 0.1rem;
+  padding: 0.1rem 0 0.05rem;
 }
 
-.obras-tl__edit-budget-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem 1rem;
-  align-items: start;
+.obras-tl__edit-inline {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 0.45rem 0.6rem;
+  min-width: 0;
 
   @media (max-width: 900px) {
-    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: wrap;
   }
 }
 
-.obras-tl__edit-budget-cell {
+.obras-tl__edit-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
   min-width: 0;
 
   .input,
   .input-money {
     width: 100%;
     max-width: none;
+    min-height: 2.15rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
   }
+
+  &--when {
+    flex: 0 0 auto;
+    width: min(11.25rem, 100%);
+  }
+
+  &--grow {
+    flex: 1 1 8rem;
+    min-width: 6rem;
+  }
+
+  &--supplier {
+    flex: 1 1 9rem;
+    min-width: 7rem;
+    max-width: 14rem;
+  }
+
+  &--supplier-name {
+    flex: 1 1 8rem;
+    min-width: 6rem;
+    max-width: 12rem;
+  }
+
+  &--amount {
+    flex: 0 0 auto;
+    width: min(10.5rem, 100%);
+
+    .input-money {
+      width: 100%;
+    }
+  }
+
+  &.field--money {
+    .input-money {
+      min-height: 2.15rem;
+    }
+  }
+}
+
+.obras-tl__edit-inline--budget {
+  @media (max-width: 1100px) {
+    flex-wrap: wrap;
+  }
+}
+
+.obras-tl__edit-inline-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #64748b);
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .obras-tl__edit-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 0.4rem;
-  margin-top: 0.15rem;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+
+  &--inline {
+    margin-top: 0;
+    margin-left: auto;
+    align-self: flex-end;
+  }
 }
 
 @media (max-width: 480px) {

@@ -26,6 +26,11 @@
                 createExpanded() ? 'Recolher' : 'Expandir'
               }}</span>
             </button>
+            @if (!createExpanded() && lastLocalCreateSaveAt() !== null) {
+              <p class="plan-create-collapsed-draft muted">
+                Rascunho guardado neste navegador — expanda para continuar.
+              </p>
+            }
             @if (createExpanded()) {
               <div id="plan-create-panel" class="plan-create-panel">
                 <form
@@ -322,6 +327,16 @@
                 Pesquisa ativa por título — período de datas ignorado.
               </p>
             }
+            @if (isSyndicOrOwner()) {
+              <label class="plan-list-filters__archived">
+                <input
+                  type="checkbox"
+                  formControlName="includeArchived"
+                  (change)="reload()"
+                />
+                <span>Mostrar pautas arquivadas</span>
+              </label>
+            }
             <div class="plan-list-filters__actions">
               <button
                 type="button"
@@ -421,6 +436,9 @@
                         @if (pollAllowsMulti(p)) {
                           <span class="plan-pill plan-pill--multi">Múltipla</span>
                         }
+                        @if (isPollArchived(p)) {
+                          <span class="plan-pill plan-pill--archived">Arquivada</span>
+                        }
                       </span>
                       @if (p.myVote?.byUnit?.length) {
                         <span
@@ -429,10 +447,7 @@
                         >O seu voto: {{ myVoteSummaryForList(p) }}</span>
                       }
                     </a>
-                    @if (
-                      (p.status === 'closed' || p.status === 'decided') &&
-                      minutesDraftDocumentIdFor(p)
-                    ) {
+                    @if (pollAfterMeeting(p) && minutesDraftDocumentIdFor(p)) {
                       <button
                         type="button"
                         class="btn ghost sm plan-poll-list__minutes-dl"
@@ -526,8 +541,17 @@
                     {{ pollQuestions(p).length === 1 ? 'deliberação' : 'deliberações' }}
                   </span>
                 }
+                @if (isPollArchived(p)) {
+                  <span class="plan-pill plan-pill--archived">Arquivada</span>
+                }
               </div>
             </div>
+
+            @if (isPollArchived(p)) {
+              <p class="plan-banner plan-banner--info" role="status">
+                Esta pauta está arquivada e não aparece na lista padrão.
+              </p>
+            }
 
             @if (editingCompetence()) {
               <form
@@ -1038,6 +1062,21 @@
               </section>
             }
 
+            @if (
+              p.finalOpinion?.trim() &&
+              (p.status === 'postponed' || p.status === 'withdrawn')
+            ) {
+              <section
+                class="plan-detail__panel plan-detail__section plan-final-resolution"
+                aria-labelledby="plan-final-resolution-heading"
+              >
+                <h3 class="plan-subtitle" id="plan-final-resolution-heading">
+                  {{ finalResolutionHeadline(p) }}
+                </h3>
+                <p class="plan-final-resolution__body">{{ p.finalOpinion!.trim() }}</p>
+              </section>
+            }
+
             @if (canShowVotePanel(p)) {
               <section
                 class="plan-detail__panel plan-detail__panel--accent plan-detail__section"
@@ -1192,7 +1231,7 @@
             }
 
             @if (
-              (p.status === 'closed' || p.status === 'decided') &&
+              pollAfterMeeting(p) &&
               minutesDraftDocumentIdFor(p) &&
               !isSyndicOrOwner()
             ) {
@@ -1278,6 +1317,75 @@
                     </form>
                   }
                 }
+                @if (p.status === 'closed') {
+                  <div class="plan-final-resolution-form">
+                    <h4 class="plan-final-resolution-form__title">
+                      Reunião inconclusiva
+                    </h4>
+                    <p class="plan-final-resolution-form__hint muted">
+                      Se houve assembleia sem decisão definitiva, registre o parecer final
+                      e indique se a matéria fica <strong>prorrogada</strong> para nova
+                      reunião ou se <strong>não há mais necessidade</strong> desta pauta.
+                    </p>
+                    <form [formGroup]="finalResolutionForm" class="plan-final-resolution-form__fields">
+                      <label class="field field--block">
+                        <span class="field__label">Parecer final</span>
+                        <textarea
+                          class="input"
+                          rows="5"
+                          formControlName="opinion"
+                          placeholder="Ex.: Inconclusivo por falta de quórum. Fica prorrogada para a próxima assembleia."
+                        ></textarea>
+                      </label>
+                      <div class="plan-create-pair">
+                        <label class="field field--block">
+                          <span class="field__label">Novo «Abre em» (opcional)</span>
+                          <input
+                            class="input plan-create-pair__control"
+                            type="datetime-local"
+                            formControlName="opensAt"
+                          />
+                        </label>
+                        <label class="field field--block">
+                          <span class="field__label">Novo «Encerra em» (opcional)</span>
+                          <input
+                            class="input plan-create-pair__control"
+                            type="datetime-local"
+                            formControlName="closesAt"
+                          />
+                        </label>
+                      </div>
+                      <div class="plan-final-resolution-form__actions">
+                        <button
+                          type="button"
+                          class="btn secondary"
+                          [disabled]="busy()"
+                          (click)="registerFinalResolution(p, 'postpone')"
+                        >
+                          Prorrogar pauta
+                        </button>
+                        <button
+                          type="button"
+                          class="btn ghost"
+                          [disabled]="busy()"
+                          (click)="registerFinalResolution(p, 'withdraw')"
+                        >
+                          Cancelar necessidade
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                }
+                @if (p.status === 'postponed') {
+                  <button
+                    type="button"
+                    class="btn primary"
+                    [disabled]="busy()"
+                    (click)="resumePostponedPoll(p)"
+                  >
+                    Retomar para rascunho
+                  </button>
+                }
                 <div class="plan-minutes-pdf plan-mgmt__attendance">
                   <h3 class="plan-subtitle plan-minutes-pdf__kicker">
                     Lista de presença (PDF)
@@ -1309,7 +1417,7 @@
                     </button>
                   </div>
                 </div>
-                @if (p.status === 'closed' || p.status === 'decided') {
+                @if (pollAfterMeeting(p)) {
                   <div class="plan-minutes-pdf plan-mgmt__minutes">
                     <h3 class="plan-subtitle plan-minutes-pdf__kicker">Ata (PDF)</h3>
                     <p class="plan-minutes-pdf__hint">
@@ -1339,6 +1447,35 @@
                     </div>
                   </div>
                 }
+                <div class="plan-mgmt__danger">
+                  <h4 class="plan-mgmt__danger-title">Arquivar ou excluir</h4>
+                  <p class="plan-mgmt__danger-hint muted">
+                    <strong>Arquivar</strong> oculta da lista sem apagar o histórico.
+                    <strong>Excluir</strong> só em rascunho e é irreversível.
+                  </p>
+                  <div class="plan-mgmt__danger-actions">
+                    @if (!isPollArchived(p)) {
+                      <button
+                        type="button"
+                        class="btn ghost sm"
+                        [disabled]="busy()"
+                        (click)="archivePoll(p)"
+                      >
+                        Arquivar pauta
+                      </button>
+                    }
+                    @if (p.status === 'draft') {
+                      <button
+                        type="button"
+                        class="btn ghost sm plan-mgmt__danger-delete"
+                        [disabled]="busy()"
+                        (click)="deleteDraftPoll(p)"
+                      >
+                        Excluir rascunho
+                      </button>
+                    }
+                  </div>
+                </div>
               </div>
               </section>
             }
@@ -1445,7 +1582,7 @@
                       <textarea
                         class="input plan-meeting-ai__input"
                         rows="4"
-                        placeholder="Anotações da reunião ou votos, ex.: «Apt 101 aprovou deliberação 1 e reprovou a 2». A IA formata a ata e regista os votos."
+                        placeholder="Digite anotações ou votos e clique em «Incorporar agora» para processar."
                         [formControl]="meetingNotesControl"
                         [disabled]="meetingMinutesAiLoading() || busy()"
                       ></textarea>
@@ -1666,7 +1803,7 @@
                         Download presença
                       </button>
                     }
-                    @if (p.status === 'closed' || p.status === 'decided') {
+                    @if (pollAfterMeeting(p)) {
                       <button
                         type="button"
                         class="btn ghost sm"

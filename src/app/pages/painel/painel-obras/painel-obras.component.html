@@ -1452,9 +1452,15 @@
                                         (ngSubmit)="saveTimelineEntryEdit(e)"
                                       >
                                         @if (e.kind === 'budget' && e.budget; as editBudget) {
-                                          <div class="obras-tl__edit-budget-row">
-                                            <label class="field field--block obras-tl__edit-budget-cell">
-                                              <span class="field__label">Quando ocorreu</span>
+                                          <div
+                                            class="obras-tl__edit-inline obras-tl__edit-inline--budget"
+                                          >
+                                            <label
+                                              class="obras-tl__edit-inline-field obras-tl__edit-inline-field--when"
+                                            >
+                                              <span class="obras-tl__edit-inline-label"
+                                                >Quando ocorreu</span
+                                              >
                                               <input
                                                 type="datetime-local"
                                                 class="input"
@@ -1469,9 +1475,12 @@
                                               />
                                             </label>
                                             <label
-                                              class="field field--block obras-tl__edit-budget-cell obras-tl__edit-budget-cell--supplier"
+                                              class="obras-tl__edit-inline-field obras-tl__edit-inline-field--supplier"
+                                              [attr.title]="timelineEditSupplierContactHint() ?? null"
                                             >
-                                              <span class="field__label">Fornecedor</span>
+                                              <span class="obras-tl__edit-inline-label"
+                                                >Fornecedor</span
+                                              >
                                               <select
                                                 class="input"
                                                 [value]="timelineEditSupplierId()"
@@ -1491,7 +1500,14 @@
                                                   }}</option>
                                                 }
                                               </select>
-                                              @if (!timelineEditSupplierId()) {
+                                            </label>
+                                            @if (!timelineEditSupplierId()) {
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--supplier-name"
+                                              >
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Nome</span
+                                                >
                                                 <input
                                                   type="text"
                                                   class="input"
@@ -1504,19 +1520,14 @@
                                                     )
                                                   "
                                                 />
-                                              } @else {
-                                                @if (timelineEditSupplierContactHint(); as hint) {
-                                                  <p
-                                                    class="muted small form-section__inline-hint"
-                                                    >{{ hint }}</p
-                                                  >
-                                                }
-                                              }
-                                            </label>
+                                              </label>
+                                            }
                                             @if (editBudget.status === 'awaiting_budget') {
-                                              <label class="field field--block obras-tl__edit-budget-cell">
-                                                <span class="field__label"
-                                                  >Visita agendada para</span
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--amount"
+                                              >
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Visita agendada</span
                                                 >
                                                 <input
                                                   type="datetime-local"
@@ -1532,9 +1543,11 @@
                                               </label>
                                             } @else {
                                               <label
-                                                class="field field--block field--money obras-tl__edit-budget-cell"
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--amount field--money"
                                               >
-                                                <span class="field__label">Valor (R$)</span>
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Valor (R$)</span
+                                                >
                                                 <div class="input-money">
                                                   <span
                                                     class="input-money__prefix"
@@ -1556,74 +1569,93 @@
                                                 </div>
                                               </label>
                                             }
+                                            <div
+                                              class="obras-tl__edit-actions obras-tl__edit-actions--inline"
+                                            >
+                                              <button
+                                                type="button"
+                                                class="btn ghost sm"
+                                                [disabled]="busy()"
+                                                (click)="cancelEditTimelineEntry()"
+                                              >
+                                                Cancelar
+                                              </button>
+                                              <button
+                                                type="submit"
+                                                class="btn primary sm"
+                                                [disabled]="busy()"
+                                              >
+                                                Salvar
+                                              </button>
+                                            </div>
                                           </div>
                                         } @else {
-                                          <label class="field field--block">
-                                            <span class="field__label">Quando ocorreu</span>
-                                            <input
-                                              type="datetime-local"
-                                              class="input plan-create-competence__input"
-                                              [max]="nowForDatetimeLocal()"
-                                              [value]="timelineEditRecordedOn()"
-                                              [disabled]="busy()"
-                                              (input)="
-                                                setTimelineEditRecordedOn(
-                                                  $any($event.target).value
-                                                )
-                                              "
-                                            />
-                                          </label>
-                                        }
-                                        @if (e.kind === 'note' || e.kind === 'legal') {
-                                          <label class="field field--block">
-                                            <span class="field__label">{{
-                                              timelineEditBodyLabel(e)
-                                            }}</span>
-                                            @if (e.kind === 'legal') {
+                                          <div class="obras-tl__edit-inline">
+                                            <label
+                                              class="obras-tl__edit-inline-field obras-tl__edit-inline-field--when"
+                                            >
+                                              <span class="obras-tl__edit-inline-label"
+                                                >Quando ocorreu</span
+                                              >
                                               <input
-                                                type="text"
-                                                class="input"
-                                                [value]="timelineEditBody()"
+                                                type="datetime-local"
+                                                class="input plan-create-competence__input"
+                                                [max]="nowForDatetimeLocal()"
+                                                [value]="timelineEditRecordedOn()"
                                                 [disabled]="busy()"
-                                                placeholder="Ex.: Contrato de obra assinado"
                                                 (input)="
-                                                  timelineEditBody.set(
+                                                  setTimelineEditRecordedOn(
                                                     $any($event.target).value
                                                   )
                                                 "
                                               />
-                                            } @else {
-                                              <textarea
-                                                class="input"
-                                                rows="3"
-                                                [value]="timelineEditBody()"
-                                                [disabled]="busy()"
-                                                (input)="
-                                                  timelineEditBody.set(
-                                                    $any($event.target).value
-                                                  )
-                                                "
-                                              ></textarea>
+                                            </label>
+                                            @if (e.kind === 'note' || e.kind === 'legal') {
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--grow"
+                                              >
+                                                <span class="obras-tl__edit-inline-label">{{
+                                                  timelineEditBodyLabel(e)
+                                                }}</span>
+                                                <input
+                                                  type="text"
+                                                  class="input"
+                                                  [value]="timelineEditBody()"
+                                                  [disabled]="busy()"
+                                                  [placeholder]="
+                                                    e.kind === 'legal'
+                                                      ? 'Ex.: Contrato de obra assinado'
+                                                      : ''
+                                                  "
+                                                  (input)="
+                                                    timelineEditBody.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                />
+                                              </label>
                                             }
-                                          </label>
+                                            <div
+                                              class="obras-tl__edit-actions obras-tl__edit-actions--inline"
+                                            >
+                                              <button
+                                                type="button"
+                                                class="btn ghost sm"
+                                                [disabled]="busy()"
+                                                (click)="cancelEditTimelineEntry()"
+                                              >
+                                                Cancelar
+                                              </button>
+                                              <button
+                                                type="submit"
+                                                class="btn primary sm"
+                                                [disabled]="busy()"
+                                              >
+                                                Salvar
+                                              </button>
+                                            </div>
+                                          </div>
                                         }
-                                        <div class="obras-tl__edit-actions">
-                                          <button
-                                            type="button"
-                                            class="btn ghost sm"
-                                            [disabled]="busy()"
-                                            (click)="cancelEditTimelineEntry()"
-                                          >
-                                            Cancelar
-                                          </button>
-                                          <button
-                                            type="submit"
-                                            class="btn primary sm"
-                                            [disabled]="busy()"
-                                          >
-                                            Salvar
-                                          </button>
-                                        </div>
                                       </form>
                                     } @else {
                                       @if (e.kind === 'budget' && e.budget; as b) {
