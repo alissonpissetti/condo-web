@@ -3,6 +3,25 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { sortSupplierCategories } from './supplier-category-display';
+import type { Supplier } from './suppliers-api.service';
+
+function mapSupplierToCondominiumSupplier(
+  row: Supplier,
+): CondominiumSupplier {
+  return {
+    id: row.id,
+    condominiumId: row.condominiumId,
+    name: row.name,
+    contactName: row.legalName,
+    phone: row.phone,
+    pixKey: row.pixKeyValue,
+    categoryId: row.categoryId,
+    categoryName: row.category?.name ?? null,
+    categoryIsGlobal: null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 export type WorkStatus =
   | 'planned'
@@ -205,9 +224,9 @@ export class CondominiumWorksApiService {
   private readonly base = environment.apiUrl;
 
   listSuppliers(condominiumId: string): Observable<CondominiumSupplier[]> {
-    return this.http.get<CondominiumSupplier[]>(
-      `${this.base}/condominiums/${condominiumId}/suppliers`,
-    );
+    return this.http
+      .get<Supplier[]>(`${this.base}/condominiums/${condominiumId}/suppliers`)
+      .pipe(map((rows) => rows.map(mapSupplierToCondominiumSupplier)));
   }
 
   createSupplier(

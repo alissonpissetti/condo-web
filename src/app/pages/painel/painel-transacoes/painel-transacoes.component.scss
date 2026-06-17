@@ -1,8 +1,17 @@
-@use '../financial-tx-table' as *;
-
 :host {
   display: block;
   width: 100%;
+}
+
+.page {
+  max-width: 36rem;
+  padding: 0 0 2.75rem;
+}
+
+@media (min-width: 640px) {
+  .page {
+    max-width: 48rem;
+  }
 }
 
 .page__header {
@@ -44,112 +53,135 @@
   }
 }
 
-/* ——— Filtros (padrão form-card / Extrato / Unidades) ——— */
-.tx-filters {
-  margin-bottom: 1.25rem;
-}
-
-.tx-filters .form-card__title,
-.tx-list-card .form-card__title {
-  margin-bottom: 0.1rem;
-}
-
-.tx-filters .form-card__lede {
-  line-height: 1.3;
-}
-
-.tx-filters__grid {
+.filters-toolbar {
+  margin-bottom: 1rem;
   display: grid;
-  gap: 0.75rem 0.85rem;
-  align-items: end;
-  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  grid-template-columns: minmax(14rem, 18rem) minmax(18rem, 1fr);
 }
 
-.tx-filters__col {
-  min-width: 0;
+@media (max-width: 860px) {
+  .filters-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 
-.tx-filters__col--period {
-  min-width: 0;
-}
-
-.tx-filters__col--refs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem 0.75rem;
-  align-items: end;
-}
-
-.tx-filters__mode {
-  margin-bottom: 0.5rem;
-}
-
-.tx-filters__period-row {
+.filters-toolbar__period {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem 0.55rem;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+}
 
-  .input[type='month'] {
-    flex: 1 1 9.5rem;
-    min-width: 0;
-  }
+.filters-toolbar__period .field {
+  flex: 1 1 auto;
+}
+
+.filters-toolbar__fund {
+  min-width: 0;
+}
+
+.filters-toolbar__search {
+  min-width: 0;
 }
 
 .period-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.45rem;
 }
 
 .period-row .input {
-  flex: 1 1 9.5rem;
-  min-width: min(100%, 9.5rem);
+  min-width: 9.5rem;
 }
 
 .period-row__sep {
   font-size: 0.85rem;
+}
+
+.period-reset {
   flex-shrink: 0;
+  align-self: flex-end;
+  margin-left: auto;
 }
 
-.tx-list-card {
-  margin-bottom: 1.25rem;
+.table-wrap {
+  margin-top: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  overflow: visible;
+  background: var(--surface);
 }
 
-.tx-list-card .tx-table-wrap {
-  margin-top: 0;
-}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
 
-.tx-list-card .bulk-bar {
-  margin-top: 0;
-}
+  th,
+  td {
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
 
-@media (min-width: 720px) {
-  .tx-filters__grid {
-    grid-template-columns:
-      minmax(0, 1.35fr)
-      minmax(0, 0.72fr)
-      minmax(0, 0.72fr)
-      minmax(0, 1fr);
+  th {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    background: var(--surface-2);
+  }
+
+  tr.row--editing td {
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  td.cell-amount {
+    white-space: nowrap;
+  }
+
+  .cell-amount__value {
+    display: inline-block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  th.col-select,
+  td.cell-select {
+    width: 2.35rem;
+    max-width: 2.35rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  th.col-select {
+    vertical-align: middle;
+  }
+
+  tbody tr.is-selected td {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  }
+
+  tbody tr.is-selected.row--editing td {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   }
 }
 
-@media (max-width: 719px) {
-  .tx-filters__grid {
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 560px) {
-  .tx-filters__col--refs {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Checkbox + ações em massa (tabela em _financial-tx-table.scss) */
-
-/* Checkbox (seleção em massa) */
+/* Checkbox (selecção em massa) */
 .checkbox {
   display: inline-flex;
   align-items: center;
@@ -252,6 +284,56 @@
   gap: 0.45rem;
   margin-left: auto;
   flex-wrap: wrap;
+}
+
+.tx-main-cell {
+  min-width: 14rem;
+}
+
+.tx-main-cell__date {
+  color: var(--muted);
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tx-main-cell__title {
+  display: inline-block;
+  margin: 0.12rem 0.42rem 0 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.tx-main-cell__badge {
+  display: inline-block;
+  margin-top: 0.12rem;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  vertical-align: middle;
+
+  &[data-kind='expense'] {
+    color: #991b1b;
+    border-color: color-mix(in srgb, #dc2626 35%, var(--border));
+    background: color-mix(in srgb, #dc2626 14%, var(--surface));
+  }
+
+  &[data-kind='income'] {
+    color: #166534;
+    border-color: color-mix(in srgb, #16a34a 35%, var(--border));
+    background: color-mix(in srgb, #16a34a 14%, var(--surface));
+  }
+
+  &[data-kind='investment'] {
+    color: #1d4ed8;
+    border-color: color-mix(in srgb, #2563eb 35%, var(--border));
+    background: color-mix(in srgb, #2563eb 14%, var(--surface));
+  }
 }
 
 .doc-list {
@@ -361,7 +443,7 @@
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 60;
+  z-index: 40;
   min-width: 12.5rem;
   margin-top: 0.2rem;
   padding: 0.35rem 0;
@@ -369,13 +451,6 @@
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow);
-
-  &--drop-up {
-    top: auto;
-    bottom: 100%;
-    margin-top: 0;
-    margin-bottom: 0.2rem;
-  }
 }
 
 .row-actions__item {
@@ -541,15 +616,6 @@
   border-top: 1px solid var(--border);
 }
 
-.form-alert {
-  margin: 1rem 1.25rem 0.35rem;
-  padding: 0;
-
-  .error {
-    margin: 0;
-  }
-}
-
 .form-card--editing {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent),
@@ -561,12 +627,194 @@
 /* ------------------------------------------------------------------ */
 @media (max-width: 720px) {
   .page {
+    max-width: none;
     padding-bottom: 1.5rem;
+  }
+
+  .filters-toolbar {
+    margin-bottom: 0.85rem;
   }
 
   .form-card__toggle {
     padding: 0.95rem 1rem;
     font-size: 0.98rem;
+  }
+
+  .table-wrap {
+    margin-top: 0.85rem;
+    border: none;
+    background: transparent;
+  }
+
+  .table--cards {
+    display: block;
+    font-size: 0.92rem;
+
+    thead {
+      display: none;
+    }
+
+    tbody,
+    tr {
+      display: block;
+      width: 100%;
+    }
+
+    tr {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      column-gap: 0.75rem;
+      row-gap: 0.4rem;
+      padding: 0.8rem 0.85rem;
+      margin-bottom: 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 0.7rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    tr.row--editing {
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+    }
+
+    td {
+      display: block;
+      padding: 0;
+      border-bottom: 0;
+      vertical-align: top;
+    }
+
+    td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.2rem;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    /* Primeira linha: selecção + menu de acções; conteúdo principal na linha seguinte. */
+    .cell-select {
+      grid-column: 1;
+      grid-row: 1;
+      align-self: center;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    .tx-main-cell {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      min-width: 0;
+    }
+
+    /* Cabeçalho do card: data à esquerda, ações à direita (primeira linha). */
+    .cell-date {
+      grid-column: 1;
+      grid-row: 1;
+      font-size: 0.78rem;
+      color: var(--muted);
+
+      &::before {
+        display: none;
+      }
+    }
+
+    .td-actions {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: start;
+      text-align: right;
+      padding: 0;
+      width: auto;
+
+      &::before {
+        display: none;
+      }
+
+      .row-actions {
+        justify-content: flex-end;
+      }
+    }
+
+    /* Título grande, ocupando toda a largura. */
+    .cell-title {
+      grid-column: 1 / -1;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    /* Tipo em chip, abaixo do título. */
+    .cell-kind {
+      grid-column: 1 / -1;
+      display: inline-flex;
+      width: fit-content;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    .cell-kind[data-kind='expense'] {
+      background: color-mix(in srgb, #c0392b 14%, var(--surface));
+      color: #a42a1e;
+    }
+
+    .cell-kind[data-kind='income'] {
+      background: color-mix(in srgb, #1f883d 14%, var(--surface));
+      color: #14652b;
+    }
+
+    .cell-kind[data-kind='investment'] {
+      background: color-mix(in srgb, #1d4ed8 14%, var(--surface));
+      color: #1e3a8a;
+    }
+
+    /* Valor em destaque, ao lado do fundo. */
+    .cell-amount {
+      grid-column: 1 / -1;
+      text-align: left;
+      white-space: nowrap;
+
+      .cell-amount__value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+    }
+
+    .cell-receipt {
+      grid-column: 1 / -1;
+
+      .btn.sm {
+        padding: 0.4rem 0.75rem;
+        min-height: 2.35rem;
+      }
+    }
+
+    .num {
+      text-align: left;
+    }
   }
 
   .empty {
@@ -575,45 +823,6 @@
     border: 1px dashed var(--border);
     border-radius: 0.7rem;
     background: var(--surface);
-  }
-
-  .bulk-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
-    padding: 0.75rem 0.85rem;
-  }
-
-  .bulk-bar__info {
-    font-size: 0.86rem;
-    line-height: 1.45;
-  }
-
-  .bulk-bar__actions {
-    margin-left: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.4rem;
-    width: 100%;
-
-    .btn {
-      width: 100%;
-      justify-content: center;
-      min-height: 2.5rem;
-    }
-  }
-
-  .tx-list-card.form-card {
-    padding-left: 0;
-    padding-right: 0;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .tx-list-card .form-card__head {
-    padding-left: 0.15rem;
-    padding-right: 0.15rem;
   }
 }
 
@@ -626,6 +835,41 @@
     width: 1.7rem;
     height: 1.7rem;
   }
+}
+
+.table tbody tr.row--disabled {
+  opacity: 0.58;
+  filter: grayscale(0.28);
+}
+
+.tx-status-badge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--muted) 14%, var(--surface));
+  color: var(--text);
+
+  &[data-pay='pending'] {
+    background: color-mix(in srgb, #ca8a04 14%, var(--surface));
+    color: #92400e;
+  }
+
+  &[data-pay='paid'] {
+    background: color-mix(in srgb, #16a34a 14%, var(--surface));
+    color: #166534;
+  }
+
+  &[data-pay='cancelled'] {
+    background: color-mix(in srgb, var(--muted) 22%, var(--surface));
+    color: var(--muted);
+  }
+}
+
+.tx-status-badge--disabled {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 
 .small {
@@ -876,12 +1120,4 @@
   &:hover:not(:disabled) {
     background: color-mix(in srgb, #c0392b 10%, var(--surface));
   }
-}
-
-.bank-account-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
 }

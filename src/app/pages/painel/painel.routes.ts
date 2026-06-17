@@ -120,6 +120,18 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/contas-bancarias',
+        canActivate: [
+          selectedCondominiumGuard,
+          condominiumManagementGuard,
+          planFeatureGuard('financialTransactions'),
+        ],
+        loadComponent: () =>
+          import(
+            './painel-contas-bancarias/painel-contas-bancarias.component'
+          ).then((m) => m.PainelContasBancariasComponent),
+      },
+      {
         path: 'condominio/:condominiumId/fundos',
         canActivate: [
           selectedCondominiumGuard,
@@ -165,6 +177,14 @@ export const painelRoutes: Routes = [
         loadComponent: () =>
           import('./painel-planejamento/painel-planejamento.component').then(
             (m) => m.PainelPlanejamentoComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/obras/:workId',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
+        loadComponent: () =>
+          import('./painel-obras/painel-obras.component').then(
+            (m) => m.PainelObrasComponent,
           ),
       },
       {

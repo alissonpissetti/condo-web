@@ -7,9 +7,11 @@ export type TxCreateDraftAllocKind =
   | 'all_units_except'
   | 'none';
 
+export type TxKind = 'expense' | 'income' | 'investment' | 'yield';
+
 export type TxCreateDraft = {
   formExpanded?: boolean;
-  txKind: 'expense' | 'income' | 'investment' | 'yield';
+  txKind: TxKind;
   entryMode: 'single' | 'recurring' | 'transfer';
   transferFromBankAccountId: string;
   transferToBankAccountId: string;

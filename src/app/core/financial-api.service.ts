@@ -54,7 +54,7 @@ export interface FinancialTransaction {
   fundId: string | null;
   supplierId?: string | null;
   supplier?: FinancialTransactionSupplierEmbed | null;
-  kind: 'expense' | 'income' | 'investment';
+  kind: 'expense' | 'income' | 'investment' | 'yield';
   amountCents: string;
   occurredOn: string;
   title: string;
@@ -71,6 +71,13 @@ export interface FinancialTransaction {
   /** Lista de documentos anexados à transação. */
   documentStorageKeys?: string[] | null;
   fund?: FinancialFund | null;
+  bankAccountId?: string | null;
+  bankAccount?: { id: string; name: string; bankName?: string | null } | null;
+  /** Par de transferência entre contas/fundos (mesmo UUID nas duas pernas). */
+  transferGroupId?: string | null;
+  transferCounterpartId?: string | null;
+  workId?: string | null;
+  work?: { id: string; title: string } | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
   updatedAt: string;
@@ -289,10 +296,15 @@ export class FinancialApiService {
     fundId?: string | null,
     occurredFromYmd?: string | null,
     occurredToYmd?: string | null,
+    workId?: string | null,
   ): Observable<FinancialTransaction[]> {
     let params = new HttpParams();
     if (fundId) {
       params = params.set('fundId', fundId);
+    }
+    const work = workId?.trim();
+    if (work) {
+      params = params.set('workId', work);
     }
     const from = occurredFromYmd?.trim();
     const to = occurredToYmd?.trim();
@@ -328,21 +340,47 @@ export class FinancialApiService {
     });
   }
 
+  createTransfer(
+    condoId: string,
+    body: {
+      fromBankAccountId: string;
+      toBankAccountId: string;
+      fromFundId?: string | null;
+      toFundId?: string | null;
+      amountCents: number;
+      occurredOn: string;
+      title?: string;
+      description?: string | null;
+    },
+  ): Observable<{
+    transferGroupId: string;
+    outTransaction: FinancialTransaction;
+    inTransaction: FinancialTransaction;
+  }> {
+    return this.http.post<{
+      transferGroupId: string;
+      outTransaction: FinancialTransaction;
+      inTransaction: FinancialTransaction;
+    }>(`${this.base(condoId)}/transactions/transfers`, body);
+  }
+
   createTransaction(
     condoId: string,
     body: {
-      kind: 'expense' | 'income' | 'investment';
+      kind: 'expense' | 'income' | 'investment' | 'yield';
       amountCents: number;
       occurredOn: string;
       title: string;
       description?: string | null;
       fundId?: string | null;
+      bankAccountId: string;
       supplierId?: string | null;
       allocationRule: AllocationRule;
       documentStorageKey?: string;
       documentStorageKeys?: string[];
       receiptStorageKey?: string;
       recurringSeriesId?: string;
+      workId?: string | null;
     },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
@@ -351,21 +389,33 @@ export class FinancialApiService {
     );
   }
 
+  bulkAssignWork(
+    condoId: string,
+    body: { transactionIds: string[]; workId?: string | null },
+  ): Observable<{ updated: number; skippedTransferIds: string[] }> {
+    return this.http.patch<{ updated: number; skippedTransferIds: string[] }>(
+      `${this.base(condoId)}/transactions/bulk/work`,
+      body,
+    );
+  }
+
   updateTransaction(
     condoId: string,
     txId: string,
     body: Partial<{
-      kind: 'expense' | 'income' | 'investment';
+      kind: 'expense' | 'income' | 'investment' | 'yield';
       amountCents: number;
       occurredOn: string;
       title: string;
       description: string | null;
       fundId: string | null;
+      bankAccountId: string;
       supplierId: string | null;
       allocationRule: AllocationRule;
       documentStorageKey: string | null;
       documentStorageKeys: string[] | null;
       receiptStorageKey: string | null;
+      workId: string | null;
     }>,
   ): Observable<FinancialTransaction> {
     return this.http.patch<FinancialTransaction>(
@@ -412,10 +462,11 @@ export class FinancialApiService {
     condoId: string,
     seriesId: string,
     body: {
-      kind?: 'expense' | 'income' | 'investment';
+      kind?: 'expense' | 'income' | 'investment' | 'yield';
       titleBase?: string;
       description?: string | null;
       fundId?: string | null;
+      bankAccountId?: string;
       supplierId?: string | null;
       allocationRule?: AllocationRule;
       amountCents?: number;

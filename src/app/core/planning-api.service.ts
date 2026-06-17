@@ -79,6 +79,8 @@ export interface PlanningMeetingNote {
 
 export interface GenerateMeetingMinutesResult {
   body: string;
+  /** Indica se a OpenAI formalizou o texto; se false, foi montagem local. */
+  aiEnhanced?: boolean;
 }
 
 export interface PollAiDraftResult {
@@ -172,7 +174,15 @@ export interface PollQuestionResults {
   decidedOptionId: string | null;
   options: { id: string; label: string; votes: number }[];
   unitsVoted: number;
+  /** Unidades que votaram nesta deliberação. */
+  unitsParticipating?: number;
+  /** Percentual de quórum (unidades que votaram / total de unidades). */
+  quorumPercent?: number | null;
   totalOptionSelections: number;
+  /** Unidades que não registaram voto nesta deliberação. */
+  abstentions?: number;
+  /** Unidades sem voto (gestão). */
+  abstentionsByUnit?: { unitId: string; identifier: string }[];
   votesByUnit?: PollUnitVoteRow[];
 }
 
@@ -180,6 +190,14 @@ export interface PollResults {
   pollId: string;
   status: PollStatus;
   allowMultiple?: boolean;
+  /** Total de unidades cadastradas no condomínio. */
+  totalUnits?: number;
+  /** Unidades distintas que votaram em alguma deliberação. */
+  unitsParticipating?: number;
+  /** Percentual de quórum agregado da pauta (votantes / total de unidades). */
+  quorumPercent?: number | null;
+  /** Unidades que não votaram em nenhuma deliberação. */
+  totalAbstentions?: number;
   questions: PollQuestionResults[];
   options: {
     id: string;
@@ -327,6 +345,16 @@ export class PlanningApiService {
   ): Observable<PollMyUnitVotes> {
     return this.http.get<PollMyUnitVotes>(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/my-votes`,
+    );
+  }
+
+  pollUnitVote(
+    condominiumId: string,
+    pollId: string,
+    unitId: string,
+  ): Observable<PollUnitVoteRow> {
+    return this.http.get<PollUnitVoteRow>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/units/${unitId}/vote`,
     );
   }
 
@@ -516,6 +544,17 @@ export class PlanningApiService {
   ): Observable<unknown> {
     return this.http.post(
       `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/votes`,
+      body,
+    );
+  }
+
+  registerAbstention(
+    condominiumId: string,
+    pollId: string,
+    body: { unitId: string; questionId: string },
+  ): Observable<{ ok: true }> {
+    return this.http.post<{ ok: true }>(
+      `${this.base}/condominiums/${condominiumId}/planning/polls/${pollId}/abstentions`,
       body,
     );
   }

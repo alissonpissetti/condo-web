@@ -1,17 +1,6 @@
 <div class="page">
   <header class="page__header">
     <h1>Transações</h1>
-    <p class="page__intro">
-      Despesas, receitas e investimentos (capital aplicado) com rateio entre unidades,
-      quando aplicável. Cada lançamento tem estado de quitação:
-      <strong>aguardando</strong> (entra na taxa condominial da competência),
-      <strong>pago</strong> ou <strong>cancelado</strong> (desactivado, fora de saldos e taxas).
-      Receitas podem ser sem repartição. Opcionalmente associe um fornecedor (chave PIX ao quitar) e anexe documento e comprovante (PDF ou imagem). Com
-      <strong>filtro por fundo</strong>, a coluna «Saldo após» é o saldo do fundo após
-      cada lançamento, em ordem cronológica (só os movimentos listados), exibido em
-      valor absoluto (sempre positivo).
-      Use as caixas de selecção para <strong>acções em massa</strong> (quitar, cancelar ou excluir).
-    </p>
   </header>
 
   @if (loading()) {
@@ -72,11 +61,119 @@
           </p>
         </div>
 
-        @if (formError(); as fe) {
-          <p class="error error--form" role="alert">{{ fe }}</p>
-        }
-
         <div class="tx-form">
+        @if (!editingId() && !editingSeriesId() && entryMode() === 'transfer') {
+          <div class="form-section">
+            <div class="form-section__head">
+              <span class="form-section__step" aria-hidden="true">1</span>
+              <div>
+                <h3 class="form-section__title">Transferência entre contas</h3>
+                <p class="form-section__hint">
+                  Movimenta saldo entre contas do condomínio (ex.: investimento →
+                  conta corrente). Gera saída e entrada quitadas automaticamente.
+                </p>
+              </div>
+            </div>
+            <div class="values-grid">
+              <label class="field field--block">
+                <span class="field__label">Título (opcional)</span>
+                <input
+                  type="text"
+                  class="input input--lg"
+                  [value]="titleTx()"
+                  (input)="titleTx.set($any($event.target).value)"
+                  placeholder="Ex.: Resgate investimento Sicredi"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Descrição (opcional)</span>
+                <input
+                  type="text"
+                  class="input input--lg"
+                  [value]="descriptionTx()"
+                  (input)="descriptionTx.set($any($event.target).value)"
+                  placeholder="Detalhes da movimentação"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Conta de origem</span>
+                <select
+                  class="input input--lg"
+                  [value]="transferFromBankAccountId()"
+                  (change)="onTransferFromAccountChange($any($event.target).value)"
+                >
+                  @for (a of activeBankAccounts(); track a.id) {
+                    <option [value]="a.id">{{ a.name }} — {{ a.bankName }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Conta de destino</span>
+                <select
+                  class="input input--lg"
+                  [value]="transferToBankAccountId()"
+                  (change)="onTransferToAccountChange($any($event.target).value)"
+                >
+                  @for (a of activeBankAccounts(); track a.id) {
+                    <option [value]="a.id">{{ a.name }} — {{ a.bankName }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Fundo de origem (opcional)</span>
+                <select
+                  class="input input--lg"
+                  [value]="transferFromFundId()"
+                  (change)="onTransferFromFundChange($any($event.target).value)"
+                >
+                  <option value="">— Conta geral —</option>
+                  @for (f of funds(); track f.id) {
+                    <option [value]="f.id">{{ f.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Fundo de destino (opcional)</span>
+                <select
+                  class="input input--lg"
+                  [value]="transferToFundId()"
+                  (change)="onTransferToFundChange($any($event.target).value)"
+                >
+                  <option value="">— Conta geral —</option>
+                  @for (f of funds(); track f.id) {
+                    <option [value]="f.id">{{ f.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field field--block field--money">
+                <span class="field__label">Valor (R$)</span>
+                <div class="input-money">
+                  <span class="input-money__prefix" aria-hidden="true">R$</span>
+                  <input
+                    type="number"
+                    class="input input--lg input--money"
+                    step="0.01"
+                    min="0.01"
+                    [value]="amountReais() || ''"
+                    (input)="setAmountFromInput($any($event.target).value)"
+                    placeholder="0,00"
+                  />
+                </div>
+              </label>
+              <label class="field field--block">
+                <span class="field__label">Data</span>
+                <input
+                  type="date"
+                  class="input input--lg"
+                  [value]="occurredOn()"
+                  (input)="occurredOn.set($any($event.target).value)"
+                />
+              </label>
+            </div>
+          </div>
+        } @else {
         <div class="form-section">
           <div class="form-section__head">
             <span class="form-section__step" aria-hidden="true">1</span>
@@ -311,6 +408,17 @@
                 <span class="mode-tab__name">Recorrente</span>
                 <span class="mode-tab__desc">Parcelas mensais</span>
               </button>
+              <button
+                type="button"
+                class="mode-tab"
+                role="tab"
+                [attr.aria-selected]="entryMode() === 'transfer'"
+                [class.mode-tab--active]="entryMode() === 'transfer'"
+                (click)="setEntryMode('transfer')"
+              >
+                <span class="mode-tab__name">Transferência</span>
+                <span class="mode-tab__desc">Entre contas / fundos</span>
+              </button>
             </div>
           }
 
@@ -471,6 +579,22 @@
                 }
               </select>
             </label>
+            <label class="field field--block">
+              <span class="field__label">Conta bancária</span>
+              <select
+                class="input input--lg"
+                [value]="bankAccountIdForm()"
+                (change)="bankAccountIdForm.set($any($event.target).value)"
+              >
+                @if (activeBankAccounts().length === 0) {
+                  <option value="">Cadastre uma conta em Contas bancárias</option>
+                } @else {
+                  @for (a of activeBankAccounts(); track a.id) {
+                    <option [value]="a.id">{{ a.name }} — {{ a.bankName }}</option>
+                  }
+                }
+              </select>
+            </label>
             @if (!planFeatures.isBlocked('suppliers')) {
               <label class="field field--block">
                 <span class="field__label">Fornecedor (opcional)</span>
@@ -503,6 +627,23 @@
                 }
               }
             }
+            <label class="field field--block">
+              <span class="field__label">Obra (opcional)</span>
+              <select
+                class="input input--lg"
+                [value]="workIdForm()"
+                (change)="workIdForm.set($any($event.target).value)"
+                [disabled]="entryMode() === 'transfer'"
+              >
+                <option value="">— Nenhuma —</option>
+                @for (w of works(); track w.id) {
+                  <option [value]="w.id">{{ w.title }}</option>
+                }
+              </select>
+              <span class="muted small form-section__inline-hint">
+                O lançamento aparece na linha do tempo da obra.
+              </span>
+            </label>
           </div>
 
           @if (
@@ -654,6 +795,7 @@
             </p>
           </div>
         </div>
+        }
 
         <div class="form-footer form-footer--split">
           @if (editingId() || editingSeriesId()) {
@@ -681,7 +823,9 @@
                     ? 'Salvar alterações'
                     : entryMode() === 'recurring'
                       ? 'Adicionar ' + recurringCount() + ' transações'
-                      : 'Adicionar transação'
+                      : entryMode() === 'transfer'
+                        ? 'Registrar transferência'
+                        : 'Adicionar transação'
             }}
           </button>
         </div>
@@ -689,72 +833,131 @@
       </div>
     </section>
 
-    <div class="filters-toolbar">
-      <div class="filters-toolbar__period">
-        <label class="field field--block">
-          <span class="field__label">Período (data da transação)</span>
-          <div class="period-row">
-            <input
-              type="date"
-              class="input input--lg"
-              [value]="periodFrom()"
-              (change)="setPeriodFrom($any($event.target).value)"
-            />
-            <span class="period-row__sep muted" aria-hidden="true">até</span>
-            <input
-              type="date"
-              class="input input--lg"
-              [value]="periodTo()"
-              (change)="setPeriodTo($any($event.target).value)"
-            />
-          </div>
-        </label>
-        <button
-          type="button"
-          class="btn btn--ghost sm period-reset"
-          (click)="resetPeriodToCurrentMonth()"
-        >
-          Mês atual
-        </button>
+    <section class="form-card tx-filters" role="search" aria-label="Filtros da lista">
+      <div class="form-card__head">
+        <h2 class="form-card__title">Filtros</h2>
       </div>
-      <label class="field field--block filters-toolbar__fund">
-        <span class="field__label">Filtrar por fundo</span>
-        <select
-          class="input input--lg"
-          [value]="fundFilter()"
-          (change)="setFundFilter($any($event.target).value)"
-        >
-          <option value="">Todos</option>
-          @for (f of funds(); track f.id) {
-            <option [value]="f.id">{{ f.name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field field--block filters-toolbar__search">
-        <span class="field__label">Buscar na lista</span>
-        <input
-          type="text"
-          class="input input--lg"
-          [value]="searchTerm()"
-          (input)="setSearchTerm($any($event.target).value)"
-          placeholder="Título, descrição, fornecedor, tipo, fundo ou data"
-          autocomplete="off"
-        />
-      </label>
-    </div>
+      <div class="tx-filters__body">
+        <div class="tx-filters__grid">
+          <div class="tx-filters__col tx-filters__col--period">
+            <label class="field field--block">
+              <span class="field__label">Período (data da transação)</span>
+              <div
+                class="mode-tabs mode-tabs--sub tx-filters__mode"
+                role="group"
+                aria-label="Tipo de período"
+              >
+                <button
+                  type="button"
+                  class="mode-tab"
+                  [class.mode-tab--active]="periodMode() === 'month'"
+                  [attr.aria-pressed]="periodMode() === 'month'"
+                  (click)="setPeriodMode('month')"
+                >
+                  <span class="mode-tab__name">Mês / ano</span>
+                </button>
+                <button
+                  type="button"
+                  class="mode-tab"
+                  [class.mode-tab--active]="periodMode() === 'custom'"
+                  [attr.aria-pressed]="periodMode() === 'custom'"
+                  (click)="setPeriodMode('custom')"
+                >
+                  <span class="mode-tab__name">Intervalo</span>
+                </button>
+              </div>
+              @if (periodMode() === 'month') {
+                <div class="tx-filters__period-row">
+                  <input
+                    type="month"
+                    class="input input--lg"
+                    [value]="periodMonthYm()"
+                    (change)="setPeriodMonthYm($any($event.target).value)"
+                    aria-label="Mês e ano"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
+                    (click)="resetPeriodToCurrentMonth()"
+                  >
+                    Mês atual
+                  </button>
+                </div>
+              } @else {
+                <div class="period-row">
+                  <input
+                    type="date"
+                    class="input input--lg"
+                    [value]="periodFrom()"
+                    (change)="setPeriodFrom($any($event.target).value)"
+                    aria-label="Data inicial"
+                  />
+                  <span class="period-row__sep muted" aria-hidden="true">até</span>
+                  <input
+                    type="date"
+                    class="input input--lg"
+                    [value]="periodTo()"
+                    (change)="setPeriodTo($any($event.target).value)"
+                    aria-label="Data final"
+                  />
+                </div>
+              }
+            </label>
+          </div>
+          <label class="field field--block tx-filters__col">
+            <span class="field__label">Filtrar por fundo</span>
+            <select
+              class="input input--lg"
+              [value]="fundFilter()"
+              (change)="setFundFilter($any($event.target).value)"
+            >
+              <option value="">Todos</option>
+              @for (f of funds(); track f.id) {
+                <option [value]="f.id">{{ f.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field field--block tx-filters__col">
+            <span class="field__label">Filtrar por obra</span>
+            <select
+              class="input input--lg"
+              [value]="workFilter()"
+              (change)="setWorkFilter($any($event.target).value)"
+            >
+              <option value="">Todas</option>
+              @for (w of works(); track w.id) {
+                <option [value]="w.id">{{ w.title }}</option>
+              }
+            </select>
+          </label>
+          <label class="field field--block tx-filters__col">
+            <span class="field__label">Buscar na lista</span>
+            <input
+              type="text"
+              class="input input--lg"
+              [value]="searchTerm()"
+              (input)="setSearchTerm($any($event.target).value)"
+              placeholder="Título, descrição, fornecedor, tipo, fundo ou data"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+      </div>
+    </section>
 
+    <section class="form-card tx-list-card" aria-label="Lista de transações">
     @if (bulkSelectedCount() > 0) {
-      <div class="bulk-bar" role="region" aria-label="Acções em massa">
+      <div class="bulk-bar" role="region" aria-label="Ações em massa">
         <div class="bulk-bar__info">
           <strong>{{ bulkSelectedCount() }}</strong>
           {{
             bulkSelectedCount() === 1
-              ? 'transação seleccionada'
-              : 'transações seleccionadas'
+              ? 'transação selecionada'
+              : 'transações selecionadas'
           }}
           @if (bulkPendingSelectedCount() > 0) {
             <span class="bulk-bar__hint">
-              · {{ bulkPendingSelectedCount() }} em «aguardando»
+              · {{ bulkPendingSelectedCount() }} em "aguardando"
             </span>
           }
           @if (bulkDeletableSelectedCount() > 0) {
@@ -770,7 +973,19 @@
             (click)="clearBulkSelection()"
             [disabled]="bulkActionBusy() || bulkSettleBusy()"
           >
-            Limpar selecção
+            Limpar seleção
+          </button>
+          <button
+            type="button"
+            class="btn sm"
+            (click)="openBulkAssignWorkModal()"
+            [disabled]="
+              bulkActionBusy() ||
+              bulkSettleBusy() ||
+              bulkWorkAssignableSelectedCount() === 0
+            "
+          >
+            Vincular à obra
           </button>
           <button
             type="button"
@@ -782,7 +997,7 @@
               bulkPendingSelectedCount() === 0
             "
           >
-            Quitar seleccionadas
+            Quitar selecionadas
           </button>
           <button
             type="button"
@@ -794,8 +1009,18 @@
               bulkPendingSelectedCount() === 0
             "
           >
-            Cancelar seleccionadas
+            Cancelar selecionadas
           </button>
+          @if (bulkPaidReopenableSelectedCount() > 0) {
+            <button
+              type="button"
+              class="btn sm"
+              (click)="confirmBulkReopen()"
+              [disabled]="bulkActionBusy() || bulkSettleBusy()"
+            >
+              Reabrir quitação
+            </button>
+          }
           <button
             type="button"
             class="btn sm danger-outline"
@@ -806,20 +1031,23 @@
               bulkDeletableSelectedCount() === 0
             "
           >
-            Excluir seleccionadas
+            Excluir selecionadas
           </button>
         </div>
       </div>
     }
 
-    <div class="table-wrap">
-      <table class="table table--cards">
+    <div
+      class="tx-table-wrap"
+      [class.tx-table-wrap--menu-open]="rowActionMenuForId() !== null"
+    >
+      <table class="tx-table tx-table--cards">
         <thead>
           <tr>
             <th class="col-select" scope="col">
               <label
                 class="checkbox"
-                [attr.aria-label]="'Seleccionar todas as linhas visíveis'"
+                [attr.aria-label]="'Selecionar todas as linhas visíveis'"
               >
                 <input
                   type="checkbox"
@@ -833,6 +1061,8 @@
             <th>Transação</th>
             <th>Estado</th>
             <th>Fundo</th>
+            <th>Obra</th>
+            <th>Conta</th>
             <th class="num">Valor</th>
             @if (fundFilter()) {
               <th class="num">Saldo após</th>
@@ -854,10 +1084,10 @@
             >
               <td
                 class="cell-select"
-                data-label="Seleccionar"
+                data-label="Selecionar"
                 (click)="$event.stopPropagation()"
               >
-                <label class="checkbox" [attr.aria-label]="'Seleccionar ' + t.title">
+                <label class="checkbox" [attr.aria-label]="'Selecionar ' + t.title">
                   <input
                     type="checkbox"
                     [checked]="isBulkSelected(t.id)"
@@ -866,13 +1096,14 @@
                   <span></span>
                 </label>
               </td>
-              <td data-label="Transação" class="tx-main-cell">
-                <small class="tx-main-cell__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
-                <br />
-                <span class="tx-main-cell__title">{{ t.title }}</span>
-                <br />
-                <span class="tx-main-cell__badge" [attr.data-kind]="t.kind">{{
-                  transactionKindLabelPt(t.kind)
+              <td data-label="Transação" class="tx-table__main">
+                <small class="tx-table__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
+                <span class="tx-table__title">{{ t.title }}</span>
+                @if (t.description?.trim()) {
+                  <span class="tx-table__desc">{{ t.description!.trim() }}</span>
+                }
+                <span class="tx-table__kind" [attr.data-kind]="t.kind">{{
+                  transactionRowKindLabel(t)
                 }}</span>
                 @if (t.supplier?.name) {
                   <br />
@@ -883,17 +1114,45 @@
               </td>
               <td data-label="Estado">
                 <span
-                  class="tx-status-badge"
+                  class="tx-table__status"
                   [attr.data-pay]="t.paymentStatus ?? 'pending'"
-                  [class.tx-status-badge--disabled]="
-                    (t.paymentStatus ?? 'pending') === 'cancelled'
-                  "
                   >{{ transactionPaymentStatusLabelPt(t.paymentStatus) }}</span
                 >
               </td>
-              <td data-label="Fundo">{{ t.fund?.name || '—' }}</td>
-              <td data-label="Valor" class="num cell-amount">
-                <small class="cell-amount__value">{{ formatCentsBrl(t.amountCents) }}</small>
+              <td data-label="Fundo" class="tx-table__fund">{{
+                t.fund?.name || '—'
+              }}</td>
+              <td data-label="Obra" class="tx-table__work">
+                @if (t.work; as work) {
+                  @if (work.title && t.workId) {
+                    <a
+                      class="tx-table__work-link"
+                      [routerLink]="[
+                        '/painel/condominio',
+                        condominiumIdParam(),
+                        'obras',
+                        t.workId,
+                      ]"
+                      >{{ work.title }}</a
+                    >
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td data-label="Conta" class="tx-table__account">
+                <span class="tx-table__account-name">{{
+                  bankAccountNickname(t)
+                }}</span>
+              </td>
+              <td
+                data-label="Valor"
+                class="num"
+                [class]="extratoDeltaCssClass(signedDeltaForTransaction(t))"
+              >
+                {{ formatTransactionAmount(t) }}
               </td>
               @if (fundFilter()) {
                 <td data-label="Saldo após" class="num">
@@ -952,6 +1211,7 @@
                   @if (rowActionMenuForId() === t.id) {
                     <div
                       class="row-actions__menu"
+                      [class.row-actions__menu--drop-up]="rowActionMenuOpensUpward()"
                       role="menu"
                       [attr.aria-labelledby]="'tx-actions-trigger-' + t.id"
                       [id]="'tx-actions-' + t.id"
@@ -1040,6 +1300,7 @@
         <p class="empty">Nenhum registro encontrado para esta busca.</p>
       }
     </div>
+    </section>
   }
 
   @if (bulkSettleTargets(); as bulkList) {
@@ -1136,8 +1397,76 @@
             {{
               bulkSettleBusy()
                 ? 'A processar…'
-                : 'Confirmar quitação em massa'
+                : 'Confirmar quitação em lote'
             }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  @if (bulkAssignWorkOpen()) {
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tx-bulk-work-title"
+      (click)="closeBulkAssignWorkModal()"
+    >
+      <div class="modal" (click)="$event.stopPropagation()">
+        <header class="modal__head">
+          <h2 id="tx-bulk-work-title">
+            Vincular {{ bulkWorkAssignableSelectedCount() }} transações à obra
+          </h2>
+          <button
+            type="button"
+            class="modal__close"
+            aria-label="Fechar"
+            (click)="closeBulkAssignWorkModal()"
+            [disabled]="bulkActionBusy()"
+          >
+            ×
+          </button>
+        </header>
+        <div class="modal__body">
+          <p class="muted small bulk-settle-lede">
+            Transferências entre contas são ignoradas. Escolha "Nenhuma" para
+            remover o vínculo com obra.
+          </p>
+          <label class="field field--block">
+            <span class="field__label">Obra</span>
+            <select
+              class="input input--lg"
+              [value]="bulkAssignWorkId()"
+              (change)="bulkAssignWorkId.set($any($event.target).value)"
+              [disabled]="bulkActionBusy()"
+            >
+              <option value="">— Nenhuma (desvincular) —</option>
+              @for (w of works(); track w.id) {
+                <option [value]="w.id">{{ w.title }}</option>
+              }
+            </select>
+          </label>
+          @if (bulkAssignWorkError(); as werr) {
+            <p class="error" role="alert">{{ werr }}</p>
+          }
+        </div>
+        <footer class="modal__foot">
+          <button
+            type="button"
+            class="btn btn--ghost"
+            (click)="closeBulkAssignWorkModal()"
+            [disabled]="bulkActionBusy()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn primary"
+            (click)="confirmBulkAssignWork()"
+            [disabled]="bulkActionBusy()"
+          >
+            {{ bulkActionBusy() ? 'Salvando…' : 'Confirmar' }}
           </button>
         </footer>
       </div>

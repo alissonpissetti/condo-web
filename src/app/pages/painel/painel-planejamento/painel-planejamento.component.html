@@ -2,6 +2,160 @@
   class="page"
   [class.page--poll-detail]="detailPollId() !== null"
 >
+  <ng-template #syndicVotesDetail let-poll="poll">
+    @if (canShowSyndicVoteDetail(poll)) {
+      @if (resultsLoading()) {
+        <p class="plan-results-by-unit__loading muted">
+          A carregar votos por unidade…
+        </p>
+      } @else if (resultsError()) {
+        <p class="plan-results-by-unit__empty plan-results__empty--error">
+          {{ resultsError() }}
+        </p>
+        <button type="button" class="btn ghost sm" (click)="retryLoadResults()">
+          Tentar novamente
+        </button>
+      } @else if (results()) {
+        @if (hasSyndicVoteDetail(results()!)) {
+          <div class="plan-results-by-unit">
+            <h4 class="plan-results-by-unit__title">Voto por unidade</h4>
+            <p class="plan-results-by-unit__hint muted">
+              Visível apenas para titular ou síndico.
+            </p>
+            @for (qr of results()!.questions; track qr.questionId) {
+              <div class="plan-results-by-unit__question-block">
+                @if (results()!.questions.length > 1) {
+                  <h5 class="plan-results-by-unit__question">{{ qr.title }}</h5>
+                }
+                @if (syndicVoteRowsForQuestion(results()!, qr).length > 0) {
+                  <ul class="plan-results-by-unit__list">
+                    @for (
+                      row of syndicVoteRowsForQuestion(results()!, qr);
+                      track row.unitId
+                    ) {
+                      <li class="plan-results-by-unit__row">
+                        <span class="plan-results-by-unit__unit">{{
+                          row.identifier
+                        }}</span>
+                        <span class="plan-results-by-unit__choices">{{
+                          formatUnitVoteChoices(row)
+                        }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if ((qr.abstentionsByUnit?.length ?? 0) > 0) {
+                  <p class="plan-results-by-unit__abstain muted">
+                    Sem voto: {{ formatUnitIdentifierList(qr.abstentionsByUnit) }}
+                  </p>
+                } @else if ((qr.abstentions ?? 0) > 0) {
+                  <p class="plan-results-by-unit__abstain muted">
+                    Abstenções (sem voto): {{ qr.abstentions }}
+                  </p>
+                }
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="plan-results-by-unit__empty muted">
+            Nenhum voto registado por unidade.
+          </p>
+        }
+      } @else {
+        <button type="button" class="btn ghost sm" (click)="retryLoadResults()">
+          Carregar votos por unidade
+        </button>
+      }
+    }
+  </ng-template>
+
+  <ng-template
+    #meetingNotesPanel
+    let-poll="poll"
+    let-includeGenerateAta="includeGenerateAta"
+  >
+    <div
+      class="plan-meeting-ai"
+      [class.plan-meeting-ai--busy]="meetingMinutesAiLoading() || meetingNotesSaving()"
+    >
+      @if (meetingMinutesAiLoading()) {
+        <p class="plan-meeting-ai__busy muted" aria-live="polite">
+          Gerando ata com IA a partir de todas as anotações e do contexto da pauta…
+        </p>
+      } @else if (meetingNotesSaving()) {
+        <p class="plan-meeting-ai__busy muted" aria-live="polite">
+          Salvando anotação…
+        </p>
+      }
+      <label class="field field--block">
+        <span class="field__label">Nova anotação</span>
+        <textarea
+          class="input plan-meeting-ai__input"
+          rows="4"
+          placeholder="Registre ocorrências, deliberações e observações ao longo do tempo. Cada comentário salvo entra no contexto para gerar a ata final com IA."
+          [formControl]="meetingNotesControl"
+          [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+        ></textarea>
+      </label>
+      <div class="plan-meeting-ai__actions">
+        <button
+          type="button"
+          class="btn secondary sm"
+          [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+          (click)="saveMeetingAnnotation(poll)"
+        >
+          Salvar anotação
+        </button>
+        @if (includeGenerateAta) {
+          <button
+            type="button"
+            class="btn primary sm"
+            [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+            (click)="generateMeetingMinutesWithAi(poll)"
+          >
+            Gerar / regerar ata com IA
+          </button>
+          @if (lastMeetingMinutesGeneratedAt() !== null) {
+            <span class="plan-meeting-ai__merged muted">
+              Última geração: {{ meetingMinutesGeneratedTimeLabel() }}
+            </span>
+          }
+        }
+      </div>
+      @if (meetingNotes().length > 0) {
+        <details class="plan-meeting-ai__history" [open]="!includeGenerateAta">
+          <summary class="plan-meeting-ai__history-summary">
+            Anotações salvas ({{ meetingNotes().length }})
+          </summary>
+          <ul class="plan-meeting-ai__history-list" role="list">
+            @for (entry of meetingNotes(); track entry.id) {
+              <li class="plan-meeting-ai__history-item">
+                <div class="plan-meeting-ai__history-meta">
+                  <time [attr.datetime]="entry.createdAt">
+                    {{ meetingNoteTimeLabel(entry.createdAt) }}
+                  </time>
+                </div>
+                <p class="plan-meeting-ai__history-text">{{ entry.text }}</p>
+                <button
+                  type="button"
+                  class="btn ghost sm plan-meeting-ai__history-reuse"
+                  [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
+                  (click)="reuseMeetingPrompt(entry.text)"
+                >
+                  Reutilizar no campo acima
+                </button>
+              </li>
+            }
+          </ul>
+        </details>
+      } @else {
+        <p class="plan-meeting-ai__note muted">
+          Ainda sem anotações. Pode registar comentários antes, durante ou depois da reunião.
+        </p>
+      }
+    </div>
+  </ng-template>
+
   @if (!detailPollId()) {
     <header class="page__header">
       <h1>Pautas/Atas</h1>
@@ -585,7 +739,53 @@
               <dl class="plan-detail__meta">
                 <div class="plan-detail__meta-item">
                   <dt>Período de votação</dt>
-                  <dd>{{ fmtDate(p.opensAt) }} — {{ fmtDate(p.closesAt) }}</dd>
+                  <dd>
+                    @if (editingVotingPeriod()) {
+                      <form
+                        class="plan-voting-period-edit"
+                        [formGroup]="votingPeriodEditForm"
+                        (ngSubmit)="saveVotingPeriod(p)"
+                      >
+                        <div class="plan-create-pair">
+                          <label class="field field--block">
+                            <span class="field__label">Abre em</span>
+                            <input
+                              class="input plan-create-pair__control"
+                              type="datetime-local"
+                              formControlName="opensAt"
+                            />
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Encerra em</span>
+                            <input
+                              class="input plan-create-pair__control"
+                              type="datetime-local"
+                              formControlName="closesAt"
+                            />
+                          </label>
+                        </div>
+                        <div class="plan-title-edit__actions">
+                          <button
+                            type="submit"
+                            class="btn primary sm"
+                            [disabled]="busy()"
+                          >
+                            Salvar período
+                          </button>
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            [disabled]="busy()"
+                            (click)="cancelEditVotingPeriod()"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    } @else {
+                      {{ fmtDate(p.opensAt) }} — {{ fmtDate(p.closesAt) }}
+                    }
+                  </dd>
                 </div>
                 <div class="plan-detail__meta-item">
                   <dt>Competência</dt>
@@ -595,9 +795,12 @@
             }
 
             @if (
-              (canEditTitle(p) || canEditCompetenceDate(p)) &&
+              (canEditTitle(p) ||
+                canEditCompetenceDate(p) ||
+                canEditVotingPeriod(p)) &&
               !editingTitle() &&
-              !editingCompetence()
+              !editingCompetence() &&
+              !editingVotingPeriod()
             ) {
               <div class="plan-detail__head-actions">
                 @if (canEditTitle(p)) {
@@ -608,6 +811,16 @@
                     (click)="startEditTitle(p)"
                   >
                     Editar título
+                  </button>
+                }
+                @if (canEditVotingPeriod(p)) {
+                  <button
+                    type="button"
+                    class="btn ghost sm"
+                    [disabled]="busy()"
+                    (click)="startEditVotingPeriod(p)"
+                  >
+                    Editar período
                   </button>
                 }
                 @if (canEditCompetenceDate(p)) {
@@ -655,7 +868,19 @@
                 p.minutesBody?.trim()
               ) {
                 <div class="plan-minutes-preview">
-                  <h4 class="plan-minutes-preview__title">Rascunho da ata</h4>
+                  <div class="plan-minutes-preview__head">
+                    <h4 class="plan-minutes-preview__title">Rascunho da ata</h4>
+                    @if (canEditPollContent(p)) {
+                      <button
+                        type="button"
+                        class="btn ghost sm plan-minutes-preview__clear"
+                        [disabled]="busy() || meetingMinutesAiLoading()"
+                        (click)="clearMinutesBodyDraft(p)"
+                      >
+                        Limpar rascunho
+                      </button>
+                    }
+                  </div>
                   <div
                     class="poll-body-html plan-detail__prose plan-minutes-preview__prose"
                     [innerHTML]="safePollBody(p.minutesBody!)"
@@ -683,6 +908,17 @@
                     >
                       Gerar / regerar ata com IA
                     </button>
+                    @if (minutesDraftHasContent(p)) {
+                      <button
+                        type="button"
+                        class="btn ghost sm"
+                        [disabled]="busy() || meetingMinutesAiLoading()"
+                        (click)="clearMinutesBodyDraft(p)"
+                        title="Remove o rascunho da ata do servidor e do navegador."
+                      >
+                        Limpar rascunho da ata
+                      </button>
+                    }
                     <button
                       type="button"
                       class="btn ghost sm"
@@ -725,6 +961,27 @@
                 }
               }
             </section>
+
+            @if (canManageMeetingNotes(p)) {
+              <section
+                class="plan-detail__panel plan-detail__section"
+                aria-labelledby="plan-detail-meeting-notes-heading"
+              >
+                <h3 class="plan-subtitle" id="plan-detail-meeting-notes-heading">
+                  Anotações para a ata
+                </h3>
+                <p class="form-section__hint muted plan-hint-tight">
+                  Registe comentários ao longo do tempo — antes, durante ou depois da reunião.
+                  Todas as anotações salvas entram como contexto ao gerar a ata final com IA.
+                </p>
+                <ng-container
+                  *ngTemplateOutlet="
+                    meetingNotesPanel;
+                    context: { poll: p, includeGenerateAta: false }
+                  "
+                />
+              </section>
+            }
 
             @if (isSyndicOrOwner() || (p.attachments?.length ?? 0) > 0) {
             <section
@@ -1052,22 +1309,23 @@
               }
             }
 
-            @if (
-              isSyndicOrOwner() &&
-              !pollIsAta(p) &&
-              p.status === 'decided' &&
-              decidedQuestionsSummary(p).length > 0
-            ) {
+            @if (isSyndicOrOwner() && !pollIsAta(p) && p.status === 'decided') {
               <section
                 class="plan-detail__panel plan-detail__panel--accent plan-detail__section"
                 aria-labelledby="plan-detail-decision-heading"
               >
                 <h3 class="plan-subtitle" id="plan-detail-decision-heading">Decisões</h3>
-                <ul class="plan-decision-list">
-                  @for (line of decidedQuestionsSummary(p); track line) {
-                    <li>{{ line }}</li>
-                  }
-                </ul>
+                @if (decidedQuestionsSummary(p).length > 0) {
+                  <ul class="plan-decision-list">
+                    @for (line of decidedQuestionsSummary(p); track line) {
+                      <li>{{ line }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="muted plan-hint-tight">
+                    Decisão registada nesta pauta.
+                  </p>
+                }
               </section>
             }
 
@@ -1104,7 +1362,8 @@
                     Como titular ou síndico, pode votar pela sua unidade ou por qualquer
                     outra, a qualquer momento (não está limitado às datas «Abre em» /
                     «Encerra em» acima), enquanto a pauta estiver em rascunho, aberta ou
-                    encerrada — até à decisão final.
+                    encerrada — até à decisão final. Após encerrar, use «Abstenção» por
+                    deliberação para unidades que não votaram ou se abstiveram.
                   } @else {
                     Escolha a unidade, revise os votos já registados e complete ou altere
                     deliberações em falta.
@@ -1166,6 +1425,23 @@
                             <span class="plan-choice-card__label">{{ o.label }}</span>
                           </button>
                         }
+                        @if (canRegisterAbstention(p)) {
+                          <button
+                            type="button"
+                            class="plan-choice-card plan-choice-card--abstain"
+                            [class.plan-choice-card--on]="
+                              voteUnitId() && isUnitAbstainedOnQuestion(voteUnitId(), q.id)
+                            "
+                            [disabled]="!voteUnitId() || busy()"
+                            (click)="registerAbstention(p, q.id)"
+                          >
+                            <span
+                              class="plan-choice-card__check"
+                              aria-hidden="true"
+                            ></span>
+                            <span class="plan-choice-card__label">Abstenção</span>
+                          </button>
+                        }
                       </div>
                     </div>
                   }
@@ -1177,25 +1453,50 @@
               </section>
             }
 
-            @if (!pollIsAta(p) && results(); as r) {
+            @if (canViewResultsPanel(p)) {
               <section
                 class="plan-detail__panel plan-detail__section"
                 aria-labelledby="plan-detail-results-heading"
               >
               <div class="plan-results">
                 <h3 class="plan-subtitle" id="plan-detail-results-heading">Resultados</h3>
-                @if (!r.questions?.length) {
+                @if (resultsLoading()) {
+                  <p class="muted plan-results__empty">A carregar resultados…</p>
+                } @else if (resultsError()) {
+                  <p class="plan-results__empty plan-results__empty--error">{{ resultsError() }}</p>
+                  <button
+                    type="button"
+                    class="btn ghost sm"
+                    (click)="retryLoadResults()"
+                  >
+                    Tentar novamente
+                  </button>
+                } @else if (results()) {
+                @if (!results()!.questions.length) {
                   <p class="muted plan-results__empty">
                     Sem votação por opções nesta pauta.
                   </p>
                 } @else {
+                  @if (canShowQuorumAndAbstentions(p)) {
+                    @if (pollQuorumSummary(results()!); as quorumLine) {
+                      <p class="plan-results__quorum">{{ quorumLine }}</p>
+                    }
+                    <p class="plan-results__abstentions-summary muted">
+                      {{ pollAbstentionsSummary(results()!) }}
+                    </p>
+                  }
                   <p class="plan-results__summary muted">
-                    {{ r.unitsVoted }} unidade(s) votaram ·
-                    {{ r.totalOptionSelections }} marcações no total
+                    {{ results()!.unitsVoted }} unidade(s) votaram ·
+                    {{ results()!.totalOptionSelections }} marcações no total
                   </p>
-                  @for (qr of r.questions; track qr.questionId) {
+                  @for (qr of results()!.questions; track qr.questionId) {
                     <div class="plan-results-question">
                       <h4 class="plan-results-question__title">{{ qr.title }}</h4>
+                      @if (canShowQuorumAndAbstentions(p)) {
+                        @if (questionQuorumSummary(qr, results()!.totalUnits); as qQuorum) {
+                          <p class="plan-results-question__quorum muted">{{ qQuorum }}</p>
+                        }
+                      }
                       <ul class="plan-result-bars">
                         @for (o of qr.options; track o.id) {
                           <li class="plan-result-row">
@@ -1211,30 +1512,28 @@
                             </div>
                           </li>
                         }
+                        @if (canShowQuorumAndAbstentions(p)) {
+                          <li class="plan-result-row plan-result-row--abstain">
+                            <div class="plan-result-row__top">
+                              <span class="plan-result-row__label">Abstenções (sem voto)</span>
+                              <span class="plan-result-row__n">{{ qr.abstentions ?? 0 }}</span>
+                            </div>
+                            <div class="plan-result-bar" aria-hidden="true">
+                              <div
+                                class="plan-result-bar__fill plan-result-bar__fill--abstain"
+                                [style.width.%]="abstentionBarPercent(qr.abstentions ?? 0, qr.options)"
+                              ></div>
+                            </div>
+                          </li>
+                        }
                       </ul>
                     </div>
                   }
                 }
-                @if (isMgmt() && r.votesByUnit && r.votesByUnit.length > 0) {
-                  <div class="plan-results-by-unit">
-                    <h4 class="plan-results-by-unit__title">Voto por unidade</h4>
-                    <p class="plan-results-by-unit__hint muted">
-                      Cada unidade tem no máximo um registro de voto; votar novamente substitui o anterior.
-                    </p>
-                    <ul class="plan-results-by-unit__list">
-                      @for (row of r.votesByUnit; track row.unitId) {
-                        <li class="plan-results-by-unit__row">
-                          <span class="plan-results-by-unit__unit">{{
-                            row.identifier
-                          }}</span>
-                          <span class="plan-results-by-unit__choices">{{
-                            formatUnitVoteChoices(row)
-                          }}</span>
-                        </li>
-                      }
-                    </ul>
-                  </div>
                 }
+                <ng-container
+                  *ngTemplateOutlet="syndicVotesDetail; context: { poll: p }"
+                />
               </div>
               </section>
             }
@@ -1303,16 +1602,14 @@
                 }
                 @if (p.status === 'closed' && !pollIsAta(p)) {
                   @for (q of pollQuestions(p); track q.id) {
-                    <form
-                      class="plan-decide"
-                      (ngSubmit)="decideQuestion(p, q.id)"
-                    >
+                    <div class="plan-decide">
                       <label class="field field--grow">
                         <span class="field__label">Decisão: {{ q.title }}</span>
                         <select
                           class="input"
-                          [value]="decideOptionFor(q.id)"
-                          (change)="setDecideOption(q.id, $any($event.target).value)"
+                          [ngModel]="decideOptionFor(q.id)"
+                          (ngModelChange)="setDecideOption(q.id, $event)"
+                          [ngModelOptions]="{ standalone: true }"
                         >
                           <option value="">—</option>
                           @for (o of q.options ?? []; track o.id) {
@@ -1320,10 +1617,15 @@
                           }
                         </select>
                       </label>
-                      <button type="submit" class="btn primary" [disabled]="busy()">
+                      <button
+                        type="button"
+                        class="btn primary"
+                        [disabled]="busy()"
+                        (click)="decideQuestion(p, q.id)"
+                      >
                         Registrar decisão
                       </button>
-                    </form>
+                    </div>
                   }
                 }
                 @if (p.status === 'closed') {
@@ -1534,6 +1836,16 @@
                 >
                   Salvar ata
                 </button>
+                @if (minutesDraftHasContent(p)) {
+                  <button
+                    type="button"
+                    class="btn ghost"
+                    [disabled]="busy() || meetingMinutesAiLoading()"
+                    (click)="clearMinutesBodyDraft(p)"
+                  >
+                    Limpar rascunho
+                  </button>
+                }
                 <button
                   type="button"
                   class="btn ghost"
@@ -1577,80 +1889,12 @@
                   [formGroup]="minutesEditForm"
                   (ngSubmit)="saveMinutesBody(p)"
                 >
-                  <div
-                    class="plan-meeting-ai"
-                    [class.plan-meeting-ai--busy]="meetingMinutesAiLoading() || meetingNotesSaving()"
-                  >
-                    @if (meetingMinutesAiLoading()) {
-                      <p class="plan-meeting-ai__busy muted" aria-live="polite">
-                        Gerando ata com IA a partir de todas as anotações e do contexto da pauta…
-                      </p>
-                    } @else if (meetingNotesSaving()) {
-                      <p class="plan-meeting-ai__busy muted" aria-live="polite">
-                        Salvando anotação…
-                      </p>
-                    }
-                    <label class="field field--block">
-                      <span class="field__label">Anotações da reunião</span>
-                      <textarea
-                        class="input plan-meeting-ai__input"
-                        rows="4"
-                        placeholder="Registre ocorrências, deliberações e observações. Clique em «Salvar anotação» — a ata final será gerada depois com IA."
-                        [formControl]="meetingNotesControl"
-                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
-                      ></textarea>
-                    </label>
-                    <div class="plan-meeting-ai__actions">
-                      <button
-                        type="button"
-                        class="btn secondary sm"
-                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
-                        (click)="saveMeetingAnnotation(p)"
-                      >
-                        Salvar anotação
-                      </button>
-                      <button
-                        type="button"
-                        class="btn primary sm"
-                        [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
-                        (click)="generateMeetingMinutesWithAi(p)"
-                      >
-                        Gerar / regerar ata com IA
-                      </button>
-                      @if (lastMeetingMinutesGeneratedAt() !== null) {
-                        <span class="plan-meeting-ai__merged muted">
-                          Última geração: {{ meetingMinutesGeneratedTimeLabel() }}
-                        </span>
-                      }
-                    </div>
-                    @if (meetingNotes().length > 0) {
-                      <details class="plan-meeting-ai__history" open>
-                        <summary class="plan-meeting-ai__history-summary">
-                          Anotações salvas ({{ meetingNotes().length }})
-                        </summary>
-                        <ul class="plan-meeting-ai__history-list" role="list">
-                          @for (entry of meetingNotes(); track entry.id) {
-                            <li class="plan-meeting-ai__history-item">
-                              <div class="plan-meeting-ai__history-meta">
-                                <time [attr.datetime]="entry.createdAt">
-                                  {{ meetingNoteTimeLabel(entry.createdAt) }}
-                                </time>
-                              </div>
-                              <p class="plan-meeting-ai__history-text">{{ entry.text }}</p>
-                              <button
-                                type="button"
-                                class="btn ghost sm plan-meeting-ai__history-reuse"
-                                [disabled]="meetingMinutesAiLoading() || meetingNotesSaving() || busy()"
-                                (click)="reuseMeetingPrompt(entry.text)"
-                              >
-                                Reutilizar no assistente
-                              </button>
-                            </li>
-                          }
-                        </ul>
-                      </details>
-                    }
-                  </div>
+                  <ng-container
+                    *ngTemplateOutlet="
+                      meetingNotesPanel;
+                      context: { poll: p, includeGenerateAta: true }
+                    "
+                  />
 
                   <h3 class="plan-meeting-fs__section-title">Ata final (rascunho)</h3>
                   <p class="form-section__hint muted plan-hint-tight">
@@ -1662,6 +1906,16 @@
                     <button type="submit" class="btn primary sm" [disabled]="busy()">
                       Salvar ata no servidor
                     </button>
+                    @if (minutesDraftHasContent(p)) {
+                      <button
+                        type="button"
+                        class="btn ghost sm"
+                        [disabled]="busy() || meetingMinutesAiLoading()"
+                        (click)="clearMinutesBodyDraft(p)"
+                      >
+                        Limpar rascunho
+                      </button>
+                    }
                   </div>
                 </form>
               </div>
@@ -1756,6 +2010,23 @@
                                 <span class="plan-choice-card__label">{{ o.label }}</span>
                               </button>
                             }
+                            @if (canRegisterAbstention(p)) {
+                              <button
+                                type="button"
+                                class="plan-choice-card plan-choice-card--abstain"
+                                [class.plan-choice-card--on]="
+                                  voteUnitId() && isUnitAbstainedOnQuestion(voteUnitId(), q.id)
+                                "
+                                [disabled]="!voteUnitId() || busy()"
+                                (click)="registerAbstention(p, q.id)"
+                              >
+                                <span
+                                  class="plan-choice-card__check"
+                                  aria-hidden="true"
+                                ></span>
+                                <span class="plan-choice-card__label">Abstenção</span>
+                              </button>
+                            }
                           </div>
                         </div>
                       }
@@ -1774,16 +2045,14 @@
                   <section class="plan-meeting-fs__panel">
                     <h3 class="plan-meeting-fs__section-title">Registrar decisões</h3>
                     @for (q of pollQuestions(p); track q.id) {
-                      <form
-                        class="plan-decide"
-                        (ngSubmit)="decideQuestion(p, q.id)"
-                      >
+                      <div class="plan-decide">
                         <label class="field field--grow">
                           <span class="field__label">{{ q.title }}</span>
                           <select
                             class="input"
-                            [value]="decideOptionFor(q.id)"
-                            (change)="setDecideOption(q.id, $any($event.target).value)"
+                            [ngModel]="decideOptionFor(q.id)"
+                            (ngModelChange)="setDecideOption(q.id, $event)"
+                            [ngModelOptions]="{ standalone: true }"
                           >
                             <option value="">—</option>
                             @for (o of q.options ?? []; track o.id) {
@@ -1791,24 +2060,50 @@
                             }
                           </select>
                         </label>
-                        <button type="submit" class="btn primary" [disabled]="busy()">
+                        <button
+                          type="button"
+                          class="btn primary"
+                          [disabled]="busy()"
+                          (click)="decideQuestion(p, q.id)"
+                        >
                           Registrar
                         </button>
-                      </form>
+                      </div>
                     }
                   </section>
                 }
 
-                @if (!pollIsAta(p) && results(); as r) {
+                @if (canViewResultsPanel(p)) {
                   <section class="plan-meeting-fs__panel">
                     <h3 class="plan-meeting-fs__section-title">Resultados</h3>
+                    @if (resultsLoading()) {
+                      <p class="muted">A carregar resultados…</p>
+                    } @else if (resultsError()) {
+                      <p class="plan-results__empty plan-results__empty--error">{{ resultsError() }}</p>
+                      <button type="button" class="btn ghost sm" (click)="retryLoadResults()">
+                        Tentar novamente
+                      </button>
+                    } @else if (results()) {
+                    @if (canShowQuorumAndAbstentions(p)) {
+                      @if (pollQuorumSummary(results()!); as quorumLine) {
+                        <p class="plan-results__quorum">{{ quorumLine }}</p>
+                      }
+                      <p class="plan-results__abstentions-summary muted">
+                        {{ pollAbstentionsSummary(results()!) }}
+                      </p>
+                    }
                     <p class="muted plan-meeting-fs__results-meta">
-                      {{ r.unitsVoted }} unidade(s) ·
-                      {{ r.totalOptionSelections }} marcações
+                      {{ results()!.unitsVoted }} unidade(s) ·
+                      {{ results()!.totalOptionSelections }} marcações
                     </p>
-                    @for (qr of r.questions ?? []; track qr.questionId) {
+                    @for (qr of results()!.questions; track qr.questionId) {
                       <div class="plan-results-question">
                         <h4 class="plan-results-question__title">{{ qr.title }}</h4>
+                        @if (canShowQuorumAndAbstentions(p)) {
+                          @if (questionQuorumSummary(qr, results()!.totalUnits); as qQuorum) {
+                            <p class="plan-results-question__quorum muted">{{ qQuorum }}</p>
+                          }
+                        }
                         <ul class="plan-result-bars">
                           @for (o of qr.options; track o.id) {
                             <li class="plan-result-row">
@@ -1824,9 +2119,27 @@
                               </div>
                             </li>
                           }
+                          @if (canShowQuorumAndAbstentions(p)) {
+                            <li class="plan-result-row plan-result-row--abstain">
+                              <div class="plan-result-row__top">
+                                <span class="plan-result-row__label">Abstenções (sem voto)</span>
+                                <span class="plan-result-row__n">{{ qr.abstentions ?? 0 }}</span>
+                              </div>
+                              <div class="plan-result-bar" aria-hidden="true">
+                                <div
+                                  class="plan-result-bar__fill plan-result-bar__fill--abstain"
+                                  [style.width.%]="abstentionBarPercent(qr.abstentions ?? 0, qr.options)"
+                                ></div>
+                              </div>
+                            </li>
+                          }
                         </ul>
                       </div>
                     }
+                    }
+                    <ng-container
+                      *ngTemplateOutlet="syndicVotesDetail; context: { poll: p }"
+                    />
                   </section>
                 }
 
