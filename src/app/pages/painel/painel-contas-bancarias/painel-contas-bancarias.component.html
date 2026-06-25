@@ -98,16 +98,10 @@
               </label>
               <label class="field field--block">
                 <span class="field__label">Saldo inicial (R$)</span>
-                <div class="input-money">
-                  <span class="input-money__prefix" aria-hidden="true">R$</span>
-                  <input
-                    type="text"
-                    class="input input--money"
-                    formControlName="initialBalanceReais"
-                    inputmode="decimal"
-                    placeholder="0,00"
-                  />
-                </div>
+                <app-br-money-field
+                  formControlName="initialBalanceReais"
+                  [allowNegative]="true"
+                />
               </label>
             </div>
             <p class="form-section__inline-hint form-section__inline-hint--after-grid">

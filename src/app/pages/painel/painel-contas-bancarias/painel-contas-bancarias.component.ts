@@ -34,8 +34,9 @@ import { formatDateDdMmYyyy, todayLocalIsoDate } from '../../../core/date-displa
 import {
   centsToReaisInput,
   formatCentsBrl,
-  reaisToCents,
+  parseSignedReaisInputToCents,
 } from '../../../core/money-brl';
+import { BrMoneyFieldComponent } from '../../../core/br-money-field.component';
 
 @Component({
   selector: 'app-painel-contas-bancarias',
@@ -44,6 +45,7 @@ import {
     ReactiveFormsModule,
     BankSelectFieldComponent,
     BankBrandMarkComponent,
+    BrMoneyFieldComponent,
   ],
   templateUrl: './painel-contas-bancarias.component.html',
   styleUrl: './painel-contas-bancarias.component.scss',
@@ -151,8 +153,10 @@ export class PainelContasBancariasComponent implements OnInit {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(initialBalanceOn)) {
       return null;
     }
-    const reais = parseFloat(String(raw.initialBalanceReais).replace(',', '.'));
-    if (!Number.isFinite(reais)) {
+    const initialBalanceCents = parseSignedReaisInputToCents(
+      String(raw.initialBalanceReais),
+    );
+    if (initialBalanceCents === null) {
       return null;
     }
     const params: {
@@ -160,7 +164,7 @@ export class PainelContasBancariasComponent implements OnInit {
       initialBalanceCents: number;
       initialBalanceOn: string;
     } = {
-      initialBalanceCents: reaisToCents(reais),
+      initialBalanceCents,
       initialBalanceOn,
     };
     const editId = this.editingId();
@@ -296,12 +300,13 @@ export class PainelContasBancariasComponent implements OnInit {
       return;
     }
     const raw = this.form.getRawValue();
-    const reais = parseFloat(String(raw.initialBalanceReais).replace(',', '.'));
-    if (!Number.isFinite(reais)) {
+    const initialBalanceCents = parseSignedReaisInputToCents(
+      String(raw.initialBalanceReais),
+    );
+    if (initialBalanceCents === null) {
       this.flash.warning('Saldo inicial inválido.');
       return;
     }
-    const initialBalanceCents = reaisToCents(reais);
     const initialBalanceOn = raw.initialBalanceOn.trim().slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(initialBalanceOn)) {
       this.flash.warning('Indique a data de referência do saldo inicial.');

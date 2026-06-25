@@ -29,8 +29,9 @@ import {
 import {
   centsToReaisInput,
   formatCentsBrl,
-  reaisToCents,
+  parseReaisInputToCents,
 } from '../../../core/money-brl';
+import { BrMoneyFieldComponent } from '../../../core/br-money-field.component';
 
 type ExtratoRow = {
   id: string;
@@ -61,7 +62,7 @@ function addMonthsYm(ym: string, add: number): string {
 
 @Component({
   selector: 'app-painel-fundos',
-  imports: [NgClass, ReactiveFormsModule],
+  imports: [NgClass, ReactiveFormsModule, BrMoneyFieldComponent],
   templateUrl: './painel-fundos.component.html',
   styleUrl: './painel-fundos.component.scss',
 })
@@ -366,19 +367,18 @@ export class PainelFundosComponent implements OnInit {
     if (v.isPermanent || this.parcelEntryMode() !== 'byInstallments') {
       return null;
     }
-    const total = parseFloat(String(v.termTotalPerUnitReais).replace(',', '.'));
+    const totalCents = parseReaisInputToCents(v.termTotalPerUnitReais);
     const n = parseInt(String(v.termInstallmentCount), 10);
     const start = v.termFirstMonthYm?.trim() ?? '';
     if (
-      !Number.isFinite(total) ||
-      total <= 0 ||
+      totalCents === null ||
+      totalCents < 1 ||
       !Number.isFinite(n) ||
       n < 1 ||
       !/^\d{4}-(0[1-9]|1[0-2])$/.test(start)
     ) {
       return null;
     }
-    const totalCents = reaisToCents(total);
     const monthly = Math.floor(totalCents / n);
     if (monthly < 1) {
       return null;
@@ -428,17 +428,12 @@ export class PainelFundosComponent implements OnInit {
     if (paying < 1) {
       return null;
     }
-    const obra = parseFloat(String(v.obraTotalReais).replace(',', '.'));
-    const desired = parseFloat(String(v.obraDesiredMonthlyReais).replace(',', '.'));
-    if (!Number.isFinite(obra) || obra <= 0) {
+    const obraCents = parseReaisInputToCents(v.obraTotalReais);
+    const desiredCents = parseReaisInputToCents(v.obraDesiredMonthlyReais);
+    if (obraCents === null || obraCents < 1) {
       return null;
     }
-    if (!Number.isFinite(desired) || desired <= 0) {
-      return null;
-    }
-    const obraCents = reaisToCents(obra);
-    const desiredCents = reaisToCents(desired);
-    if (obraCents < 1 || desiredCents < 1) {
+    if (desiredCents === null || desiredCents < 1) {
       return null;
     }
     const totalPerUnitCents = Math.round(obraCents / paying);
@@ -474,14 +469,9 @@ export class PainelFundosComponent implements OnInit {
     const isPermanent = v.isPermanent;
 
     if (isPermanent) {
-      const r = parseFloat(String(v.permanentMonthlyReais).replace(',', '.'));
-      if (!Number.isFinite(r) || r <= 0) {
+      const cents = parseReaisInputToCents(v.permanentMonthlyReais);
+      if (cents === null || cents < 1) {
         this.flash.warning('Indique o débito mensal (R$) para o fundo permanente.');
-        return;
-      }
-      const cents = reaisToCents(r);
-      if (cents < 1) {
-        this.flash.warning('Valor mensal demasiado baixo.');
         return;
       }
       const body = {
@@ -509,30 +499,18 @@ export class PainelFundosComponent implements OnInit {
         );
         return;
       }
-      const obraTotal = parseFloat(String(v.obraTotalReais).replace(',', '.'));
-      if (!Number.isFinite(obraTotal) || obraTotal <= 0) {
+      const obraCents = parseReaisInputToCents(v.obraTotalReais);
+      if (obraCents === null || obraCents < 1) {
         this.flash.warning('Indique o valor total da obra (R$).');
         return;
       }
-      const desiredMonthly = parseFloat(
-        String(v.obraDesiredMonthlyReais).replace(',', '.'),
-      );
-      if (!Number.isFinite(desiredMonthly) || desiredMonthly <= 0) {
+      const desiredCents = parseReaisInputToCents(v.obraDesiredMonthlyReais);
+      if (desiredCents === null || desiredCents < 1) {
         this.flash.warning('Indique a mensalidade desejada por unidade (R$).');
         return;
       }
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(start)) {
         this.flash.warning('Indique o mês/ano da primeira mensalidade.');
-        return;
-      }
-      const obraCents = reaisToCents(obraTotal);
-      const desiredCents = reaisToCents(desiredMonthly);
-      if (obraCents < 1) {
-        this.flash.warning('Valor total da obra demasiado baixo.');
-        return;
-      }
-      if (desiredCents < 1) {
-        this.flash.warning('Mensalidade desejada demasiado baixa.');
         return;
       }
       const totalPerUnitCents = Math.round(obraCents / paying);
@@ -575,9 +553,9 @@ export class PainelFundosComponent implements OnInit {
       return;
     }
 
-    const total = parseFloat(String(v.termTotalPerUnitReais).replace(',', '.'));
+    const totalCents = parseReaisInputToCents(v.termTotalPerUnitReais);
     const n = parseInt(String(v.termInstallmentCount), 10);
-    if (!Number.isFinite(total) || total <= 0) {
+    if (totalCents === null || totalCents < 1) {
       this.flash.warning('Indique o total por unidade a arrecadar (R$).');
       return;
     }
@@ -589,7 +567,6 @@ export class PainelFundosComponent implements OnInit {
       this.flash.warning('Indique o mês/ano da primeira mensalidade.');
       return;
     }
-    const totalCents = reaisToCents(total);
     if (Math.floor(totalCents / n) < 1) {
       this.flash.warning(
         'O total por unidade é baixo demais para o número de parcelas.',

@@ -19,14 +19,18 @@ export type TxCreateDraft = {
   transferToFundId: string;
   recurringMode: 'by_installment' | 'by_total';
   recurringCount: number;
-  recurringInstallmentReais: number;
-  recurringTotalReais: number;
-  amountReais: number;
+  recurringInstallmentReais: string;
+  recurringTotalReais: string;
+  amountReais: string;
   occurredOn: string;
   titleTx: string;
   descriptionTx: string;
   fundIdForm: string;
   bankAccountIdForm: string;
+  supplierIdForm?: string;
+  supplierNameForm?: string;
+  supplierPixKeyTypeForm?: string;
+  supplierPixKeyValueForm?: string;
   allocKind: TxCreateDraftAllocKind;
   selectedUnitIds: string[];
   selectedGroupingIds: string[];
@@ -87,13 +91,24 @@ export function txCreateDraftHasContent(draft: TxCreateDraft): boolean {
   if (draft.titleTx.trim() || draft.descriptionTx.trim()) {
     return true;
   }
-  if (draft.amountReais > 0) {
+  if (draft.amountReais.trim()) {
     return true;
   }
-  if (draft.recurringInstallmentReais > 0 || draft.recurringTotalReais > 0) {
+  if (
+    draft.recurringInstallmentReais.trim() ||
+    draft.recurringTotalReais.trim()
+  ) {
     return true;
   }
   if (draft.fundIdForm.trim() || draft.bankAccountIdForm.trim()) {
+    return true;
+  }
+  if (
+    (draft.supplierIdForm ?? '').trim() ||
+    (draft.supplierNameForm ?? '').trim() ||
+    (draft.supplierPixKeyTypeForm ?? '').trim() ||
+    (draft.supplierPixKeyValueForm ?? '').trim()
+  ) {
     return true;
   }
   if (draft.allocKind !== 'all_units_equal') {

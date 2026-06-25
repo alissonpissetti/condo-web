@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
+import type { AllocationRule } from './financial-api.service';
 import { sortSupplierCategories } from './supplier-category-display';
 import type { Supplier } from './suppliers-api.service';
 
@@ -115,6 +116,7 @@ export interface WorkBudget {
   id: string;
   supplierId: string | null;
   supplierName: string;
+  title: string | null;
   amountCents: number;
   validUntil: string | null;
   scheduledAt: string | null;
@@ -144,6 +146,8 @@ export interface WorkListItem {
   status: WorkStatus;
   /** Ordem na fila de execução (planejada / em andamento). */
   queueOrder: number;
+  /** Critério de rateio para transações vinculadas à obra. */
+  allocationRule: AllocationRule;
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string | null;
@@ -186,11 +190,13 @@ export interface UpdateWorkBody {
   title?: string;
   description?: string | null;
   status?: WorkStatus;
+  allocationRule?: AllocationRule;
 }
 
 export interface CreateWorkBudgetBody {
   supplierId?: string;
   supplierName?: string;
+  title?: string;
   amountCents?: number;
   validUntil?: string;
   scheduledAt?: string;
@@ -202,6 +208,7 @@ export interface CreateWorkBudgetBody {
 export interface UpdateWorkBudgetBody {
   supplierId?: string | null;
   supplierName?: string;
+  title?: string | null;
   amountCents?: number;
   validUntil?: string | null;
   scheduledAt?: string | null;
@@ -215,7 +222,9 @@ export interface UpdateTimelineEntryBody {
   amountCents?: number;
   supplierId?: string | null;
   supplierName?: string;
+  title?: string | null;
   scheduledAt?: string | null;
+  status?: WorkBudgetStatus;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -414,6 +423,9 @@ export class CondominiumWorksApiService {
     if (payload.supplierName?.trim()) {
       fd.append('supplierName', payload.supplierName.trim());
     }
+    if (payload.title?.trim()) {
+      fd.append('title', payload.title.trim());
+    }
     if (payload.amountCents !== undefined) {
       fd.append('amountCents', String(payload.amountCents));
     }
@@ -466,6 +478,17 @@ export class CondominiumWorksApiService {
     return this.http.post<WorkTimelineEntry>(
       `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}/attachments`,
       fd,
+    );
+  }
+
+  removeTimelineAttachment(
+    condominiumId: string,
+    workId: string,
+    entryId: string,
+    attachmentId: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}/attachments/${attachmentId}`,
     );
   }
 

@@ -447,6 +447,21 @@
   }
 }
 
+.obras-transaction-form {
+  .form-section {
+    padding: 0.5rem 0 0;
+    border-bottom: none;
+  }
+
+  .form-section__head {
+    margin-bottom: 0.55rem;
+  }
+
+  .field__label {
+    font-size: 0.82rem;
+  }
+}
+
 .obras-recorded-on-hint {
   margin: 0.35rem 0 0;
   padding: 0.4rem 0.55rem;
@@ -1599,6 +1614,22 @@
   padding: 0.1rem 0 0.05rem;
 }
 
+.obras-tl__edit-attachments {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.obras-tl__edit-att-empty {
+  margin: 0;
+}
+
+.obras-tl__edit-att-add {
+  margin-top: 0.15rem;
+}
+
 .obras-tl__edit-inline {
   display: flex;
   flex-wrap: nowrap;
@@ -1642,6 +1673,12 @@
     max-width: 14rem;
   }
 
+  &--title {
+    flex: 1 1 8rem;
+    min-width: 6rem;
+    max-width: 12rem;
+  }
+
   &--supplier-name {
     flex: 1 1 8rem;
     min-width: 6rem;
@@ -1655,6 +1692,11 @@
     .input-money {
       width: 100%;
     }
+  }
+
+  &--status {
+    flex: 0 0 auto;
+    width: min(9.5rem, 100%);
   }
 
   &.field--money {
@@ -1853,4 +1895,82 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.obras-alloc-modal {
+  width: min(100%, 40rem);
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 720px);
+  overflow: hidden;
+}
+
+.obras-alloc-modal__lede {
+  margin: 0.35rem 0 0;
+}
+
+.obras-alloc-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* —— Manutenções: formulário compacto em duas colunas —— */
+.manut-form {
+  padding: 0.35rem 0 0.15rem;
+}
+
+.manut-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+  align-items: start;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.manut-form__span-2 {
+  grid-column: 1 / -1;
+}
+
+.manut-form__supplier-name {
+  margin-top: 0.35rem;
+}
+
+.manut-form__pix-pair {
+  margin-top: 0.35rem;
+}
+
+.manut-form__actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.85rem;
+  padding-top: 0.15rem;
+}
+
+.obras-work-progress--manut {
+  margin-bottom: 0.85rem;
+
+  .obras-work-progress__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 520px) {
+    .obras-work-progress__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+.manut-costs-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }

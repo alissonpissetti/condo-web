@@ -373,6 +373,13 @@
                   <button
                     type="button"
                     class="btn btn--ghost sm"
+                    (click)="openAllocationModal()"
+                  >
+                    Rateio · {{ workAllocationSummary() }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost sm"
                     (click)="toggleEditingWork()"
                   >
                     {{ editingWork() ? 'Fechar edição' : 'Editar dados da obra' }}
@@ -483,8 +490,9 @@
                 @if (registerExpanded()) {
                   <div id="obras-register-panel" class="plan-create-panel">
                     <p class="form-card__lede plan-create-panel__lede">
-                      Comentário, jurídico (contrato assinado) ou orçamento. O rascunho
-                      fica salvo no navegador até publicar na linha do tempo.
+                      Comentário, jurídico, orçamento ou transação financeira vinculada a
+                      esta obra. O rascunho fica salvo no navegador até publicar na linha
+                      do tempo.
                     </p>
                     <div class="obras-register">
                 <div
@@ -522,6 +530,20 @@
                   >
                     Jurídico
                   </button>
+                  @if (canRegisterTransaction()) {
+                    <button
+                      type="button"
+                      role="tab"
+                      class="obras-register__type-btn"
+                      [attr.aria-selected]="registerTab() === 'transaction'"
+                      [class.obras-register__type-btn--active]="
+                        registerTab() === 'transaction'
+                      "
+                      (click)="setRegisterTab('transaction')"
+                    >
+                      Transação
+                    </button>
+                  }
                 </div>
 
                 <div class="obras-register__panel">
@@ -848,6 +870,34 @@
                               formControlName="supplierName"
                               placeholder="Nome da empresa"
                             />
+                            <div class="plan-create-pair supplier-pix-pair">
+                              <label class="field field--block">
+                                <span class="field__label">Tipo de chave PIX (opcional)</span>
+                                <select
+                                  class="input plan-create-pair__control"
+                                  formControlName="supplierPixKeyType"
+                                >
+                                  <option value="">Não informar PIX</option>
+                                  @for (opt of supplierPixTypeOptions; track opt.value) {
+                                    <option [value]="opt.value">{{ opt.label }}</option>
+                                  }
+                                </select>
+                              </label>
+                              <label class="field field--block">
+                                <span class="field__label">Chave PIX</span>
+                                <input
+                                  type="text"
+                                  class="input plan-create-pair__control"
+                                  formControlName="supplierPixKeyValue"
+                                  maxlength="255"
+                                  placeholder="Valor da chave"
+                                />
+                              </label>
+                            </div>
+                            <p class="muted small form-section__inline-hint">
+                              O fornecedor é salvo no cadastro (categoria «Outros») e vinculado a
+                              este orçamento. Se o nome já existir, reutilizamos o cadastro.
+                            </p>
                           } @else if (selectedBudgetSupplier()) {
                             <p class="muted small form-section__inline-hint">
                               {{ budgetSupplierContactHint() }}
@@ -863,6 +913,17 @@
                               >Gerenciar fornecedores</a
                             >
                           </p>
+                        </label>
+                        <label class="field field--block obras-register__pair-spaced">
+                          <span class="field__label">Referente a</span>
+                          <input
+                            type="text"
+                            class="input plan-create-pair__control"
+                            formControlName="title"
+                            maxlength="255"
+                            placeholder="Ex.: mão de obra, materiais, drenagem…"
+                          />
+                          <span class="field__hint muted">Opcional.</span>
                         </label>
                         @if (isBudgetScheduleMode()) {
                           <label class="field field--block obras-register__pair-spaced">
@@ -983,6 +1044,228 @@
                           } @else {
                             Registrar orçamento
                           }
+                        </button>
+                      </div>
+                    </form>
+                  }
+
+                  @if (canRegisterTransaction() && registerTab() === 'transaction') {
+                    <form
+                      class="obras-register__form fund-form obras-transaction-form"
+                      [formGroup]="transactionForm"
+                      (ngSubmit)="submitTransaction()"
+                    >
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <div>
+                            <h4 class="form-section__title">Despesa na obra</h4>
+                            <p class="form-section__hint">
+                              Cria uma despesa no financeiro e na linha do tempo.
+                              Para parcelar ou quitar com comprovante de pagamento, use
+                              <a
+                                [routerLink]="[
+                                  '/painel/condominio',
+                                  condominiumIdParam(),
+                                  'transacoes',
+                                ]"
+                                [queryParams]="{ workId: selected()!.id }"
+                                >Transações</a
+                              >.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div class="plan-create-pair">
+                          <label class="field field--block">
+                            <span class="field__label">Título</span>
+                            <input
+                              type="text"
+                              class="input plan-create-pair__control"
+                              formControlName="title"
+                              maxlength="255"
+                              placeholder="Ex.: Pagamento mão de obra"
+                            />
+                          </label>
+                          <label class="field field--block field--money">
+                            <span class="field__label">Valor (R$)</span>
+                            <div class="input-money">
+                              <span class="input-money__prefix" aria-hidden="true">R$</span>
+                              <input
+                                type="text"
+                                class="input plan-create-pair__control input--money"
+                                appBrMoneyMask
+                                formControlName="amountReais"
+                                placeholder="0,00"
+                              />
+                            </div>
+                          </label>
+                        </div>
+
+                        <div class="plan-create-pair obras-register__pair-spaced">
+                          <label class="field field--block">
+                            <span class="field__label">Data</span>
+                            <input
+                              type="date"
+                              class="input plan-create-pair__control"
+                              formControlName="occurredOn"
+                            />
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Fornecedor (opcional)</span>
+                            <select
+                              class="input plan-create-pair__control"
+                              formControlName="supplierId"
+                              (change)="
+                                onTransactionSupplierIdChange($any($event.target).value)
+                              "
+                            >
+                              <option value="">— Digitar nome manualmente —</option>
+                              @for (s of suppliers(); track s.id) {
+                                <option [value]="s.id">{{ supplierOptionLabel(s) }}</option>
+                              }
+                            </select>
+                            @if (!transactionForm.controls.supplierId.value) {
+                              <input
+                                type="text"
+                                class="input plan-create-pair__control"
+                                formControlName="supplierName"
+                                placeholder="Nome da empresa"
+                              />
+                              <div class="plan-create-pair supplier-pix-pair">
+                                <label class="field field--block">
+                                  <span class="field__label">Tipo de chave PIX (opcional)</span>
+                                  <select
+                                    class="input plan-create-pair__control"
+                                    formControlName="supplierPixKeyType"
+                                  >
+                                    <option value="">Não informar PIX</option>
+                                    @for (opt of supplierPixTypeOptions; track opt.value) {
+                                      <option [value]="opt.value">{{ opt.label }}</option>
+                                    }
+                                  </select>
+                                </label>
+                                <label class="field field--block">
+                                  <span class="field__label">Chave PIX</span>
+                                  <input
+                                    type="text"
+                                    class="input plan-create-pair__control"
+                                    formControlName="supplierPixKeyValue"
+                                    maxlength="255"
+                                    placeholder="Valor da chave"
+                                  />
+                                </label>
+                              </div>
+                              <p class="muted small form-section__inline-hint">
+                                O fornecedor é salvo no cadastro (categoria «Outros») e vinculado a
+                                esta despesa. Se o nome já existir, reutilizamos o cadastro.
+                              </p>
+                            } @else if (selectedTransactionSupplier()) {
+                              <p class="muted small form-section__inline-hint">
+                                {{ transactionSupplierContactHint() }}
+                              </p>
+                            }
+                          </label>
+                        </div>
+
+                        @if (activeBankAccounts().length === 0) {
+                          <p class="plan-banner plan-banner--warn obras-register__pair-spaced" role="status">
+                            Cadastre uma conta bancária em
+                            <a
+                              [routerLink]="[
+                                '/painel/condominio',
+                                condominiumIdParam(),
+                                'contas-bancarias',
+                              ]"
+                              >Contas bancárias</a
+                            >
+                            antes de lançar.
+                          </p>
+                        } @else {
+                          <div class="plan-create-pair obras-register__pair-spaced">
+                            <label class="field field--block">
+                              <span class="field__label">Conta bancária</span>
+                              <select class="input plan-create-pair__control" formControlName="bankAccountId">
+                                @for (a of activeBankAccounts(); track a.id) {
+                                  <option [value]="a.id">{{ bankAccountLabel(a) }}</option>
+                                }
+                              </select>
+                            </label>
+                            <label class="field field--block">
+                              <span class="field__label">Fundo (opcional)</span>
+                              <select class="input plan-create-pair__control" formControlName="fundId">
+                                <option value="">— Nenhum —</option>
+                                @for (f of funds(); track f.id) {
+                                  <option [value]="f.id">{{ f.name }}</option>
+                                }
+                              </select>
+                            </label>
+                          </div>
+                        }
+
+                        <label class="field field--block obras-register__pair-spaced">
+                          <span class="field__label">Descrição (opcional)</span>
+                          <textarea
+                            class="input"
+                            rows="2"
+                            formControlName="description"
+                          ></textarea>
+                        </label>
+
+                        <div class="receipt-field obras-register__pair-spaced">
+                          <span class="field__label">Anexos (opcional)</span>
+                          <input
+                            #transactionFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+                            [disabled]="busy()"
+                            (change)="onTransactionFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="transactionFileInput.click()"
+                            >
+                              Escolher arquivos…
+                            </button>
+                            <span class="receipt-field__name"
+                              >PDF, JPG, PNG ou WEBP — até 8 MB por arquivo.</span
+                            >
+                          </div>
+                          @if (transactionPendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Anexos selecionados">
+                              @for (f of transactionPendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeTransactionPendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="
+                            busy() ||
+                            transactionForm.invalid ||
+                            activeBankAccounts().length === 0
+                          "
+                        >
+                          {{ busy() ? 'Salvando…' : 'Registrar despesa' }}
                         </button>
                       </div>
                     </form>
@@ -1440,7 +1723,7 @@
                                         <h4 class="obras-tl__card-title">{{ title }}</h4>
                                       }
                                       <p class="obras-tl__card-meta">
-                                        {{ e.authorDisplayName }}
+                                        {{ timelineBudgetCardMeta(e) }}
                                       </p>
                                     </div>
                                   </header>
@@ -1501,6 +1784,26 @@
                                                 }
                                               </select>
                                             </label>
+                                            <label
+                                              class="obras-tl__edit-inline-field obras-tl__edit-inline-field--title"
+                                            >
+                                              <span class="obras-tl__edit-inline-label"
+                                                >Referente a</span
+                                              >
+                                              <input
+                                                type="text"
+                                                class="input"
+                                                [value]="timelineEditTitle()"
+                                                maxlength="255"
+                                                placeholder="Ex.: mão de obra"
+                                                [disabled]="busy()"
+                                                (input)="
+                                                  timelineEditTitle.set(
+                                                    $any($event.target).value
+                                                  )
+                                                "
+                                              />
+                                            </label>
                                             @if (!timelineEditSupplierId()) {
                                               <label
                                                 class="obras-tl__edit-inline-field obras-tl__edit-inline-field--supplier-name"
@@ -1516,6 +1819,53 @@
                                                   placeholder="Nome da empresa"
                                                   (input)="
                                                     timelineEditSupplierName.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                />
+                                              </label>
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--supplier-pix-type"
+                                              >
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Tipo PIX</span
+                                                >
+                                                <select
+                                                  class="input"
+                                                  [value]="timelineEditSupplierPixKeyType()"
+                                                  [disabled]="busy()"
+                                                  (change)="
+                                                    timelineEditSupplierPixKeyType.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                >
+                                                  <option value="">Não informar</option>
+                                                  @for (
+                                                    opt of supplierPixTypeOptions;
+                                                    track opt.value
+                                                  ) {
+                                                    <option [value]="opt.value">{{
+                                                      opt.label
+                                                    }}</option>
+                                                  }
+                                                </select>
+                                              </label>
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--supplier-pix-value"
+                                              >
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Chave PIX</span
+                                                >
+                                                <input
+                                                  type="text"
+                                                  class="input"
+                                                  [value]="timelineEditSupplierPixKeyValue()"
+                                                  [disabled]="busy()"
+                                                  maxlength="255"
+                                                  placeholder="Valor da chave"
+                                                  (input)="
+                                                    timelineEditSupplierPixKeyValue.set(
                                                       $any($event.target).value
                                                     )
                                                   "
@@ -1568,26 +1918,33 @@
                                                   />
                                                 </div>
                                               </label>
+                                              <label
+                                                class="obras-tl__edit-inline-field obras-tl__edit-inline-field--status"
+                                              >
+                                                <span class="obras-tl__edit-inline-label"
+                                                  >Status</span
+                                                >
+                                                <select
+                                                  class="input"
+                                                  [value]="timelineEditStatus()"
+                                                  [disabled]="busy()"
+                                                  (change)="
+                                                    timelineEditStatus.set(
+                                                      $any($event.target).value
+                                                    )
+                                                  "
+                                                >
+                                                  @for (
+                                                    s of timelineEditBudgetStatusOptions();
+                                                    track s
+                                                  ) {
+                                                    <option [value]="s">{{
+                                                      budgetStatusLabel(s)
+                                                    }}</option>
+                                                  }
+                                                </select>
+                                              </label>
                                             }
-                                            <div
-                                              class="obras-tl__edit-actions obras-tl__edit-actions--inline"
-                                            >
-                                              <button
-                                                type="button"
-                                                class="btn ghost sm"
-                                                [disabled]="busy()"
-                                                (click)="cancelEditTimelineEntry()"
-                                              >
-                                                Cancelar
-                                              </button>
-                                              <button
-                                                type="submit"
-                                                class="btn primary sm"
-                                                [disabled]="busy()"
-                                              >
-                                                Salvar
-                                              </button>
-                                            </div>
                                           </div>
                                         } @else {
                                           <div class="obras-tl__edit-inline">
@@ -1635,27 +1992,120 @@
                                                 />
                                               </label>
                                             }
-                                            <div
-                                              class="obras-tl__edit-actions obras-tl__edit-actions--inline"
+                                          </div>
+                                        }
+                                        @if (canEditTimelineAttachments(e)) {
+                                          <div class="obras-tl__edit-attachments">
+                                            <span class="obras-tl__edit-inline-label"
+                                              >Anexos</span
                                             >
-                                              <button
-                                                type="button"
-                                                class="btn ghost sm"
-                                                [disabled]="busy()"
-                                                (click)="cancelEditTimelineEntry()"
+                                            @if (
+                                              timelineEditRemainingAttachments(e).length > 0
+                                            ) {
+                                              <ul
+                                                class="obras-file-chips"
+                                                aria-label="Anexos do registro"
                                               >
-                                                Cancelar
-                                              </button>
-                                              <button
-                                                type="submit"
-                                                class="btn primary sm"
+                                                @for (
+                                                  att of timelineEditRemainingAttachments(e);
+                                                  track att.id
+                                                ) {
+                                                  <li class="obras-file-chips__item">
+                                                    <span class="obras-file-chips__name">{{
+                                                      att.originalFilename
+                                                    }}</span>
+                                                    <button
+                                                      type="button"
+                                                      class="btn btn--ghost sm"
+                                                      [disabled]="busy()"
+                                                      (click)="
+                                                        markTimelineEditAttachmentRemoved(
+                                                          att.id
+                                                        )
+                                                      "
+                                                    >
+                                                      Remover
+                                                    </button>
+                                                  </li>
+                                                }
+                                              </ul>
+                                            } @else {
+                                              <p class="muted small obras-tl__edit-att-empty">
+                                                Nenhum anexo neste registro.
+                                              </p>
+                                            }
+                                            <div class="receipt-field obras-tl__edit-att-add">
+                                              <input
+                                                #timelineEditFileInput
+                                                type="file"
+                                                class="receipt-field__input"
+                                                multiple
                                                 [disabled]="busy()"
-                                              >
-                                                Salvar
-                                              </button>
+                                                (change)="onTimelineEditFilesSelected($event)"
+                                              />
+                                              <div class="receipt-field__box">
+                                                <button
+                                                  type="button"
+                                                  class="btn btn--ghost sm"
+                                                  [disabled]="busy()"
+                                                  (click)="timelineEditFileInput.click()"
+                                                >
+                                                  Adicionar arquivos…
+                                                </button>
+                                                <span class="receipt-field__name"
+                                                  >PDF, imagens, vídeos — até 100 MB por
+                                                  arquivo.</span
+                                                >
+                                              </div>
+                                              @if (timelineEditPendingFiles().length > 0) {
+                                                <ul
+                                                  class="obras-file-chips"
+                                                  aria-label="Novos arquivos"
+                                                >
+                                                  @for (
+                                                    f of timelineEditPendingFiles();
+                                                    track $index
+                                                  ) {
+                                                    <li class="obras-file-chips__item">
+                                                      <span class="obras-file-chips__name">{{
+                                                        f.name
+                                                      }}</span>
+                                                      <button
+                                                        type="button"
+                                                        class="btn btn--ghost sm"
+                                                        [disabled]="busy()"
+                                                        (click)="
+                                                          removeTimelineEditPendingFile($index)
+                                                        "
+                                                      >
+                                                        Remover
+                                                      </button>
+                                                    </li>
+                                                  }
+                                                </ul>
+                                              }
                                             </div>
                                           </div>
                                         }
+                                        <div
+                                          class="obras-tl__edit-actions obras-tl__edit-actions--inline"
+                                        >
+                                          <button
+                                            type="button"
+                                            class="btn ghost sm"
+                                            [disabled]="busy()"
+                                            (click)="cancelEditTimelineEntry()"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            type="submit"
+                                            class="btn primary sm"
+                                            [disabled]="busy()"
+                                          >
+                                            Salvar
+                                          </button>
+                                        </div>
                                       </form>
                                     } @else {
                                       @if (e.kind === 'budget' && e.budget; as b) {
@@ -1832,10 +2282,27 @@
                                         }
                                       } @else if (e.body) {
                                         <p class="obras-tl__comment">{{ e.body }}</p>
+                                        @if (
+                                          e.kind === 'transaction' && e.financialTransactionId
+                                        ) {
+                                          <p class="obras-tl__tx-link muted small">
+                                            <a
+                                              [routerLink]="[
+                                                '/painel/condominio',
+                                                condominiumIdParam(),
+                                                'transacoes',
+                                              ]"
+                                              [queryParams]="{ workId: selected()!.id }"
+                                              >Ver em Transações</a
+                                            >
+                                          </p>
+                                        }
                                       }
                                     }
 
-                                    @if (attachmentCount(e) > 0) {
+                                    @if (
+                                      attachmentCount(e) > 0 && !isEditingTimelineEntry(e)
+                                    ) {
                                       <div class="obras-tl__media">
                                         <ul class="obras-tl__media-list">
                                           @for (att of e.attachments; track att.id) {
@@ -1907,6 +2374,143 @@
           </div>
         </section>
       }
+    </div>
+  }
+
+  @if (allocationModalOpen()) {
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="obras-alloc-modal-title"
+      (click)="closeAllocationModal()"
+    >
+      <div class="modal obras-alloc-modal" (click)="$event.stopPropagation()">
+        <header class="modal__head">
+          <div>
+            <h2 id="obras-alloc-modal-title">Rateio da obra</h2>
+            <p class="muted small obras-alloc-modal__lede">
+              Lançamentos vinculados a esta obra seguem este critério.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="modal__close"
+            aria-label="Fechar"
+            (click)="closeAllocationModal()"
+            [disabled]="allocationSaving()"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__body obras-alloc-modal__body">
+          <label class="field field--block">
+            <span class="field__label">Critério</span>
+            <select
+              class="input"
+              [value]="allocKind()"
+              (change)="onAllocKindChange($any($event.target).value)"
+            >
+              <option value="all_units_equal">Todas as unidades (partes iguais)</option>
+              <option value="unit_ids">Apenas unidades selecionadas</option>
+              <option value="grouping_ids">Apenas agrupamentos selecionados</option>
+              <option value="all_units_except">Todas exceto as selecionadas</option>
+            </select>
+          </label>
+
+          @if (allocKind() === 'unit_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades incluídas</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades neste condomínio.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInAllocInclude(u.id)"
+                        (change)="toggleAllocUnit(u.id, 'include')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'grouping_ids') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Agrupamentos incluídos</span>
+              @if (tree().length === 0) {
+                <p class="pick-panel__empty">Sem agrupamentos.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (g of tree(); track g.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="groupingAllocSelected(g.id)"
+                        (change)="toggleAllocGrouping(g.id)"
+                      />
+                      <span class="pick-row__text">{{ g.name }}</span>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (allocKind() === 'all_units_except') {
+            <div class="pick-panel">
+              <span class="pick-panel__title">Unidades excluídas do rateio</span>
+              @if (flatUnits().length === 0) {
+                <p class="pick-panel__empty">Sem unidades.</p>
+              } @else {
+                <div class="pick-panel__scroll">
+                  @for (u of flatUnits(); track u.id) {
+                    <label class="pick-row">
+                      <input
+                        type="checkbox"
+                        [checked]="unitInAllocExclude(u.id)"
+                        (change)="toggleAllocUnit(u.id, 'exclude')"
+                      />
+                      <span class="pick-row__text"
+                        ><span class="pick-row__id">{{ u.identifier }}</span>
+                        <span class="pick-row__sub">{{ u.groupingName }}</span></span
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <footer class="modal__foot">
+          <button
+            type="button"
+            class="btn btn--ghost sm"
+            (click)="closeAllocationModal()"
+            [disabled]="allocationSaving()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn primary sm"
+            [disabled]="allocationSaving() || busy()"
+            (click)="saveWorkAllocation()"
+          >
+            {{ allocationSaving() ? 'Salvando…' : 'Salvar rateio' }}
+          </button>
+        </footer>
+      </div>
     </div>
   }
 

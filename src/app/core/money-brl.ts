@@ -94,3 +94,21 @@ export function parseReaisInputToCents(raw: string): number | null {
   }
   return Math.round(n * 100);
 }
+
+/** Como parseReaisInputToCents, mas aceita sinal negativo (ex.: saldo inicial de conta). */
+export function parseSignedReaisInputToCents(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) {
+    return null;
+  }
+  const negative = s.startsWith('-');
+  const inner = negative ? s.slice(1).trim() : s;
+  if (!inner) {
+    return null;
+  }
+  const cents = parseReaisInputToCents(inner);
+  if (cents === null) {
+    return null;
+  }
+  return negative ? -cents : cents;
+}

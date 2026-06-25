@@ -4,7 +4,7 @@ import type { WorkBudgetStatus, WorkStatus } from './condominium-works-api.servi
 
 const PREFIX = 'condo.obras.draft.v1';
 
-export type ObrasRegisterTab = 'note' | 'budget' | 'legal';
+export type ObrasRegisterTab = 'note' | 'budget' | 'legal' | 'transaction';
 
 export type ObrasCreateDraft = {
   title: string;
@@ -27,6 +27,7 @@ export type ObrasBudgetDraft = {
   registerMode?: 'schedule' | 'received';
   supplierId?: string;
   supplierName: string;
+  title?: string;
   amountReais: string;
   validUntil: string;
   scheduledAt?: string;

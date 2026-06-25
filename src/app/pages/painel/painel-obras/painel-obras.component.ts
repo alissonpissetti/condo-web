@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { NgClass } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormBuilder,
@@ -11,10 +11,23 @@ import {
 } from '@angular/forms';
 import { BrMoneyMaskDirective } from '../../../core/br-money-mask.directive';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subscription, debounceTime, distinctUntilChanged, forkJoin, of, switchMap, throwError, type Observable } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
+import { CondominiumPlanFeaturesStore } from '../../../core/condominium-plan-features.store';
 import { FlashMessageService } from '../../../core/flash-message.service';
 import { condoAccessAllowsManagement } from '../../../core/condo-access.util';
+import {
+  FinancialApiService,
+  type AllocationRule,
+  type CondominiumBankAccount,
+  type FinancialFund,
+} from '../../../core/financial-api.service';
+import {
+  CondominiumManagementService,
+  type GroupingWithUnits,
+} from '../../../core/condominium-management.service';
+import { todayLocalIsoDate } from '../../../core/date-display';
 import {
   CondominiumWorksApiService,
   type CondominiumSupplier,
@@ -25,7 +38,16 @@ import {
   type WorkStatus,
   type WorkTimelineEntry,
 } from '../../../core/condominium-works-api.service';
-import { supplierSelectLabel } from '../../../core/supplier-display';
+import { supplierSelectLabel, supplierPixTypeLabelPt } from '../../../core/supplier-display';
+import {
+  ensureSupplierByName$,
+  validateManualSupplierPix,
+} from '../../../core/ensure-supplier-by-name.util';
+import {
+  SUPPLIER_PIX_TYPE_OPTIONS,
+  SuppliersApiService,
+  type Supplier,
+} from '../../../core/suppliers-api.service';
 import { ObrasTimelineAttachmentPreviewComponent } from './obras-timeline-attachment-preview.component';
 import { ObrasTimelineAttachmentModalHostComponent } from './obras-timeline-attachment-modal-host.component';
 import {
@@ -95,6 +117,19 @@ const BUDGET_STATUS_LABELS: Record<WorkBudgetStatus, string> = {
   rejected: 'Rejeitado',
 };
 
+const TIMELINE_EDIT_BUDGET_STATUSES: WorkBudgetStatus[] = [
+  'received',
+  'under_review',
+  'approved',
+  'rejected',
+];
+
+type AllocKind =
+  | 'all_units_equal'
+  | 'unit_ids'
+  | 'grouping_ids'
+  | 'all_units_except';
+
 @Component({
   selector: 'app-painel-obras',
   standalone: true,
@@ -117,12 +152,20 @@ export class PainelObrasComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(CondominiumWorksApiService);
+  private readonly financialApi = inject(FinancialApiService);
+  private readonly condoMgmt = inject(CondominiumManagementService);
   private readonly planningApi = inject(PlanningApiService);
+  private readonly planFeatures = inject(CondominiumPlanFeaturesStore);
+  private readonly suppliersApi = inject(SuppliersApiService);
   private readonly fb = inject(FormBuilder);
 
   protected readonly works = signal<WorkListItem[]>([]);
   protected readonly selected = signal<WorkDetail | null>(null);
   protected readonly suppliers = signal<CondominiumSupplier[]>([]);
+  protected readonly supplierPixTypeOptions = SUPPLIER_PIX_TYPE_OPTIONS;
+  protected readonly supplierPixTypeLabel = supplierPixTypeLabelPt;
+  protected readonly funds = signal<FinancialFund[]>([]);
+  protected readonly bankAccounts = signal<CondominiumBankAccount[]>([]);
   protected readonly access = signal<CondoAccess | null>(null);
   protected readonly loadError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -138,6 +181,49 @@ export class PainelObrasComponent implements OnInit {
   protected readonly statusFilter = signal<WorkStatus | 'all'>('all');
   protected readonly queueReorderBusy = signal(false);
   protected readonly draftSavedAt = signal<number | null>(null);
+
+  protected readonly tree = signal<GroupingWithUnits[]>([]);
+  protected readonly allocKind = signal<AllocKind>('all_units_equal');
+  protected readonly selectedUnitIds = signal<string[]>([]);
+  protected readonly selectedGroupingIds = signal<string[]>([]);
+  protected readonly excludeUnitIds = signal<string[]>([]);
+  protected readonly allocationSaving = signal(false);
+  protected readonly allocationModalOpen = signal(false);
+
+  protected readonly flatUnits = computed(() => {
+    const rows: { id: string; identifier: string; groupingName: string }[] = [];
+    for (const g of this.tree()) {
+      for (const u of g.units) {
+        rows.push({
+          id: u.id,
+          identifier: u.identifier,
+          groupingName: g.name,
+        });
+      }
+    }
+    return rows.sort((a, b) =>
+      a.identifier.localeCompare(b.identifier, 'pt-BR'),
+    );
+  });
+
+  protected readonly workAllocationSummary = computed(() => {
+    const rule = this.selected()?.allocationRule;
+    if (!rule || rule.kind === 'all_units_equal') {
+      return 'Todas as unidades (iguais)';
+    }
+    switch (rule.kind) {
+      case 'unit_ids':
+        return `${rule.unitIds.length} unidade(s)`;
+      case 'grouping_ids':
+        return `${rule.groupingIds.length} agrupamento(s)`;
+      case 'all_units_except':
+        return rule.excludeUnitIds.length > 0
+          ? `Todas exceto ${rule.excludeUnitIds.length}`
+          : 'Todas as unidades (iguais)';
+      default:
+        return 'Todas as unidades (iguais)';
+    }
+  });
 
   protected readonly createForm = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.maxLength(512)]],
@@ -162,6 +248,7 @@ export class PainelObrasComponent implements OnInit {
   protected readonly notePendingFiles = signal<File[]>([]);
   protected readonly legalPendingFiles = signal<File[]>([]);
   protected readonly budgetPendingFiles = signal<File[]>([]);
+  protected readonly transactionPendingFiles = signal<File[]>([]);
   /** YYYY-MM-DDTHH:mm; vazio = agora no envio */
   protected readonly registerRecordedOn = signal('');
   protected readonly registerRecordedOnTouched = signal(false);
@@ -172,7 +259,15 @@ export class PainelObrasComponent implements OnInit {
   protected readonly timelineEditAmountReais = signal('');
   protected readonly timelineEditSupplierId = signal('');
   protected readonly timelineEditSupplierName = signal('');
+  protected readonly timelineEditSupplierPixKeyType = signal('');
+  protected readonly timelineEditSupplierPixKeyValue = signal('');
   protected readonly timelineEditScheduledAt = signal('');
+  protected readonly timelineEditStatus = signal<WorkBudgetStatus>('under_review');
+  protected readonly timelineEditTitle = signal('');
+  protected readonly timelineEditRemoveAttachmentIds = signal<
+    ReadonlySet<string>
+  >(new Set());
+  protected readonly timelineEditPendingFiles = signal<File[]>([]);
   protected readonly receivingBudgetEntryId = signal<string | null>(null);
   protected readonly receiveBudgetAmountReais = signal('');
   protected readonly receiveBudgetValidUntil = signal('');
@@ -187,6 +282,9 @@ export class PainelObrasComponent implements OnInit {
     registerMode: this.fb.nonNullable.control<'schedule' | 'received'>('schedule'),
     supplierId: [''],
     supplierName: ['', [Validators.maxLength(255)]],
+    supplierPixKeyType: [''],
+    supplierPixKeyValue: ['', [Validators.maxLength(255)]],
+    title: ['', [Validators.maxLength(255)]],
     amountReais: [''],
     validUntil: [''],
     scheduledAt: [''],
@@ -194,7 +292,21 @@ export class PainelObrasComponent implements OnInit {
     notes: [''],
   });
 
+  protected readonly transactionForm = this.fb.nonNullable.group({
+    title: ['', [Validators.required, Validators.maxLength(255)]],
+    amountReais: ['', [Validators.required]],
+    occurredOn: [todayLocalIsoDate(), [Validators.required]],
+    bankAccountId: ['', [Validators.required]],
+    fundId: [''],
+    supplierId: [''],
+    supplierName: ['', [Validators.maxLength(255)]],
+    supplierPixKeyType: [''],
+    supplierPixKeyValue: ['', [Validators.maxLength(255)]],
+    description: [''],
+  });
+
   private condominiumId = '';
+  private defaultSupplierCategoryId: string | null = null;
   private detailDraftSubs = new Subscription();
   private editDraftWiredFor: string | null = null;
   private pendingFilesRestoreGen = 0;
@@ -207,7 +319,11 @@ export class PainelObrasComponent implements OnInit {
       return;
     }
     this.condominiumId = id;
+    this.planFeatures.ensureLoaded(id);
     this.loadSuppliers();
+    this.loadDefaultSupplierCategory();
+    this.loadFinancialOptions();
+    this.loadAllocationTree();
     this.restoreListUiDraft();
     this.wireCreateDraft();
 
@@ -241,6 +357,124 @@ export class PainelObrasComponent implements OnInit {
     return this.condominiumId;
   }
 
+  private loadDefaultSupplierCategory(): void {
+    if (!this.condominiumId) {
+      return;
+    }
+    this.suppliersApi.listCategories(this.condominiumId).subscribe({
+      next: (cats) => {
+        const outros = cats.find(
+          (c) => c.name.trim().toLowerCase() === 'outros',
+        );
+        this.defaultSupplierCategoryId = outros?.id ?? cats[0]?.id ?? null;
+      },
+      error: () => {
+        this.defaultSupplierCategoryId = null;
+      },
+    });
+  }
+
+  private mapSupplierRow(row: Supplier): CondominiumSupplier {
+    return {
+      id: row.id,
+      condominiumId: row.condominiumId,
+      name: row.name,
+      contactName: row.legalName,
+      phone: row.phone,
+      pixKey: row.pixKeyValue,
+      categoryId: row.categoryId,
+      categoryName: row.category?.name ?? null,
+      categoryIsGlobal: null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private upsertSupplierFromApi(row: Supplier): void {
+    const mapped = this.mapSupplierRow(row);
+    this.suppliers.update((rows) => {
+      const next = rows.filter((r) => r.id !== mapped.id);
+      next.push(mapped);
+      return next.sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+    });
+  }
+
+  private ensureManualSupplier$(
+    name: string,
+    pixType: string,
+    pixVal: string,
+  ): Observable<string> {
+    return ensureSupplierByName$(
+      this.suppliersApi,
+      this.condominiumId,
+      {
+        name,
+        pixKeyType: pixType.trim() || null,
+        pixKeyValue: pixVal.trim() || null,
+        existingSuppliers: this.suppliers(),
+        defaultCategoryId: this.defaultSupplierCategoryId,
+      },
+    ).pipe(
+      tap((row) => this.upsertSupplierFromApi(row)),
+      map((row) => row.id),
+    );
+  }
+
+  private resolveRequiredSupplierId$(
+    supplierId: string,
+    supplierName: string,
+    pixType: string,
+    pixVal: string,
+  ): Observable<string> {
+    const id = supplierId.trim();
+    if (id) {
+      return of(id);
+    }
+    const name = supplierName.trim();
+    if (!name) {
+      return throwError(
+        () =>
+          new Error(
+            'Selecione um fornecedor cadastrado ou informe o nome.',
+          ),
+      );
+    }
+    const pixErr = validateManualSupplierPix(pixType, pixVal);
+    if (pixErr) {
+      return throwError(() => new Error(pixErr));
+    }
+    return this.ensureManualSupplier$(name, pixType, pixVal);
+  }
+
+  private resolveOptionalSupplierId$(
+    supplierId: string,
+    supplierName: string,
+    pixType: string,
+    pixVal: string,
+  ): Observable<string | undefined> {
+    const id = supplierId.trim();
+    if (id) {
+      return of(id);
+    }
+    const name = supplierName.trim();
+    if (!name) {
+      return of(undefined);
+    }
+    const pixErr = validateManualSupplierPix(pixType, pixVal);
+    if (pixErr) {
+      return throwError(() => new Error(pixErr));
+    }
+    return this.ensureManualSupplier$(name, pixType, pixVal);
+  }
+
+  private flashResolveSupplierError(err: unknown, fallback: string): void {
+    if (err instanceof Error && err.message.trim()) {
+      this.flash.warning(err.message);
+      return;
+    }
+    this.flash.errorFromHttp(err as HttpErrorResponse, fallback);
+  }
+
   private loadSuppliers(): void {
     if (!this.condominiumId) {
       return;
@@ -248,6 +482,231 @@ export class PainelObrasComponent implements OnInit {
     this.api.listSuppliers(this.condominiumId).subscribe({
       next: (rows) => this.suppliers.set(rows),
       error: () => this.suppliers.set([]),
+    });
+  }
+
+  private loadFinancialOptions(): void {
+    if (!this.condominiumId || this.planFeatures.isBlocked('financialTransactions')) {
+      this.funds.set([]);
+      this.bankAccounts.set([]);
+      return;
+    }
+    this.financialApi.listFunds(this.condominiumId).subscribe({
+      next: (rows) => this.funds.set(rows),
+      error: () => this.funds.set([]),
+    });
+    this.financialApi.listBankAccounts(this.condominiumId).subscribe({
+      next: (rows) => {
+        this.bankAccounts.set(rows);
+        this.ensureDefaultTransactionBankAccount();
+      },
+      error: () => this.bankAccounts.set([]),
+    });
+  }
+
+  private ensureDefaultTransactionBankAccount(): void {
+    const current = this.transactionForm.controls.bankAccountId.value.trim();
+    if (current) {
+      return;
+    }
+    const first = this.activeBankAccounts()[0]?.id;
+    if (first) {
+      this.transactionForm.controls.bankAccountId.setValue(first, {
+        emitEvent: false,
+      });
+    }
+  }
+
+  private resetTransactionForm(): void {
+    this.transactionForm.reset({
+      title: '',
+      amountReais: '',
+      occurredOn: todayLocalIsoDate(),
+      bankAccountId: '',
+      fundId: '',
+      supplierId: '',
+      supplierName: '',
+      supplierPixKeyType: '',
+      supplierPixKeyValue: '',
+      description: '',
+    });
+    this.transactionPendingFiles.set([]);
+    this.ensureDefaultTransactionBankAccount();
+  }
+
+  /** Despesas da obra usam o rateio configurado na obra. */
+  private transactionAllocationRule(): AllocationRule {
+    const w = this.selected();
+    if (w?.allocationRule && w.allocationRule.kind !== 'none') {
+      return w.allocationRule;
+    }
+    return { kind: 'all_units_equal' };
+  }
+
+  private loadAllocationTree(): void {
+    if (!this.condominiumId) {
+      return;
+    }
+    this.condoMgmt.loadGroupingsWithUnits(this.condominiumId).subscribe({
+      next: (rows: GroupingWithUnits[]) => this.tree.set(rows),
+      error: () => this.tree.set([]),
+    });
+  }
+
+  private applyAllocationFromWork(rule: AllocationRule | null | undefined): void {
+    if (!rule || rule.kind === 'all_units_equal') {
+      this.allocKind.set('all_units_equal');
+      this.selectedUnitIds.set([]);
+      this.selectedGroupingIds.set([]);
+      this.excludeUnitIds.set([]);
+      return;
+    }
+    switch (rule.kind) {
+      case 'none':
+        this.allocKind.set('all_units_equal');
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'unit_ids':
+        this.allocKind.set('unit_ids');
+        this.selectedUnitIds.set([...rule.unitIds].sort());
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'grouping_ids':
+        this.allocKind.set('grouping_ids');
+        this.selectedGroupingIds.set([...rule.groupingIds].sort());
+        this.selectedUnitIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'all_units_except':
+        this.allocKind.set('all_units_except');
+        this.excludeUnitIds.set([...rule.excludeUnitIds].sort());
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        break;
+      default:
+        this.allocKind.set('all_units_equal');
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+    }
+  }
+
+  protected onAllocKindChange(v: string): void {
+    const k = v as AllocKind;
+    this.allocKind.set(k);
+    if (k !== 'unit_ids') this.selectedUnitIds.set([]);
+    if (k !== 'grouping_ids') this.selectedGroupingIds.set([]);
+    if (k !== 'all_units_except') this.excludeUnitIds.set([]);
+  }
+
+  protected toggleAllocUnit(id: string, list: 'include' | 'exclude'): void {
+    if (list === 'include') {
+      const cur = new Set(this.selectedUnitIds());
+      if (cur.has(id)) cur.delete(id);
+      else cur.add(id);
+      this.selectedUnitIds.set([...cur].sort());
+    } else {
+      const cur = new Set(this.excludeUnitIds());
+      if (cur.has(id)) cur.delete(id);
+      else cur.add(id);
+      this.excludeUnitIds.set([...cur].sort());
+    }
+  }
+
+  protected toggleAllocGrouping(id: string): void {
+    const cur = new Set(this.selectedGroupingIds());
+    if (cur.has(id)) cur.delete(id);
+    else cur.add(id);
+    this.selectedGroupingIds.set([...cur].sort());
+  }
+
+  protected unitInAllocInclude(id: string): boolean {
+    return this.selectedUnitIds().includes(id);
+  }
+
+  protected unitInAllocExclude(id: string): boolean {
+    return this.excludeUnitIds().includes(id);
+  }
+
+  protected groupingAllocSelected(id: string): boolean {
+    return this.selectedGroupingIds().includes(id);
+  }
+
+  private buildWorkAllocationRule(): AllocationRule {
+    const k = this.allocKind();
+    switch (k) {
+      case 'all_units_equal':
+        return { kind: 'all_units_equal' };
+      case 'unit_ids': {
+        const ids = this.selectedUnitIds();
+        if (ids.length === 0) {
+          throw new Error('Selecione pelo menos uma unidade.');
+        }
+        return { kind: 'unit_ids', unitIds: ids };
+      }
+      case 'grouping_ids': {
+        const ids = this.selectedGroupingIds();
+        if (ids.length === 0) {
+          throw new Error('Selecione pelo menos um agrupamento.');
+        }
+        return { kind: 'grouping_ids', groupingIds: ids };
+      }
+      case 'all_units_except':
+        return {
+          kind: 'all_units_except',
+          excludeUnitIds: this.excludeUnitIds(),
+        };
+      default:
+        return { kind: 'all_units_equal' };
+    }
+  }
+
+  protected openAllocationModal(): void {
+    const w = this.selected();
+    if (!w || !this.canManage()) {
+      return;
+    }
+    this.applyAllocationFromWork(w.allocationRule);
+    this.allocationModalOpen.set(true);
+  }
+
+  protected closeAllocationModal(): void {
+    this.allocationModalOpen.set(false);
+    const w = this.selected();
+    if (w) {
+      this.applyAllocationFromWork(w.allocationRule);
+    }
+  }
+
+  protected saveWorkAllocation(): void {
+    const w = this.selected();
+    if (!w || !this.canManage() || this.allocationSaving()) return;
+    let rule: AllocationRule;
+    try {
+      rule = this.buildWorkAllocationRule();
+    } catch (e) {
+      this.flash.warning(
+        e instanceof Error ? e.message : 'Revise o critério de rateio.',
+      );
+      return;
+    }
+    this.allocationSaving.set(true);
+    this.api.update(this.condominiumId, w.id, { allocationRule: rule }).subscribe({
+      next: (detail) => {
+        this.allocationSaving.set(false);
+        this.applyWorkDetail(detail);
+        this.applyAllocationFromWork(detail.allocationRule);
+        this.allocationModalOpen.set(false);
+        this.reloadList();
+        this.flash.success('Rateio da obra salvo.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.allocationSaving.set(false);
+        this.flash.errorFromHttp(err, 'Não foi possível salvar o rateio.');
+      },
     });
   }
 
@@ -291,7 +750,54 @@ export class PainelObrasComponent implements OnInit {
       if (supplier) {
         this.budgetForm.controls.supplierName.setValue(supplier.name);
       }
+      this.budgetForm.patchValue({
+        supplierPixKeyType: '',
+        supplierPixKeyValue: '',
+      });
     }
+  }
+
+  protected onTransactionSupplierIdChange(raw: string): void {
+    const id = (raw ?? '').trim();
+    this.transactionForm.controls.supplierId.setValue(id);
+    if (id) {
+      const supplier = this.suppliers().find((s) => s.id === id);
+      if (supplier) {
+        this.transactionForm.controls.supplierName.setValue(supplier.name);
+      }
+      this.transactionForm.patchValue({
+        supplierPixKeyType: '',
+        supplierPixKeyValue: '',
+      });
+    }
+  }
+
+  protected selectedTransactionSupplier(): CondominiumSupplier | null {
+    const id = this.transactionForm.controls.supplierId.value.trim();
+    if (!id) {
+      return null;
+    }
+    return this.suppliers().find((s) => s.id === id) ?? null;
+  }
+
+  protected transactionSupplierContactHint(): string | null {
+    const supplier = this.selectedTransactionSupplier();
+    if (!supplier) {
+      return null;
+    }
+    const parts: string[] = [];
+    if (supplier.contactName?.trim()) {
+      parts.push(`Contato: ${supplier.contactName.trim()}`);
+    }
+    if (supplier.phone?.trim()) {
+      parts.push(`Tel.: ${supplier.phone.trim()}`);
+    }
+    if (supplier.pixKey?.trim()) {
+      parts.push(`Pix: ${supplier.pixKey.trim()}`);
+    }
+    return parts.length > 0
+      ? parts.join(' · ')
+      : 'Sem contato, telefone ou Pix no cadastro.';
   }
 
   protected selectedTimelineEditSupplier(): CondominiumSupplier | null {
@@ -328,9 +834,33 @@ export class PainelObrasComponent implements OnInit {
       if (supplier) {
         this.timelineEditSupplierName.set(supplier.name);
       }
+      this.timelineEditSupplierPixKeyType.set('');
+      this.timelineEditSupplierPixKeyValue.set('');
     } else {
       this.timelineEditSupplierName.set('');
     }
+  }
+
+  private resolveCatalogSupplierForBudget(
+    supplierId: string | null | undefined,
+    supplierName: string,
+  ): CondominiumSupplier | null {
+    const id = (supplierId ?? '').trim();
+    if (id) {
+      const byId = this.suppliers().find((s) => s.id === id);
+      if (byId) {
+        return byId;
+      }
+    }
+    const normalizedName = supplierName.trim().toLowerCase();
+    if (!normalizedName) {
+      return null;
+    }
+    return (
+      this.suppliers().find(
+        (s) => s.name.trim().toLowerCase() === normalizedName,
+      ) ?? null
+    );
   }
 
   /** Valor máximo para input datetime-local (agora, fuso local). */
@@ -359,6 +889,19 @@ export class PainelObrasComponent implements OnInit {
   protected canManage(): boolean {
     const a = this.access();
     return a !== null && condoAccessAllowsManagement(a);
+  }
+
+  protected canRegisterTransaction(): boolean {
+    return this.canManage() && !this.planFeatures.isBlocked('financialTransactions');
+  }
+
+  protected activeBankAccounts(): CondominiumBankAccount[] {
+    return this.bankAccounts().filter((a) => a.isActive);
+  }
+
+  protected bankAccountLabel(account: CondominiumBankAccount): string {
+    const bank = account.bankName?.trim();
+    return bank ? `${account.name} (${bank})` : account.name;
   }
 
   protected showActiveSection(): boolean {
@@ -478,6 +1021,10 @@ export class PainelObrasComponent implements OnInit {
 
   protected budgetStatusLabel(s: WorkBudgetStatus): string {
     return BUDGET_STATUS_LABELS[s] ?? s;
+  }
+
+  protected timelineEditBudgetStatusOptions(): WorkBudgetStatus[] {
+    return TIMELINE_EDIT_BUDGET_STATUSES;
   }
 
   protected readonly workStatusOptions = WORK_STATUS_OPTIONS;
@@ -1030,7 +1577,7 @@ export class PainelObrasComponent implements OnInit {
       return entry.transaction.title;
     }
     if (entry.kind === 'budget' && entry.budget) {
-      return entry.budget.supplierName;
+      return entry.budget.title?.trim() || entry.budget.supplierName;
     }
     const body = entry.body?.trim();
     if (!body) {
@@ -1114,6 +1661,53 @@ export class PainelObrasComponent implements OnInit {
     );
   }
 
+  protected canEditTimelineAttachments(entry: WorkTimelineEntry): boolean {
+    return (
+      entry.kind === 'note' ||
+      entry.kind === 'legal' ||
+      entry.kind === 'budget'
+    );
+  }
+
+  protected timelineEditRemainingAttachments(
+    entry: WorkTimelineEntry,
+  ): WorkTimelineEntry['attachments'] {
+    const remove = this.timelineEditRemoveAttachmentIds();
+    return (entry.attachments ?? []).filter((a) => !remove.has(a.id));
+  }
+
+  protected markTimelineEditAttachmentRemoved(attachmentId: string): void {
+    const next = new Set(this.timelineEditRemoveAttachmentIds());
+    next.add(attachmentId);
+    this.timelineEditRemoveAttachmentIds.set(next);
+  }
+
+  protected onTimelineEditFilesSelected(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const picked = input.files;
+    if (!picked?.length) return;
+    this.timelineEditPendingFiles.update((list) => [
+      ...list,
+      ...Array.from(picked),
+    ]);
+    input.value = '';
+  }
+
+  protected removeTimelineEditPendingFile(index: number): void {
+    const list = [...this.timelineEditPendingFiles()];
+    list.splice(index, 1);
+    this.timelineEditPendingFiles.set(list);
+  }
+
+  protected timelineBudgetCardMeta(entry: WorkTimelineEntry): string {
+    const parts: string[] = [];
+    if (entry.kind === 'budget' && entry.budget?.title?.trim()) {
+      parts.push(entry.budget.supplierName);
+    }
+    parts.push(entry.authorDisplayName);
+    return parts.join(' · ');
+  }
+
   protected isEditingTimelineEntry(entry: WorkTimelineEntry): boolean {
     return this.editingTimelineEntryId() === entry.id;
   }
@@ -1130,21 +1724,38 @@ export class PainelObrasComponent implements OnInit {
       this.timelineEditAmountReais.set(
         centsToReaisInput(entry.budget.amountCents),
       );
-      this.timelineEditSupplierId.set(entry.budget.supplierId ?? '');
-      this.timelineEditSupplierName.set(
-        entry.budget.supplierId ? '' : entry.budget.supplierName,
+      const catalogSupplier = this.resolveCatalogSupplierForBudget(
+        entry.budget.supplierId,
+        entry.budget.supplierName,
       );
+      if (catalogSupplier) {
+        this.timelineEditSupplierId.set(catalogSupplier.id);
+        this.timelineEditSupplierName.set('');
+      } else {
+        this.timelineEditSupplierId.set('');
+        this.timelineEditSupplierName.set(entry.budget.supplierName);
+      }
+      this.timelineEditSupplierPixKeyType.set('');
+      this.timelineEditSupplierPixKeyValue.set('');
       this.timelineEditScheduledAt.set(
         entry.budget.scheduledAt
           ? dateToDatetimeLocalValue(new Date(entry.budget.scheduledAt))
           : '',
       );
+      this.timelineEditTitle.set(entry.budget.title ?? '');
+      this.timelineEditStatus.set(entry.budget.status);
     } else {
       this.timelineEditAmountReais.set('');
       this.timelineEditSupplierId.set('');
       this.timelineEditSupplierName.set('');
+      this.timelineEditSupplierPixKeyType.set('');
+      this.timelineEditSupplierPixKeyValue.set('');
       this.timelineEditScheduledAt.set('');
+      this.timelineEditStatus.set('under_review');
+      this.timelineEditTitle.set('');
     }
+    this.timelineEditRemoveAttachmentIds.set(new Set());
+    this.timelineEditPendingFiles.set([]);
   }
 
   protected cancelEditTimelineEntry(): void {
@@ -1154,7 +1765,13 @@ export class PainelObrasComponent implements OnInit {
     this.timelineEditAmountReais.set('');
     this.timelineEditSupplierId.set('');
     this.timelineEditSupplierName.set('');
+    this.timelineEditSupplierPixKeyType.set('');
+    this.timelineEditSupplierPixKeyValue.set('');
     this.timelineEditScheduledAt.set('');
+    this.timelineEditStatus.set('under_review');
+    this.timelineEditTitle.set('');
+    this.timelineEditRemoveAttachmentIds.set(new Set());
+    this.timelineEditPendingFiles.set([]);
   }
 
   protected setTimelineEditRecordedOn(value: string): void {
@@ -1178,8 +1795,12 @@ export class PainelObrasComponent implements OnInit {
       amountCents?: number;
       supplierId?: string | null;
       supplierName?: string;
+      title?: string | null;
       scheduledAt?: string | null;
+      status?: WorkBudgetStatus;
     } = {};
+
+    let manualSupplierResolve$: Observable<string> | null = null;
 
     const recordedOn = this.timelineEditRecordedOn().trim();
     const prevRecorded = dateToDatetimeLocalValue(new Date(entry.createdAt));
@@ -1204,14 +1825,35 @@ export class PainelObrasComponent implements OnInit {
         return;
       }
 
-      const prevSupplierId = (b.supplierId ?? '').trim();
+      const prevSupplierName = b.supplierName.trim();
       if (supplierId) {
-        if (supplierId !== prevSupplierId) {
+        const selected = this.suppliers().find((s) => s.id === supplierId);
+        const selectedName = selected?.name.trim() ?? '';
+        if (
+          selectedName.toLowerCase() !== prevSupplierName.toLowerCase()
+        ) {
           payload.supplierId = supplierId;
         }
-      } else if (supplierName !== b.supplierName.trim()) {
-        payload.supplierId = null;
-        payload.supplierName = supplierName;
+      } else if (supplierName) {
+        const pixErr = validateManualSupplierPix(
+          this.timelineEditSupplierPixKeyType(),
+          this.timelineEditSupplierPixKeyValue(),
+        );
+        if (pixErr) {
+          this.flash.warning(pixErr);
+          return;
+        }
+        manualSupplierResolve$ = this.ensureManualSupplier$(
+          supplierName,
+          this.timelineEditSupplierPixKeyType(),
+          this.timelineEditSupplierPixKeyValue(),
+        );
+      }
+
+      const title = this.timelineEditTitle().trim();
+      const prevTitle = (b.title ?? '').trim();
+      if (title !== prevTitle) {
+        payload.title = title || null;
       }
 
       const scheduledAt = this.timelineEditScheduledAt().trim();
@@ -1232,39 +1874,164 @@ export class PainelObrasComponent implements OnInit {
         if (parsed !== prevCents) {
           payload.amountCents = parsed;
         }
+
+        const status = this.timelineEditStatus();
+        if (status !== b.status) {
+          if (
+            b.status === 'approved' &&
+            status !== 'approved' &&
+            !confirm(
+              'Remover a aprovação deste orçamento? Ele deixará de entrar na soma de referência da obra.',
+            )
+          ) {
+            return;
+          }
+          payload.status = status;
+        }
       }
     }
 
-    if (
-      payload.recordedOn === undefined &&
-      payload.body === undefined &&
-      payload.amountCents === undefined &&
-      payload.supplierId === undefined &&
-      payload.supplierName === undefined &&
-      payload.scheduledAt === undefined
-    ) {
+    const toRemove = [...this.timelineEditRemoveAttachmentIds()];
+    const toAdd = [...this.timelineEditPendingFiles()];
+    const hasAttachmentChanges = toRemove.length > 0 || toAdd.length > 0;
+
+    if (entry.kind === 'note' || entry.kind === 'legal') {
+      const remainingAttachments =
+        (entry.attachments ?? []).filter((a) => !toRemove.includes(a.id))
+          .length + toAdd.length;
+      const textAfter =
+        payload.body !== undefined
+          ? (payload.body ?? '').trim()
+          : (entry.body ?? '').trim();
+      if (entry.kind === 'legal' && remainingAttachments < 1) {
+        this.flash.warning(
+          'O registro jurídico precisa de ao menos um documento anexado.',
+        );
+        return;
+      }
+      if (entry.kind === 'note' && !textAfter && remainingAttachments < 1) {
+        this.flash.warning('O comentário precisa de texto ou ao menos um anexo.');
+        return;
+      }
+    }
+
+    const hasPayloadChanges =
+      payload.recordedOn !== undefined ||
+      payload.body !== undefined ||
+      payload.amountCents !== undefined ||
+      payload.supplierId !== undefined ||
+      payload.supplierName !== undefined ||
+      payload.title !== undefined ||
+      payload.scheduledAt !== undefined ||
+      payload.status !== undefined;
+
+    if (!hasPayloadChanges && !hasAttachmentChanges && !manualSupplierResolve$) {
       this.cancelEditTimelineEntry();
       return;
     }
 
-    this.busy.set(true);
-    this.api
-      .updateTimelineEntry(this.condominiumId, w.id, entry.id, payload)
-      .subscribe({
-        next: () => {
-          this.busy.set(false);
-          this.flash.success('Registro atualizado.');
-          this.cancelEditTimelineEntry();
-          if (entry.kind === 'budget') {
-            this.loadSuppliers();
-          }
-          this.loadDetail(w.id);
-        },
-        error: (err: HttpErrorResponse) => {
-          this.busy.set(false);
-          this.flash.errorFromHttp(err, 'Não foi possível salvar a edição.');
-        },
-      });
+    const runTimelineSave = (): void => {
+      const hasChanges =
+        payload.recordedOn !== undefined ||
+        payload.body !== undefined ||
+        payload.amountCents !== undefined ||
+        payload.supplierId !== undefined ||
+        payload.supplierName !== undefined ||
+        payload.title !== undefined ||
+        payload.scheduledAt !== undefined ||
+        payload.status !== undefined;
+
+      if (!hasChanges && !hasAttachmentChanges) {
+        this.cancelEditTimelineEntry();
+        return;
+      }
+
+      this.busy.set(true);
+      const update$: Observable<WorkTimelineEntry | null> = hasChanges
+        ? this.api.updateTimelineEntry(
+            this.condominiumId,
+            w.id,
+            entry.id,
+            payload,
+          )
+        : of(null);
+
+      update$
+        .pipe(
+          switchMap(() => {
+            if (toRemove.length === 0) {
+              return of(null);
+            }
+            return forkJoin(
+              toRemove.map((attachmentId) =>
+                this.api.removeTimelineAttachment(
+                  this.condominiumId,
+                  w.id,
+                  entry.id,
+                  attachmentId,
+                ),
+              ),
+            );
+          }),
+          switchMap(() => {
+            if (toAdd.length === 0) {
+              return of(null);
+            }
+            return this.api.addTimelineEntryAttachments(
+              this.condominiumId,
+              w.id,
+              entry.id,
+              toAdd,
+            );
+          }),
+        )
+        .subscribe({
+          next: () => {
+            this.busy.set(false);
+            this.flash.success('Registro atualizado.');
+            this.cancelEditTimelineEntry();
+            if (entry.kind === 'budget') {
+              this.loadSuppliers();
+            }
+            this.loadDetail(w.id);
+          },
+          error: (err: HttpErrorResponse) => {
+            this.busy.set(false);
+            this.flash.errorFromHttp(err, 'Não foi possível salvar a edição.');
+          },
+        });
+    };
+
+    if (manualSupplierResolve$ && entry.budget) {
+      const b = entry.budget;
+      const typedSupplierName = this.timelineEditSupplierName().trim();
+      manualSupplierResolve$
+        .pipe(
+          map((resolvedId) => {
+            const selectedName =
+              this.suppliers().find((s) => s.id === resolvedId)?.name.trim() ??
+              typedSupplierName;
+            if (
+              resolvedId !== (b.supplierId ?? '') ||
+              selectedName.toLowerCase() !== b.supplierName.trim().toLowerCase()
+            ) {
+              payload.supplierId = resolvedId;
+            }
+          }),
+        )
+        .subscribe({
+          next: () => runTimelineSave(),
+          error: (err: unknown) => {
+            this.flashResolveSupplierError(
+              err,
+              'Não foi possível salvar o fornecedor.',
+            );
+          },
+        });
+      return;
+    }
+
+    runTimelineSave();
   }
 
   protected setStatusFilter(v: string): void {
@@ -1275,6 +2042,9 @@ export class PainelObrasComponent implements OnInit {
 
   protected setRegisterTab(tab: ObrasRegisterTab): void {
     this.registerTab.set(tab);
+    if (tab === 'transaction') {
+      this.ensureDefaultTransactionBankAccount();
+    }
     this.persistDetailUiDraft();
   }
 
@@ -1483,6 +2253,23 @@ export class PainelObrasComponent implements OnInit {
     this.persistBudgetPendingFilesDraft();
   }
 
+  protected onTransactionFilesSelected(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const picked = input.files;
+    if (!picked?.length) return;
+    this.transactionPendingFiles.update((list) => [
+      ...list,
+      ...Array.from(picked),
+    ]);
+    input.value = '';
+  }
+
+  protected removeTransactionPendingFile(index: number): void {
+    const list = [...this.transactionPendingFiles()];
+    list.splice(index, 1);
+    this.transactionPendingFiles.set(list);
+  }
+
   protected submitBudget(): void {
     const w = this.selected();
     if (!w || this.budgetForm.invalid || this.busy()) return;
@@ -1526,21 +2313,30 @@ export class PainelObrasComponent implements OnInit {
     }
 
     this.busy.set(true);
-    this.api
-      .addBudget(
-        this.condominiumId,
-        w.id,
-        {
-          supplierId: supplierId || undefined,
-          supplierName: supplierId ? undefined : supplierName,
-          amountCents,
-          validUntil,
-          scheduledAt: v.scheduledAt.trim() || undefined,
-          status,
-          notes: v.notes.trim() || undefined,
-          recordedOn: this.recordedOnForApi(),
-        },
-        files,
+    this.resolveRequiredSupplierId$(
+      supplierId,
+      supplierName,
+      v.supplierPixKeyType,
+      v.supplierPixKeyValue,
+    )
+      .pipe(
+        switchMap((resolvedSupplierId) =>
+          this.api.addBudget(
+            this.condominiumId,
+            w.id,
+            {
+              supplierId: resolvedSupplierId,
+              title: v.title.trim() || undefined,
+              amountCents,
+              validUntil,
+              scheduledAt: v.scheduledAt.trim() || undefined,
+              status,
+              notes: v.notes.trim() || undefined,
+              recordedOn: this.recordedOnForApi(),
+            },
+            files,
+          ),
+        ),
       )
       .subscribe({
         next: () => {
@@ -1556,6 +2352,9 @@ export class PainelObrasComponent implements OnInit {
             registerMode: 'schedule',
             supplierId: '',
             supplierName: '',
+            supplierPixKeyType: '',
+            supplierPixKeyValue: '',
+            title: '',
             amountReais: '',
             validUntil: '',
             scheduledAt: '',
@@ -1566,9 +2365,103 @@ export class PainelObrasComponent implements OnInit {
           this.loadSuppliers();
           this.loadDetail(w.id);
         },
-        error: (err: HttpErrorResponse) => {
+        error: (err: unknown) => {
           this.busy.set(false);
-          this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
+          this.flashResolveSupplierError(
+            err,
+            'Não foi possível concluir o pedido.',
+          );
+        },
+      });
+  }
+
+  protected submitTransaction(): void {
+    const w = this.selected();
+    if (!w || !this.canRegisterTransaction() || this.busy()) return;
+    if (this.transactionForm.invalid) {
+      this.transactionForm.markAllAsTouched();
+      this.flash.warning('Preencha os campos obrigatórios da transação.');
+      return;
+    }
+    const v = this.transactionForm.getRawValue();
+    const amountCents = parseReaisInputToCents(v.amountReais);
+    if (amountCents === null || amountCents <= 0) {
+      this.flash.warning('Informe um valor válido (ex.: 1.270,00).');
+      return;
+    }
+    const bankAccountId = v.bankAccountId.trim();
+    if (!bankAccountId) {
+      this.flash.warning('Selecione a conta bancária.');
+      return;
+    }
+    const title = v.title.trim();
+    if (!title) {
+      this.flash.warning('Informe o título do lançamento.');
+      return;
+    }
+    const occurredOn = v.occurredOn.trim().slice(0, 10) || todayLocalIsoDate();
+    const supplierId = v.supplierId.trim();
+    const supplierName = v.supplierName.trim();
+    const pendingFiles = [...this.transactionPendingFiles()];
+
+    this.busy.set(true);
+    this.resolveOptionalSupplierId$(
+      supplierId,
+      supplierName,
+      v.supplierPixKeyType,
+      v.supplierPixKeyValue,
+    )
+      .pipe(
+        switchMap((resolvedSupplierId) => {
+          const uploads$ =
+            pendingFiles.length > 0
+              ? forkJoin(
+                  pendingFiles.map((f) =>
+                    this.financialApi.uploadTransactionReceipt(
+                      this.condominiumId,
+                      f,
+                    ),
+                  ),
+                )
+              : of([] as { receiptStorageKey: string }[]);
+          return uploads$.pipe(
+            switchMap((uploads) => {
+              const documentStorageKeys = uploads
+                .map((d) => d.receiptStorageKey)
+                .filter((k): k is string => !!k);
+              return this.financialApi.createTransaction(this.condominiumId, {
+                kind: 'expense',
+                amountCents,
+                occurredOn,
+                title,
+                description: v.description.trim() || null,
+                fundId: v.fundId.trim() || null,
+                bankAccountId,
+                supplierId: resolvedSupplierId,
+                allocationRule: this.transactionAllocationRule(),
+                workId: w.id,
+                ...(documentStorageKeys.length ? { documentStorageKeys } : {}),
+              });
+            }),
+          );
+        }),
+      )
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.resetTransactionForm();
+          this.persistDetailUiDraft();
+          this.registerExpanded.set(false);
+          this.loadSuppliers();
+          this.loadDetail(w.id);
+          this.flash.success('Despesa registrada na linha do tempo da obra.');
+        },
+        error: (err: unknown) => {
+          this.busy.set(false);
+          this.flashResolveSupplierError(
+            err,
+            'Não foi possível registrar a despesa.',
+          );
         },
       });
   }
@@ -1722,8 +2615,12 @@ export class PainelObrasComponent implements OnInit {
     );
     if (ui?.registerTab) {
       const tab = ui.registerTab;
-      if (tab === 'budget' || tab === 'legal' || tab === 'note') {
-        this.registerTab.set(tab);
+      if (tab === 'budget' || tab === 'legal' || tab === 'note' || tab === 'transaction') {
+        if (tab === 'transaction' && !this.canRegisterTransaction()) {
+          this.registerTab.set('note');
+        } else {
+          this.registerTab.set(tab);
+        }
       }
     }
     if (ui?.registerRecordedOn) {
@@ -1977,6 +2874,7 @@ export class PainelObrasComponent implements OnInit {
         attachments: e.attachments ?? [],
       })),
     });
+    this.applyAllocationFromWork(detail.allocationRule);
     const workId = this.detailWorkId();
     if (workId) {
       this.restoreTimelineDayExpansion(workId);
@@ -1990,6 +2888,7 @@ export class PainelObrasComponent implements OnInit {
     this.api.getOne(this.condominiumId, workId).subscribe({
       next: (detail) => {
         this.loadSuppliers();
+        this.loadFinancialOptions();
         this.applyWorkDetail(detail);
         this.editForm.patchValue(
           {

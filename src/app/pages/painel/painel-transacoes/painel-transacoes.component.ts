@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   OnInit,
@@ -9,18 +10,23 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FlashMessageService } from '../../../core/flash-message.service';
-import { Observable, of, from, forkJoin } from 'rxjs';
-import { switchMap, concatMap, last, finalize } from 'rxjs/operators';
+import { Observable, of, from, forkJoin, throwError, EMPTY } from 'rxjs';
+import { switchMap, concatMap, last, finalize, map, catchError } from 'rxjs/operators';
 import { translateHttpErrorMessage } from '../../../core/api-errors-pt';
 import {
   CondominiumManagementService,
   type GroupingWithUnits,
 } from '../../../core/condominium-management.service';
 import { CondominiumPlanFeaturesStore } from '../../../core/condominium-plan-features.store';
+import {
+  CondominiumMaintenancesApiService,
+  type MaintenanceListItem,
+} from '../../../core/condominium-maintenances-api.service';
 import {
   CondominiumWorksApiService,
   type WorkListItem,
@@ -51,7 +57,8 @@ import {
   parseCentsBigint,
   signedDeltaForTransaction,
 } from '../../../core/financial-extrato-display';
-import { formatCentsBrl, reaisToCents } from '../../../core/money-brl';
+import { BrMoneyFieldComponent } from '../../../core/br-money-field.component';
+import { formatCentsBrl, centsToReaisInput, parseReaisInputToCents } from '../../../core/money-brl';
 import { transactionKindLabelPt } from '../../../core/transaction-kind-pt';
 import {
   clearTxCreateDraft,
@@ -71,18 +78,23 @@ type AllocKind =
   | 'all_units_except'
   | 'none';
 
+/** Valor reservado no &lt;select&gt; de fornecedor para cadastro inline. */
+const NEW_SUPPLIER_OPTION = '__new__';
+
 @Component({
   selector: 'app-painel-transacoes',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, BrMoneyFieldComponent],
   templateUrl: './painel-transacoes.component.html',
   styleUrl: './painel-transacoes.component.scss',
 })
 export class PainelTransacoesComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly flash = inject(FlashMessageService);
   private readonly api = inject(FinancialApiService);
   private readonly condoApi = inject(CondominiumManagementService);
   private readonly worksApi = inject(CondominiumWorksApiService);
+  private readonly maintenancesApi = inject(CondominiumMaintenancesApiService);
   private readonly suppliersApi = inject(SuppliersApiService);
   protected readonly planFeatures = inject(CondominiumPlanFeaturesStore);
 
@@ -96,6 +108,11 @@ export class PainelTransacoesComponent implements OnInit {
 
   protected readonly transactions = signal<FinancialTransaction[]>([]);
   protected readonly works = signal<WorkListItem[]>([]);
+  /** Com obra selecionada, o rateio vem da configuração da obra. */
+  protected readonly workLocksAllocation = computed(
+    () => this.workIdForm().trim().length > 0,
+  );
+  protected readonly maintenances = signal<MaintenanceListItem[]>([]);
   protected readonly funds = signal<FinancialFund[]>([]);
   protected readonly bankAccounts = signal<CondominiumBankAccount[]>([]);
   protected readonly tree = signal<GroupingWithUnits[]>([]);
@@ -104,6 +121,7 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly saving = signal(false);
   protected readonly fundFilter = signal<string>('');
   protected readonly workFilter = signal<string>('');
+  protected readonly maintenanceFilter = signal<string>('');
   /** Período da lista (AAAA-MM-DD), inclusive; por defeito o mês civil corrente. */
   protected readonly periodFrom = signal('');
   protected readonly periodTo = signal('');
@@ -125,17 +143,25 @@ export class PainelTransacoesComponent implements OnInit {
     'by_installment',
   );
   protected readonly recurringCount = signal(2);
-  protected readonly recurringInstallmentReais = signal(0);
-  protected readonly recurringTotalReais = signal(0);
-  protected readonly amountReais = signal(0);
+  protected readonly recurringInstallmentReais = signal('');
+  protected readonly recurringTotalReais = signal('');
+  protected readonly amountReais = signal('');
   protected readonly occurredOn = signal('');
   protected readonly titleTx = signal('');
   protected readonly descriptionTx = signal('');
   protected readonly fundIdForm = signal<string>('');
   protected readonly workIdForm = signal<string>('');
+  protected readonly maintenanceIdForm = signal<string>('');
   protected readonly bankAccountIdForm = signal<string>('');
   protected readonly supplierIdForm = signal<string>('');
+  protected readonly supplierNameForm = signal('');
+  protected readonly supplierPixKeyTypeForm = signal('');
+  protected readonly supplierPixKeyValueForm = signal('');
   protected readonly suppliersList = signal<Supplier[]>([]);
+  private readonly defaultSupplierCategoryId = signal<string | null>(null);
+
+  protected readonly newSupplierOptionValue = NEW_SUPPLIER_OPTION;
+  protected readonly supplierPixTypeOptions = SUPPLIER_PIX_TYPE_OPTIONS;
 
   /** Explica efeito no saldo do fundo e na taxa condominial ao escolher fundo + tipo. */
   protected fundLaunchHint(): string | null {
@@ -166,7 +192,7 @@ export class PainelTransacoesComponent implements OnInit {
   /** Edição em lote de transações com o mesmo `recurringSeriesId`. */
   protected readonly editingSeriesId = signal<string | null>(null);
   /** Se &gt; 0, aplica o mesmo valor (R$) a todas as parcelas ao salvar a série. */
-  protected readonly seriesUniformAmountReais = signal(0);
+  protected readonly seriesUniformAmountReais = signal('');
   protected readonly pendingDocumentFiles = signal<File[]>([]);
   protected readonly editingDocumentKeys = signal<string[]>([]);
   protected readonly pendingReceiptFile = signal<File | null>(null);
@@ -201,6 +227,9 @@ export class PainelTransacoesComponent implements OnInit {
   protected readonly bulkAssignWorkOpen = signal(false);
   protected readonly bulkAssignWorkId = signal<string>('');
   protected readonly bulkAssignWorkError = signal<string | null>(null);
+  protected readonly bulkAssignMaintenanceOpen = signal(false);
+  protected readonly bulkAssignMaintenanceId = signal<string>('');
+  protected readonly bulkAssignMaintenanceError = signal<string | null>(null);
 
   /**
    * Formulário de criação/edição colapsado por padrão; ao editar abre
@@ -270,31 +299,45 @@ export class PainelTransacoesComponent implements OnInit {
     }
   }
 
-  /** Últimas linhas visíveis: menu abre para cima para não ser cortado pelo scroll da tabela. */
-  protected rowActionMenuOpensUpward(): boolean {
-    const id = this.rowActionMenuForId();
-    if (!id) {
-      return false;
-    }
-    const rows = this.filteredTransactions();
-    if (rows.length === 0) {
-      return false;
-    }
-    const idx = rows.findIndex((r) => r.id === id);
-    if (idx < 0) {
-      return false;
-    }
-    return idx >= rows.length - 2;
-  }
+  /** Menu ⋮ abre para cima quando não há espaço abaixo na viewport. */
+  protected readonly rowActionMenuOpensUpward = signal(false);
 
   toggleRowActionMenu(txId: string, ev: Event): void {
     ev.stopPropagation();
+    const willOpen = this.rowActionMenuForId() !== txId;
     this.rowActionMenuForId.update((cur) => (cur === txId ? null : txId));
+    if (!willOpen) {
+      this.rowActionMenuOpensUpward.set(false);
+      return;
+    }
+    const trigger = ev.currentTarget as HTMLElement | null;
+    queueMicrotask(() => {
+      if (this.rowActionMenuForId() !== txId) {
+        return;
+      }
+      this.rowActionMenuOpensUpward.set(
+        this.shouldRowMenuOpenUpward(trigger),
+      );
+    });
+  }
+
+  private shouldRowMenuOpenUpward(trigger: HTMLElement | null): boolean {
+    if (!trigger || typeof window === 'undefined') {
+      return false;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const estimatedMenuHeight = 320;
+    return window.innerHeight - rect.bottom < estimatedMenuHeight;
+  }
+
+  private closeRowActionMenu(): void {
+    this.rowActionMenuForId.set(null);
+    this.rowActionMenuOpensUpward.set(false);
   }
 
   @HostListener('document:click')
   onDocumentClickCloseRowMenu(): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
   }
 
   @HostListener('document:keydown.escape')
@@ -307,6 +350,9 @@ export class PainelTransacoesComponent implements OnInit {
     }
     if (this.settleTarget()) {
       this.closeTxSettle();
+    }
+    if (this.rowActionMenuForId()) {
+      this.closeRowActionMenu();
     }
   }
 
@@ -387,7 +433,7 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   protected openBulkSettleModal(): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     const list = this.bulkPendingSelected();
     if (list.length === 0) {
       this.flash.warning(
@@ -585,22 +631,22 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   editRowFromMenu(t: FinancialTransaction): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     this.startEdit(t);
   }
 
   editSeriesFromMenu(seriesId: string): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     this.startEditSeries(seriesId);
   }
 
   removeRowFromMenu(t: FinancialTransaction): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     this.remove(t);
   }
 
   removeSeriesFromMenu(seriesId: string): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     this.removeSeries(seriesId);
   }
 
@@ -618,11 +664,15 @@ export class PainelTransacoesComponent implements OnInit {
 
   protected readonly selectedSupplier = computed(() => {
     const id = this.supplierIdForm().trim();
-    if (!id) {
+    if (!id || id === NEW_SUPPLIER_OPTION) {
       return null;
     }
     return this.suppliersList().find((s) => s.id === id) ?? null;
   });
+
+  protected readonly isNewSupplierForm = computed(
+    () => this.supplierIdForm() === NEW_SUPPLIER_OPTION,
+  );
 
   protected readonly flatUnits = computed(() => {
     const out: { id: string; identifier: string; groupingName: string }[] =
@@ -737,19 +787,18 @@ export class PainelTransacoesComponent implements OnInit {
     }
     const start = this.occurredOn();
     if (this.recurringMode() === 'by_installment') {
-      const v = this.recurringInstallmentReais();
-      if (!Number.isFinite(v) || v <= 0) {
+      const each = parseReaisInputToCents(this.recurringInstallmentReais());
+      if (each === null || each <= 0) {
         return '';
       }
-      const each = reaisToCents(v);
       const total = each * n;
       return `Serão criadas ${n} transações mensais de ${formatCentsBrl(each)} (total ${formatCentsBrl(total)}), primeira em ${formatDateDdMmYyyy(start)}.`;
     }
-    const t = this.recurringTotalReais();
-    if (!Number.isFinite(t) || t <= 0) {
+    const totalCents = parseReaisInputToCents(this.recurringTotalReais());
+    if (totalCents === null || totalCents <= 0) {
       return '';
     }
-    const parts = this.splitTotalCentsEvenly(reaisToCents(t), n);
+    const parts = this.splitTotalCentsEvenly(totalCents, n);
     const minV = Math.min(...parts);
     const maxV = Math.max(...parts);
     const valHint =
@@ -775,10 +824,15 @@ export class PainelTransacoesComponent implements OnInit {
       return;
     }
     this.condoId = id;
-    const workFromQuery = this.route.snapshot.queryParamMap.get('workId');
-    if (workFromQuery?.trim()) {
-      this.workFilter.set(workFromQuery.trim());
-    }
+    this.applyUrlFilters(this.route.snapshot.queryParamMap);
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        this.applyUrlFilters(params);
+        if (this.condoId && !this.loading()) {
+          this.refreshList();
+        }
+      });
     this.occurredOn.set(todayLocalIsoDate());
     this.periodMode.set('month');
     this.periodMonthYm.set(localIsoMonthYm());
@@ -796,11 +850,14 @@ export class PainelTransacoesComponent implements OnInit {
           funds: this.api.listFunds(this.condoId),
           bankAccounts: this.api.listBankAccounts(this.condoId),
           works: this.worksApi.list(this.condoId),
+          maintenances: this.maintenancesApi.list(this.condoId),
         }).subscribe({
-          next: ({ funds, bankAccounts, works }) => {
+          next: ({ funds, bankAccounts, works, maintenances }) => {
             this.funds.set(funds);
             this.bankAccounts.set(bankAccounts);
             this.works.set(works);
+            this.maintenances.set(maintenances);
+            this.reapplyUrlFiltersAfterCatalogsLoad();
             this.ensureDefaultBankAccount();
             this.loadSuppliersForForm();
             this.restoreCreateDraftFromStorage();
@@ -810,6 +867,7 @@ export class PainelTransacoesComponent implements OnInit {
             this.funds.set([]);
             this.bankAccounts.set([]);
             this.works.set([]);
+            this.maintenances.set([]);
             this.restoreCreateDraftFromStorage();
             this.refreshList();
           },
@@ -825,12 +883,121 @@ export class PainelTransacoesComponent implements OnInit {
   private loadSuppliersForForm(): void {
     if (!this.condoId || this.planFeatures.isBlocked('suppliers')) {
       this.suppliersList.set([]);
+      this.defaultSupplierCategoryId.set(null);
       return;
     }
+    this.suppliersApi.listCategories(this.condoId).subscribe({
+      next: (cats) => {
+        const outros = cats.find(
+          (c) => c.name.trim().toLowerCase() === 'outros',
+        );
+        this.defaultSupplierCategoryId.set(outros?.id ?? cats[0]?.id ?? null);
+      },
+      error: () => this.defaultSupplierCategoryId.set(null),
+    });
     this.suppliersApi.listSuppliers(this.condoId).subscribe({
       next: (rows) => this.suppliersList.set(rows),
       error: () => this.suppliersList.set([]),
     });
+  }
+
+  protected onSupplierIdFormChange(raw: string): void {
+    this.supplierIdForm.set(raw);
+    if (raw !== NEW_SUPPLIER_OPTION) {
+      this.supplierNameForm.set('');
+      this.supplierPixKeyTypeForm.set('');
+      this.supplierPixKeyValueForm.set('');
+    }
+  }
+
+  private clearNewSupplierFields(): void {
+    this.supplierNameForm.set('');
+    this.supplierPixKeyTypeForm.set('');
+    this.supplierPixKeyValueForm.set('');
+  }
+
+  private validateNewSupplierForm(): string | null {
+    if (this.supplierIdForm() !== NEW_SUPPLIER_OPTION) {
+      return null;
+    }
+    const name = this.supplierNameForm().trim();
+    if (!name) {
+      return 'Informe o nome do novo fornecedor.';
+    }
+    const pixType = this.supplierPixKeyTypeForm().trim();
+    const pixVal = this.supplierPixKeyValueForm().trim();
+    if ((pixType && !pixVal) || (!pixType && pixVal)) {
+      return 'Chave PIX: informe o tipo e o valor juntos, ou deixe os dois em branco.';
+    }
+    const existing = this.suppliersList().find(
+      (s) => s.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (!existing && !this.defaultSupplierCategoryId()) {
+      return 'Categoria padrão de fornecedor indisponível. Cadastre em Fornecedores.';
+    }
+    return null;
+  }
+
+  /** Cria ou reutiliza fornecedor quando «Novo fornecedor» está selecionado. */
+  private resolveSupplierIdForSave(): Observable<string | undefined> {
+    const id = this.supplierIdForm().trim();
+    if (!id) {
+      return of(undefined);
+    }
+    if (id !== NEW_SUPPLIER_OPTION) {
+      return of(id);
+    }
+
+    const name = this.supplierNameForm().trim();
+    const pixType = this.supplierPixKeyTypeForm().trim() || null;
+    const pixVal = this.supplierPixKeyValueForm().trim() || null;
+    const existing = this.suppliersList().find(
+      (s) => s.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+
+    if (existing) {
+      if (pixType && pixVal) {
+        return this.suppliersApi
+          .updateSupplier(this.condoId, existing.id, {
+            pixKeyType: pixType,
+            pixKeyValue: pixVal,
+          })
+          .pipe(
+            map((updated) => {
+              this.suppliersList.update((rows) =>
+                rows
+                  .map((s) => (s.id === updated.id ? updated : s))
+                  .sort((a, b) => a.name.localeCompare(b.name, 'pt')),
+              );
+              return updated.id;
+            }),
+          );
+      }
+      return of(existing.id);
+    }
+
+    const categoryId = this.defaultSupplierCategoryId();
+    if (!categoryId) {
+      return throwError(() => new Error('Categoria de fornecedor indisponível.'));
+    }
+
+    return this.suppliersApi
+      .createSupplier(this.condoId, {
+        categoryId,
+        name,
+        pixKeyType: pixType,
+        pixKeyValue: pixVal,
+      })
+      .pipe(
+        map((created) => {
+          this.suppliersList.update((rows) =>
+            [...rows, created].sort((a, b) =>
+              a.name.localeCompare(b.name, 'pt'),
+            ),
+          );
+          return created.id;
+        }),
+      );
   }
 
   protected supplierPixTypeLabel(
@@ -852,12 +1019,35 @@ export class PainelTransacoesComponent implements OnInit {
     void navigator.clipboard.writeText(v);
   }
 
+  private applyUrlFilters(
+    params: { get: (name: string) => string | null },
+  ): void {
+    this.workFilter.set(params.get('workId')?.trim() ?? '');
+    this.maintenanceFilter.set(params.get('maintenanceId')?.trim() ?? '');
+  }
+
+  /** Reaplica filtros da URL depois que obras/manutenções carregam (select precisa das opções). */
+  private reapplyUrlFiltersAfterCatalogsLoad(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const workId = params.get('workId')?.trim() ?? '';
+    const maintenanceId = params.get('maintenanceId')?.trim() ?? '';
+    if (workId) {
+      this.workFilter.set(workId);
+    }
+    if (maintenanceId) {
+      this.maintenanceFilter.set(maintenanceId);
+    }
+  }
+
   refreshList(): void {
     const fid = this.fundFilter() || undefined;
     const wid = this.workFilter() || undefined;
+    const mid = this.maintenanceFilter() || undefined;
     const from = this.periodFrom().trim().slice(0, 10);
     const to = this.periodTo().trim().slice(0, 10);
-    this.api.listTransactions(this.condoId, fid, from, to, wid).subscribe({
+    this.api
+      .listTransactions(this.condoId, fid, from, to, wid, mid)
+      .subscribe({
       next: (rows) => {
         this.transactions.set(rows);
         this.bulkSelectedIds.set(new Set());
@@ -877,6 +1067,11 @@ export class PainelTransacoesComponent implements OnInit {
 
   setWorkFilter(v: string): void {
     this.workFilter.set(v);
+    this.refreshList();
+  }
+
+  setMaintenanceFilter(v: string): void {
+    this.maintenanceFilter.set(v);
     this.refreshList();
   }
 
@@ -949,6 +1144,90 @@ export class PainelTransacoesComponent implements OnInit {
       });
   }
 
+  protected readonly bulkMaintenanceAssignableSelected = computed(
+    () => this.bulkWorkAssignableSelected(),
+  );
+
+  protected readonly bulkMaintenanceAssignableSelectedCount = computed(
+    () => this.bulkMaintenanceAssignableSelected().length,
+  );
+
+  protected openBulkAssignMaintenanceModal(): void {
+    const list = this.bulkMaintenanceAssignableSelected();
+    if (list.length === 0) {
+      return;
+    }
+    this.bulkAssignMaintenanceError.set(null);
+    const commonMaintenance = list.every(
+      (t) => (t.maintenanceId ?? '') === (list[0]?.maintenanceId ?? ''),
+    )
+      ? list[0]?.maintenanceId ?? ''
+      : '';
+    this.bulkAssignMaintenanceId.set(commonMaintenance);
+    this.bulkAssignMaintenanceOpen.set(true);
+  }
+
+  protected closeBulkAssignMaintenanceModal(): void {
+    if (this.bulkActionBusy()) {
+      return;
+    }
+    this.bulkAssignMaintenanceOpen.set(false);
+    this.bulkAssignMaintenanceError.set(null);
+  }
+
+  protected confirmBulkAssignMaintenance(): void {
+    const ids = this.bulkMaintenanceAssignableSelected().map((t) => t.id);
+    if (ids.length === 0) {
+      return;
+    }
+    const maintenanceId = this.bulkAssignMaintenanceId().trim() || null;
+    this.bulkActionBusy.set(true);
+    this.bulkAssignMaintenanceError.set(null);
+    this.api
+      .bulkAssignMaintenance(this.condoId, { transactionIds: ids, maintenanceId })
+      .subscribe({
+        next: (res) => {
+          this.bulkActionBusy.set(false);
+          this.bulkAssignMaintenanceOpen.set(false);
+          this.bulkSelectedIds.set(new Set());
+          this.refreshList();
+          if (res.skippedTransferIds.length > 0) {
+            this.flash.warning(
+              `${res.updated} transação(ões) vinculada(s). ${res.skippedTransferIds.length} transferência(s) foram ignoradas.`,
+            );
+          } else {
+            this.flash.success(
+              maintenanceId
+                ? `${res.updated} transação(ões) vinculada(s) à manutenção.`
+                : `Vínculo com manutenção removido em ${res.updated} transação(ões).`,
+            );
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.bulkActionBusy.set(false);
+          this.bulkAssignMaintenanceError.set(this.msg(err));
+        },
+      });
+  }
+
+  protected onWorkIdFormChange(raw: string): void {
+    this.workIdForm.set(raw);
+    if (raw.trim()) {
+      this.maintenanceIdForm.set('');
+      const work = this.works().find((w) => w.id === raw.trim());
+      if (work) {
+        this.applyAllocationRuleToForm(work.allocationRule);
+      }
+    }
+  }
+
+  protected onMaintenanceIdFormChange(raw: string): void {
+    this.maintenanceIdForm.set(raw);
+    if (raw.trim()) {
+      this.workIdForm.set('');
+    }
+  }
+
   setPeriodMode(mode: 'month' | 'custom'): void {
     if (this.periodMode() === mode) return;
     this.periodMode.set(mode);
@@ -1012,15 +1291,21 @@ export class PainelTransacoesComponent implements OnInit {
     this.searchTerm.set(v);
   }
 
-  setAmountFromInput(v: string): void {
-    const n = parseFloat(String(v).replace(',', '.'));
-    this.amountReais.set(Number.isFinite(n) ? n : 0);
+  private restoreMoneyDraft(v: string | number | undefined | null): string {
+    if (typeof v === 'string') {
+      return v;
+    }
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+      return centsToReaisInput(Math.round(v * 100));
+    }
+    return '';
   }
 
   setEntryMode(m: 'single' | 'recurring' | 'transfer'): void {
     this.entryMode.set(m);
     if (m === 'transfer') {
       this.workIdForm.set('');
+      this.maintenanceIdForm.set('');
       this.ensureTransferDefaults();
     }
   }
@@ -1116,21 +1401,6 @@ export class PainelTransacoesComponent implements OnInit {
     this.recurringCount.set(Number.isFinite(n) ? n : 0);
   }
 
-  setRecurringInstallmentFromInput(v: string): void {
-    const n = parseFloat(String(v).replace(',', '.'));
-    this.recurringInstallmentReais.set(Number.isFinite(n) ? n : 0);
-  }
-
-  setRecurringTotalFromInput(v: string): void {
-    const n = parseFloat(String(v).replace(',', '.'));
-    this.recurringTotalReais.set(Number.isFinite(n) ? n : 0);
-  }
-
-  setSeriesUniformAmountFromInput(v: string): void {
-    const n = parseFloat(String(v).replace(',', '.'));
-    this.seriesUniformAmountReais.set(Number.isFinite(n) ? n : 0);
-  }
-
   onAllocKindChange(v: string): void {
     const k = v as AllocKind;
     this.allocKind.set(k);
@@ -1190,6 +1460,14 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   buildRule(): AllocationRule {
+    const workId = this.workIdForm().trim();
+    if (workId) {
+      const work = this.works().find((w) => w.id === workId);
+      if (work?.allocationRule && work.allocationRule.kind !== 'none') {
+        return work.allocationRule;
+      }
+      return { kind: 'all_units_equal' };
+    }
     const k = this.allocKind();
     switch (k) {
       case 'all_units_equal':
@@ -1219,6 +1497,49 @@ export class PainelTransacoesComponent implements OnInit {
     }
   }
 
+  private applyAllocationRuleToForm(
+    rule: AllocationRule | null | undefined,
+  ): void {
+    if (!rule || rule.kind === 'all_units_equal') {
+      this.allocKind.set('all_units_equal');
+      this.selectedUnitIds.set([]);
+      this.selectedGroupingIds.set([]);
+      this.excludeUnitIds.set([]);
+      return;
+    }
+    switch (rule.kind) {
+      case 'none':
+        this.allocKind.set('all_units_equal');
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'unit_ids':
+        this.allocKind.set('unit_ids');
+        this.selectedUnitIds.set([...rule.unitIds].sort());
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'grouping_ids':
+        this.allocKind.set('grouping_ids');
+        this.selectedGroupingIds.set([...rule.groupingIds].sort());
+        this.selectedUnitIds.set([]);
+        this.excludeUnitIds.set([]);
+        break;
+      case 'all_units_except':
+        this.allocKind.set('all_units_except');
+        this.excludeUnitIds.set([...rule.excludeUnitIds].sort());
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        break;
+      default:
+        this.allocKind.set('all_units_equal');
+        this.selectedUnitIds.set([]);
+        this.selectedGroupingIds.set([]);
+        this.excludeUnitIds.set([]);
+    }
+  }
+
   private buildCreateDraftSnapshot(): TxCreateDraft {
     return {
       formExpanded: this.formExpanded(),
@@ -1238,6 +1559,10 @@ export class PainelTransacoesComponent implements OnInit {
       descriptionTx: this.descriptionTx(),
       fundIdForm: this.fundIdForm(),
       bankAccountIdForm: this.bankAccountIdForm(),
+      supplierIdForm: this.supplierIdForm(),
+      supplierNameForm: this.supplierNameForm(),
+      supplierPixKeyTypeForm: this.supplierPixKeyTypeForm(),
+      supplierPixKeyValueForm: this.supplierPixKeyValueForm(),
       allocKind: this.allocKind() as TxCreateDraftAllocKind,
       selectedUnitIds: [...this.selectedUnitIds()],
       selectedGroupingIds: [...this.selectedGroupingIds()],
@@ -1275,9 +1600,13 @@ export class PainelTransacoesComponent implements OnInit {
       }
       this.recurringMode.set(draft.recurringMode);
       this.recurringCount.set(draft.recurringCount);
-      this.recurringInstallmentReais.set(draft.recurringInstallmentReais);
-      this.recurringTotalReais.set(draft.recurringTotalReais);
-      this.amountReais.set(draft.amountReais);
+      this.recurringInstallmentReais.set(
+        this.restoreMoneyDraft(draft.recurringInstallmentReais),
+      );
+      this.recurringTotalReais.set(
+        this.restoreMoneyDraft(draft.recurringTotalReais),
+      );
+      this.amountReais.set(this.restoreMoneyDraft(draft.amountReais));
       if (draft.occurredOn.trim()) {
         this.occurredOn.set(draft.occurredOn.trim().slice(0, 10));
       }
@@ -1289,6 +1618,18 @@ export class PainelTransacoesComponent implements OnInit {
         this.bankAccountIdForm.set(bankId);
       } else {
         this.ensureDefaultBankAccount();
+      }
+      if (draft.supplierIdForm !== undefined) {
+        this.supplierIdForm.set(draft.supplierIdForm);
+      }
+      if (draft.supplierNameForm !== undefined) {
+        this.supplierNameForm.set(draft.supplierNameForm);
+      }
+      if (draft.supplierPixKeyTypeForm !== undefined) {
+        this.supplierPixKeyTypeForm.set(draft.supplierPixKeyTypeForm);
+      }
+      if (draft.supplierPixKeyValueForm !== undefined) {
+        this.supplierPixKeyValueForm.set(draft.supplierPixKeyValueForm);
       }
       this.allocKind.set(draft.allocKind);
       this.selectedUnitIds.set([...draft.selectedUnitIds]);
@@ -1311,7 +1652,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.clearCreateDraftStorage();
     this.editingId.set(null);
     this.editingSeriesId.set(null);
-    this.seriesUniformAmountReais.set(0);
+    this.seriesUniformAmountReais.set('');
     this.txKind.set('expense');
     this.entryMode.set('single');
     this.transferFromBankAccountId.set('');
@@ -1320,15 +1661,17 @@ export class PainelTransacoesComponent implements OnInit {
     this.transferToFundId.set('');
     this.recurringMode.set('by_installment');
     this.recurringCount.set(2);
-    this.recurringInstallmentReais.set(0);
-    this.recurringTotalReais.set(0);
-    this.amountReais.set(0);
+    this.recurringInstallmentReais.set('');
+    this.recurringTotalReais.set('');
+    this.amountReais.set('');
     this.occurredOn.set(todayLocalIsoDate());
     this.titleTx.set('');
     this.descriptionTx.set('');
     this.fundIdForm.set('');
     this.workIdForm.set('');
+    this.maintenanceIdForm.set('');
     this.supplierIdForm.set('');
+    this.clearNewSupplierFields();
     this.ensureDefaultBankAccount();
     this.allocKind.set('all_units_equal');
     this.selectedUnitIds.set([]);
@@ -1376,10 +1719,10 @@ export class PainelTransacoesComponent implements OnInit {
     }
     this.entryMode.set('single');
     this.editingSeriesId.set(null);
-    this.seriesUniformAmountReais.set(0);
+    this.seriesUniformAmountReais.set('');
     this.editingId.set(t.id);
     this.txKind.set(t.kind);
-    this.amountReais.set(Number(t.amountCents) / 100);
+    this.amountReais.set(centsToReaisInput(t.amountCents));
     this.occurredOn.set(
       t.occurredOn.length >= 10 ? t.occurredOn.slice(0, 10) : t.occurredOn,
     );
@@ -1387,7 +1730,9 @@ export class PainelTransacoesComponent implements OnInit {
     this.descriptionTx.set(t.description ?? '');
     this.fundIdForm.set(t.fundId ?? '');
     this.workIdForm.set(t.workId ?? '');
+    this.maintenanceIdForm.set(t.maintenanceId ?? '');
     this.supplierIdForm.set((t.supplierId ?? t.supplier?.id ?? '').trim());
+    this.clearNewSupplierFields();
     this.bankAccountIdForm.set(
       t.bankAccountId ?? t.bankAccount?.id ?? this.primaryBankAccountId() ?? '',
     );
@@ -1437,9 +1782,9 @@ export class PainelTransacoesComponent implements OnInit {
     this.editingId.set(null);
     this.entryMode.set('single');
     this.editingSeriesId.set(seriesId);
-    this.seriesUniformAmountReais.set(0);
+    this.seriesUniformAmountReais.set('');
     this.txKind.set(first.kind);
-    this.amountReais.set(Number(first.amountCents) / 100);
+    this.amountReais.set(centsToReaisInput(first.amountCents));
     this.occurredOn.set(
       first.occurredOn.length >= 10
         ? first.occurredOn.slice(0, 10)
@@ -1454,6 +1799,7 @@ export class PainelTransacoesComponent implements OnInit {
     this.supplierIdForm.set(
       supplierIds.size === 1 ? [...supplierIds][0] ?? '' : '',
     );
+    this.clearNewSupplierFields();
     this.bankAccountIdForm.set(
       first.bankAccountId ??
         first.bankAccount?.id ??
@@ -1660,16 +2006,19 @@ export class PainelTransacoesComponent implements OnInit {
       !editId && !editSeriesId && this.entryMode() === 'recurring';
 
     if (!isRecurring && !editSeriesId) {
-      const ar = this.amountReais();
-      if (!Number.isFinite(ar) || ar <= 0) {
+      const ar = parseReaisInputToCents(this.amountReais());
+      if (ar === null || ar <= 0) {
         this.flash.warning('Indique um valor válido em reais.');
         return;
       }
     } else if (editSeriesId) {
-      const u = this.seriesUniformAmountReais();
-      if (u !== 0 && (!Number.isFinite(u) || u <= 0)) {
-        this.flash.warning('Valor único para todas as parcelas inválido.');
-        return;
+      const uniformRaw = this.seriesUniformAmountReais().trim();
+      if (uniformRaw) {
+        const u = parseReaisInputToCents(uniformRaw);
+        if (u === null || u <= 0) {
+          this.flash.warning('Valor único para todas as parcelas inválido.');
+          return;
+        }
       }
     } else if (isRecurring) {
       const n = Math.floor(this.recurringCount());
@@ -1682,18 +2031,24 @@ export class PainelTransacoesComponent implements OnInit {
         return;
       }
       if (this.recurringMode() === 'by_installment') {
-        const v = this.recurringInstallmentReais();
-        if (!Number.isFinite(v) || v <= 0) {
+        const v = parseReaisInputToCents(this.recurringInstallmentReais());
+        if (v === null || v <= 0) {
           this.flash.warning('Indique o valor de cada parcela.');
           return;
         }
       } else {
-        const t = this.recurringTotalReais();
-        if (!Number.isFinite(t) || t <= 0) {
+        const t = parseReaisInputToCents(this.recurringTotalReais());
+        if (t === null || t <= 0) {
           this.flash.warning('Indique o valor total a dividir.');
           return;
         }
       }
+    }
+
+    const supplierErr = this.validateNewSupplierForm();
+    if (supplierErr) {
+      this.flash.warning(supplierErr);
+      return;
     }
 
     const pendingDocuments = this.pendingDocumentFiles();
@@ -1731,9 +2086,9 @@ export class PainelTransacoesComponent implements OnInit {
               ...uploadedDocumentKeys,
             ];
             const receiptKey = uploads.receiptUpload?.receiptStorageKey;
-            const supplierFormId = this.supplierIdForm().trim();
-            const supplierPatch =
-              supplierFormId === '' ? null : supplierFormId;
+            return this.resolveSupplierIdForSave().pipe(
+              switchMap((resolvedSupplierId) => {
+                const supplierPatch = resolvedSupplierId ?? null;
           if (editSeriesId) {
             const patch: Parameters<
               FinancialApiService['updateRecurringSeries']
@@ -1746,9 +2101,11 @@ export class PainelTransacoesComponent implements OnInit {
               allocationRule: rule,
             };
             patch.supplierId = supplierPatch;
-            const uniform = this.seriesUniformAmountReais();
-            if (Number.isFinite(uniform) && uniform > 0) {
-              patch.amountCents = reaisToCents(uniform);
+            const uniformCents = parseReaisInputToCents(
+              this.seriesUniformAmountReais(),
+            );
+            if (uniformCents !== null && uniformCents > 0) {
+              patch.amountCents = uniformCents;
             }
             patch.documentStorageKeys = finalDocumentKeys;
             if (receiptKey) {
@@ -1763,10 +2120,10 @@ export class PainelTransacoesComponent implements OnInit {
             );
           }
           if (editId) {
-            const ar = this.amountReais();
+            const amountCents = parseReaisInputToCents(this.amountReais());
             const baseBody = {
               kind: this.txKind(),
-              amountCents: reaisToCents(ar),
+              amountCents: amountCents!,
               occurredOn: this.occurredOn(),
               title,
               description: this.descriptionTx().trim() || null,
@@ -1778,6 +2135,7 @@ export class PainelTransacoesComponent implements OnInit {
               FinancialApiService['updateTransaction']
             >[2] = { ...baseBody };
             patch.workId = this.resolveWorkIdForPayload();
+            patch.maintenanceId = this.resolveMaintenanceIdForPayload();
             patch.supplierId = supplierPatch;
             patch.documentStorageKeys = finalDocumentKeys;
             if (receiptKey) {
@@ -1795,7 +2153,7 @@ export class PainelTransacoesComponent implements OnInit {
               finalDocumentKeys,
               receiptKey,
               recurringSeriesId,
-              supplierFormId || undefined,
+              resolvedSupplierId,
             );
             return from(payloads).pipe(
               concatMap((body) =>
@@ -1804,12 +2162,12 @@ export class PainelTransacoesComponent implements OnInit {
               last(),
             );
           }
-          const ar = this.amountReais();
+          const amountCents = parseReaisInputToCents(this.amountReais())!;
           const createBody: Parameters<
             FinancialApiService['createTransaction']
           >[1] = {
             kind: this.txKind(),
-            amountCents: reaisToCents(ar),
+            amountCents,
             occurredOn: this.occurredOn(),
             title,
             description: this.descriptionTx().trim() || null,
@@ -1817,6 +2175,7 @@ export class PainelTransacoesComponent implements OnInit {
             bankAccountId,
             allocationRule: rule,
             workId: this.resolveWorkIdForPayload(),
+            maintenanceId: this.resolveMaintenanceIdForPayload(),
           };
           if (finalDocumentKeys.length > 0) {
             createBody.documentStorageKeys = finalDocumentKeys;
@@ -1824,12 +2183,22 @@ export class PainelTransacoesComponent implements OnInit {
           if (receiptKey) {
             createBody.receiptStorageKey = receiptKey;
           }
-          if (supplierFormId) {
-            createBody.supplierId = supplierFormId;
+          if (resolvedSupplierId) {
+            createBody.supplierId = resolvedSupplierId;
           }
           return this.api.createTransaction(this.condoId, createBody);
+              }),
+            );
         },
         ),
+        catchError((err: unknown) => {
+          if (err instanceof Error && !(err instanceof HttpErrorResponse)) {
+            this.saving.set(false);
+            this.flash.warning(err.message);
+            return EMPTY;
+          }
+          return throwError(() => err);
+        }),
       )
       .subscribe({
         next: () => {
@@ -1872,8 +2241,8 @@ export class PainelTransacoesComponent implements OnInit {
       );
       return;
     }
-    const ar = this.amountReais();
-    if (!Number.isFinite(ar) || ar <= 0) {
+    const amountCents = parseReaisInputToCents(this.amountReais());
+    if (amountCents === null || amountCents <= 0) {
       this.flash.warning('Indique um valor válido em reais.');
       return;
     }
@@ -1887,7 +2256,7 @@ export class PainelTransacoesComponent implements OnInit {
       toBankAccountId,
       fromFundId,
       toFundId,
-      amountCents: reaisToCents(ar),
+      amountCents,
       occurredOn: this.occurredOn(),
       description: this.descriptionTx().trim() || null,
     };
@@ -1937,6 +2306,14 @@ export class PainelTransacoesComponent implements OnInit {
     return id || null;
   }
 
+  private resolveMaintenanceIdForPayload(): string | null {
+    if (this.entryMode() === 'transfer') {
+      return null;
+    }
+    const id = this.maintenanceIdForm().trim();
+    return id || null;
+  }
+
   private buildRecurringCreatePayloads(
     title: string,
     rule: AllocationRule,
@@ -1950,16 +2327,17 @@ export class PainelTransacoesComponent implements OnInit {
     const desc = this.descriptionTx().trim() || null;
     const fundId = this.fundIdForm() || null;
     const workId = this.resolveWorkIdForPayload();
+    const maintenanceId = this.resolveMaintenanceIdForPayload();
     const bankAccountId = this.bankAccountIdForm().trim();
     const kind = this.txKind();
 
     let amounts: number[];
     if (this.recurringMode() === 'by_installment') {
-      const c = reaisToCents(this.recurringInstallmentReais());
+      const c = parseReaisInputToCents(this.recurringInstallmentReais())!;
       amounts = Array.from({ length: n }, () => c);
     } else {
       amounts = this.splitTotalCentsEvenly(
-        reaisToCents(this.recurringTotalReais()),
+        parseReaisInputToCents(this.recurringTotalReais())!,
         n,
       );
     }
@@ -1976,6 +2354,7 @@ export class PainelTransacoesComponent implements OnInit {
         allocationRule: rule,
         recurringSeriesId,
         workId,
+        maintenanceId,
       };
       if (i === 0 && documentKeys.length > 0) {
         body.documentStorageKeys = documentKeys;
@@ -2007,7 +2386,7 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   protected openSettleFromMenu(t: FinancialTransaction): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     this.settleError.set(null);
     this.settleReceiptFile.set(null);
     this.settleTarget.set(t);
@@ -2097,7 +2476,7 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   protected cancelTxFromMenu(t: FinancialTransaction): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     if (
       !confirm(
         `Cancelar o lançamento «${t.title}»? Deixa de entrar na taxa condominial e nos saldos (aparece como desativado).`,
@@ -2114,7 +2493,7 @@ export class PainelTransacoesComponent implements OnInit {
   }
 
   protected reopenTxFromMenu(t: FinancialTransaction): void {
-    this.rowActionMenuForId.set(null);
+    this.closeRowActionMenu();
     if (
       !confirm(
         `Reabrir quitação de «${t.title}»? Volta a «aguardando» e pode voltar a ser incluída na taxa condominial.`,

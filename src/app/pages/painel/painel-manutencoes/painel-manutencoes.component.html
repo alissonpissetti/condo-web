@@ -1,0 +1,1215 @@
+<div
+  class="page"
+  [class.page--work-detail]="detailMaintenanceId() !== null"
+>
+  @if (!detailMaintenanceId()) {
+    <header class="page__header">
+      <h1>Manutenções</h1>
+      <p class="page__intro">
+        Registre consertos rotineiros, anexe fotos e notas fiscais e vincule
+        despesas à linha do tempo para histórico e garantia.
+      </p>
+    </header>
+
+    @if (loadError()) {
+      <p class="plan-banner plan-banner--error" role="alert">{{ loadError() }}</p>
+    } @else {
+      <div class="plan-stack">
+        @if (canManage()) {
+          <section class="form-card plan-create-card">
+            <button
+              type="button"
+              class="plan-create-toggle"
+              (click)="toggleCreateExpanded()"
+              [attr.aria-expanded]="createExpanded()"
+            >
+              <span class="plan-create-toggle__label">Nova manutenção</span>
+              <span class="plan-create-toggle__hint" aria-hidden="true">{{
+                createExpanded() ? 'Recolher' : 'Expandir'
+              }}</span>
+            </button>
+            @if (createExpanded()) {
+              <div class="plan-create-panel obras-create-panel">
+                <form
+                  class="manut-form fund-form"
+                  [formGroup]="createForm"
+                  (ngSubmit)="submitCreate()"
+                  novalidate
+                >
+                  <div class="manut-form__grid">
+                    <label class="field field--block">
+                      <span class="field__label">Título</span>
+                      <input
+                        type="text"
+                        class="input"
+                        formControlName="title"
+                        maxlength="512"
+                        placeholder="Ex.: Correção no portão eletrônico"
+                      />
+                    </label>
+                    <label class="field field--block">
+                      <span class="field__label">Status inicial</span>
+                      <select class="input" formControlName="status">
+                        @for (opt of statusOptions; track opt.value) {
+                          <option [value]="opt.value">{{ opt.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label class="field field--block">
+                      <span class="field__label">Local</span>
+                      <input
+                        type="text"
+                        class="input"
+                        formControlName="location"
+                        maxlength="255"
+                        placeholder="Ex.: Portão principal"
+                        list="manut-location-create-suggestions"
+                        autocomplete="off"
+                      />
+                      <datalist id="manut-location-create-suggestions">
+                        @for (loc of locationSuggestions(); track loc) {
+                          <option [value]="loc"></option>
+                        }
+                      </datalist>
+                    </label>
+                    <label class="field field--block">
+                      <span class="field__label">Fornecedor</span>
+                      <select
+                        class="input"
+                        [value]="createSupplierSelectValue()"
+                        (change)="onCreateSupplierChange($any($event.target).value)"
+                      >
+                        <option value="">— Nenhum —</option>
+                        <option [value]="manualSupplierOption"
+                          >— Digitar nome manualmente —</option
+                        >
+                        @for (s of suppliers(); track s.id) {
+                          <option [value]="s.id">{{ supplierOptionLabel(s) }}</option>
+                        }
+                      </select>
+                      @if (createSupplierManual()) {
+                        <input
+                          type="text"
+                          class="input manut-form__supplier-name"
+                          formControlName="supplierName"
+                          maxlength="255"
+                          placeholder="Nome da empresa"
+                        />
+                        <div class="plan-create-pair supplier-pix-pair manut-form__pix-pair">
+                          <label class="field field--block">
+                            <span class="field__label">Tipo de chave PIX (opcional)</span>
+                            <select
+                              class="input"
+                              formControlName="supplierPixKeyType"
+                            >
+                              <option value="">Não informar PIX</option>
+                              @for (opt of supplierPixTypeOptions; track opt.value) {
+                                <option [value]="opt.value">{{ opt.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Chave PIX</span>
+                            <input
+                              type="text"
+                              class="input"
+                              formControlName="supplierPixKeyValue"
+                              maxlength="255"
+                              placeholder="Valor da chave"
+                            />
+                          </label>
+                        </div>
+                        <p class="muted small form-section__inline-hint">
+                          O fornecedor é salvo no cadastro (categoria «Outros»).
+                          <a
+                            [routerLink]="[
+                              '/painel/condominio',
+                              condominiumIdParam(),
+                              'fornecedores',
+                            ]"
+                            >Gerenciar fornecedores</a
+                          >.
+                        </p>
+                      } @else {
+                        @let sup = selectedCreateSupplier();
+                        @if (sup && supplierContactHint(sup); as hint) {
+                          <p class="muted small form-section__inline-hint">{{ hint }}</p>
+                        }
+                      }
+                    </label>
+                    <label class="field field--block manut-form__span-2">
+                      <span class="field__label">Peças / itens trocados</span>
+                      <textarea
+                        class="input"
+                        rows="2"
+                        formControlName="replacedParts"
+                        placeholder="Ex.: Motor do portão, placa de controle…"
+                      ></textarea>
+                    </label>
+                    <label class="field field--block manut-form__span-2">
+                      <span class="field__label">Descrição</span>
+                      <textarea
+                        class="input"
+                        rows="2"
+                        formControlName="description"
+                      ></textarea>
+                    </label>
+                    <div class="field field--block manut-form__span-2">
+                      <span class="field__label">Anexos iniciais (opcional)</span>
+                      <input
+                        #createFileInput
+                        type="file"
+                        class="receipt-field__input"
+                        multiple
+                        accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+                        [disabled]="busy()"
+                        (change)="onCreateFilesSelected($event)"
+                      />
+                      <div class="receipt-field__box">
+                        <button
+                          type="button"
+                          class="btn btn--ghost sm"
+                          [disabled]="busy()"
+                          (click)="createFileInput.click()"
+                        >
+                          Escolher arquivos…
+                        </button>
+                        <span class="receipt-field__name"
+                          >NF, fotos ou comprovantes — publicados na linha do tempo ao
+                          criar.</span
+                        >
+                      </div>
+                      @if (createPendingFiles().length > 0) {
+                        <ul class="obras-file-chips" aria-label="Anexos selecionados">
+                          @for (f of createPendingFiles(); track $index) {
+                            <li class="obras-file-chips__item">
+                              <span class="obras-file-chips__name">{{ f.name }}</span>
+                              <button
+                                type="button"
+                                class="btn btn--ghost sm"
+                                [disabled]="busy()"
+                                (click)="removeCreatePendingFile($index)"
+                              >
+                                Remover
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </div>
+                  <div class="manut-form__actions">
+                    <button
+                      type="submit"
+                      class="btn primary"
+                      [disabled]="createForm.invalid || busy()"
+                    >
+                      {{ busy() ? 'Salvando…' : 'Criar manutenção' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            }
+          </section>
+        }
+
+        <section class="form-card plan-list-card">
+          <div class="form-card__head">
+            <h2 class="form-card__title">Manutenções cadastradas</h2>
+            <label class="field field--block obras-list-filter">
+              <span class="field__label">Filtrar por status</span>
+              <select
+                class="input"
+                [value]="statusFilter()"
+                (change)="setStatusFilter($any($event.target).value)"
+              >
+                <option value="all">Todas</option>
+                @for (opt of statusOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          @if (listLoading()) {
+            <p class="muted plan-list-card__loading">Carregando…</p>
+          } @else if (!listHasVisible()) {
+            <div class="plan-list-empty" role="status">
+              <p class="plan-list-empty__title">Nenhuma manutenção neste filtro</p>
+            </div>
+          } @else {
+            <div class="plan-list-body obras-list-sections">
+              @if (activeItems().length > 0) {
+                <section class="list-section">
+                  <h3 class="list-section__title">Em aberto / andamento</h3>
+                  <ul class="plan-poll-list">
+                    @for (m of activeItems(); track m.id) {
+                      <li>
+                        <a
+                          class="plan-poll-tile obras-work-tile"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'manutencoes',
+                            m.id,
+                          ]"
+                        >
+                          <span class="plan-poll-tile__title">{{ m.title }}</span>
+                          @if (m.location) {
+                            <span class="muted small">{{ m.location }}</span>
+                          }
+                          @if (maintenanceListDateLabel(m); as listDate) {
+                            <span class="plan-poll-tile__competence muted">{{
+                              listDate
+                            }}</span>
+                          }
+                          <span class="plan-poll-tile__meta">
+                            <span
+                              class="plan-pill sm"
+                              [ngClass]="statusPillClass(m.status)"
+                              >{{ statusLabel(m.status) }}</span
+                            >
+                          </span>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+              @if (completedItems().length > 0) {
+                <section class="list-section">
+                  <h3 class="list-section__title">Concluídas</h3>
+                  <ul class="plan-poll-list">
+                    @for (m of completedItems(); track m.id) {
+                      <li>
+                        <a
+                          class="plan-poll-tile obras-work-tile"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'manutencoes',
+                            m.id,
+                          ]"
+                        >
+                          <span class="plan-poll-tile__title">{{ m.title }}</span>
+                          @if (m.location) {
+                            <span class="muted small">{{ m.location }}</span>
+                          }
+                          @if (maintenanceListDateLabel(m); as listDate) {
+                            <span class="plan-poll-tile__competence muted">{{
+                              listDate
+                            }}</span>
+                          }
+                          <span class="plan-poll-tile__meta">
+                            <span
+                              class="plan-pill sm"
+                              [ngClass]="statusPillClass(m.status)"
+                              >{{ statusLabel(m.status) }}</span
+                            >
+                          </span>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+              @if (cancelledItems().length > 0) {
+                <section class="list-section">
+                  <h3 class="list-section__title">Canceladas</h3>
+                  <ul class="plan-poll-list">
+                    @for (m of cancelledItems(); track m.id) {
+                      <li>
+                        <a
+                          class="plan-poll-tile obras-work-tile"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'manutencoes',
+                            m.id,
+                          ]"
+                        >
+                          <span class="plan-poll-tile__title">{{ m.title }}</span>
+                          @if (m.location) {
+                            <span class="muted small">{{ m.location }}</span>
+                          }
+                          @if (maintenanceListDateLabel(m); as listDate) {
+                            <span class="plan-poll-tile__competence muted">{{
+                              listDate
+                            }}</span>
+                          }
+                          <span class="plan-poll-tile__meta">
+                            <span
+                              class="plan-pill sm"
+                              [ngClass]="statusPillClass(m.status)"
+                              >{{ statusLabel(m.status) }}</span
+                            >
+                          </span>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+            </div>
+          }
+        </section>
+      </div>
+    }
+  } @else {
+    <div class="plan-detail-page">
+      <nav class="plan-back" aria-label="Navegação da manutenção">
+        <a
+          class="btn btn--ghost sm plan-back__link"
+          [routerLink]="['/painel/condominio', condominiumIdParam(), 'manutencoes']"
+        >
+          ← Voltar às manutenções
+        </a>
+      </nav>
+
+      @if (detailLoading() && !selected()) {
+        <p class="muted">Carregando manutenção…</p>
+      } @else if (detailError()) {
+        <p class="plan-banner plan-banner--error" role="alert">{{ detailError() }}</p>
+      } @else if (selected()) {
+      <section class="form-card plan-detail">
+        <div class="form-card__head plan-detail__head">
+          <div class="plan-detail__head-primary">
+            <h1 class="plan-detail__h1">{{ selected()!.title }}</h1>
+            @if (selected()!.location) {
+              <p class="form-card__lede plan-detail__lede">
+                <span class="plan-detail__lede-label">Local</span>
+                {{ selected()!.location }}
+              </p>
+            }
+            @if (selected()!.replacedParts) {
+              <p class="form-card__lede plan-detail__lede">
+                <span class="plan-detail__lede-label">Peças trocadas</span>
+                {{ selected()!.replacedParts }}
+              </p>
+            }
+            @if (selected()!.description) {
+              <p class="form-card__lede plan-detail__lede">
+                <span class="plan-detail__lede-label">Descrição</span>
+                {{ selected()!.description }}
+              </p>
+            }
+            @if (selected()!.supplierName) {
+              <p class="muted small">Fornecedor: {{ selected()!.supplierName }}</p>
+            }
+            @if (canManage()) {
+              <div class="plan-title-actions">
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="toggleEditingHeader()"
+                >
+                  {{ editingHeader() ? 'Fechar edição' : 'Editar dados' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn danger sm"
+                  [disabled]="busy()"
+                  (click)="deleteMaintenance()"
+                >
+                  Remover
+                </button>
+              </div>
+            }
+          </div>
+          <div class="plan-detail__badges" aria-label="Status da manutenção">
+            @if (canManage()) {
+              <label class="obra-status-field">
+                <span class="obra-status-field__label">Status</span>
+                <select
+                  class="obra-status-select"
+                  [ngClass]="maintenanceStatusSelectClass(editForm.controls.status.value)"
+                  [formControl]="editForm.controls.status"
+                  (change)="onMaintenanceStatusChange($event)"
+                  [disabled]="busy()"
+                >
+                  @for (opt of statusOptions; track opt.value) {
+                    <option [value]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+              </label>
+            } @else {
+              <span
+                class="plan-pill"
+                [ngClass]="statusPillClass(selected()!.status)"
+                >{{ statusLabel(selected()!.status) }}</span
+              >
+            }
+          </div>
+        </div>
+
+        <div class="plan-detail__body">
+          @if (canManage() && editingHeader()) {
+            <section
+              class="plan-detail__section plan-type-settings"
+              aria-labelledby="manut-edit-heading"
+            >
+              <h3 class="plan-subtitle" id="manut-edit-heading">Dados da manutenção</h3>
+              <form
+                class="plan-type-settings__form manut-form fund-form"
+                [formGroup]="editForm"
+                (ngSubmit)="saveHeader()"
+              >
+                <div class="manut-form__grid">
+                  <label class="field field--block">
+                    <span class="field__label">Título</span>
+                    <input type="text" class="input" formControlName="title" />
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Status</span>
+                    <select class="input" formControlName="status">
+                      @for (opt of statusOptions; track opt.value) {
+                        <option [value]="opt.value">{{ opt.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Local</span>
+                    <input
+                      type="text"
+                      class="input"
+                      formControlName="location"
+                      maxlength="255"
+                      list="manut-location-edit-suggestions"
+                      autocomplete="off"
+                    />
+                    <datalist id="manut-location-edit-suggestions">
+                      @for (loc of locationSuggestions(); track loc) {
+                        <option [value]="loc"></option>
+                      }
+                    </datalist>
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Fornecedor</span>
+                    <select
+                      class="input"
+                      [value]="editSupplierSelectValue()"
+                      (change)="onEditSupplierChange($any($event.target).value)"
+                    >
+                      <option value="">— Nenhum —</option>
+                      <option [value]="manualSupplierOption"
+                        >— Digitar nome manualmente —</option
+                      >
+                      @for (s of suppliers(); track s.id) {
+                        <option [value]="s.id">{{ supplierOptionLabel(s) }}</option>
+                      }
+                    </select>
+                    @if (editSupplierManual()) {
+                      <input
+                        type="text"
+                        class="input manut-form__supplier-name"
+                        formControlName="supplierName"
+                        maxlength="255"
+                        placeholder="Nome da empresa"
+                      />
+                      <div class="plan-create-pair supplier-pix-pair manut-form__pix-pair">
+                        <label class="field field--block">
+                          <span class="field__label">Tipo de chave PIX (opcional)</span>
+                          <select class="input" formControlName="supplierPixKeyType">
+                            <option value="">Não informar PIX</option>
+                            @for (opt of supplierPixTypeOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                        <label class="field field--block">
+                          <span class="field__label">Chave PIX</span>
+                          <input
+                            type="text"
+                            class="input"
+                            formControlName="supplierPixKeyValue"
+                            maxlength="255"
+                            placeholder="Valor da chave"
+                          />
+                        </label>
+                      </div>
+                    } @else {
+                      @let sup = selectedEditSupplier();
+                      @if (sup && supplierContactHint(sup); as hint) {
+                        <p class="muted small form-section__inline-hint">{{ hint }}</p>
+                      }
+                    }
+                  </label>
+                  <label class="field field--block manut-form__span-2">
+                    <span class="field__label">Peças trocadas</span>
+                    <textarea class="input" rows="2" formControlName="replacedParts"></textarea>
+                  </label>
+                  <label class="field field--block manut-form__span-2">
+                    <span class="field__label">Descrição</span>
+                    <textarea class="input" rows="2" formControlName="description"></textarea>
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  class="btn primary sm plan-type-settings__submit"
+                  [disabled]="editForm.invalid || busy()"
+                >
+                  {{ busy() ? 'Salvando…' : 'Salvar alterações' }}
+                </button>
+              </form>
+            </section>
+          }
+
+          @if (canManage()) {
+            <section
+              class="form-card plan-create-card obras-register-card"
+              aria-label="Novo registro na timeline"
+            >
+              <button
+                type="button"
+                class="plan-create-toggle"
+                (click)="toggleRegisterExpanded()"
+                [attr.aria-expanded]="registerExpanded()"
+                aria-controls="manut-register-panel"
+              >
+                <span class="plan-create-toggle__label">Novo registro</span>
+                <span class="plan-create-toggle__hint" aria-hidden="true">{{
+                  registerExpanded() ? 'Recolher' : 'Expandir'
+                }}</span>
+              </button>
+              @if (registerExpanded()) {
+                <div id="manut-register-panel" class="plan-create-panel">
+                  <p class="form-card__lede plan-create-panel__lede">
+                    Nota com anexos ou despesa financeira vinculada a esta manutenção. Despesas
+                    quitadas aparecem na linha do tempo e em Transações.
+                  </p>
+                  <div class="obras-register">
+                  <div
+                    class="obras-register__type"
+                    role="tablist"
+                    aria-label="Tipo de registro"
+                  >
+                    <button
+                      type="button"
+                      class="obras-register__type-btn"
+                      role="tab"
+                      [attr.aria-selected]="registerTab() === 'note'"
+                      [class.obras-register__type-btn--active]="registerTab() === 'note'"
+                      (click)="setRegisterTab('note')"
+                    >
+                      Registro
+                    </button>
+                    @if (canRegisterTransaction()) {
+                      <button
+                        type="button"
+                        class="obras-register__type-btn"
+                        role="tab"
+                        [attr.aria-selected]="registerTab() === 'transaction'"
+                        [class.obras-register__type-btn--active]="
+                          registerTab() === 'transaction'
+                        "
+                        (click)="setRegisterTab('transaction')"
+                      >
+                        Despesa
+                      </button>
+                    }
+                  </div>
+
+                  <div class="obras-register__panel">
+                  @if (registerTab() === 'note') {
+                    <form
+                      class="obras-register__form fund-form"
+                      [formGroup]="noteForm"
+                      (ngSubmit)="submitNote()"
+                    >
+                      <div class="form-section">
+                        <label class="field field--block plan-create-competence">
+                          <span class="field__label">Quando ocorreu</span>
+                          <input
+                            type="datetime-local"
+                            class="input plan-create-competence__input"
+                            [max]="nowForDatetimeLocal()"
+                            [value]="registerRecordedOn()"
+                            (input)="setRegisterRecordedOn($any($event.target).value)"
+                          />
+                          <p class="form-section__hint plan-hint-tight">
+                            Em branco = agora.
+                          </p>
+                        </label>
+                      </div>
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <div>
+                            <h4 class="form-section__title">Registro</h4>
+                            <p class="form-section__hint">
+                              Texto livre sobre o que foi feito, observações ou contato.
+                            </p>
+                          </div>
+                        </div>
+                        <label class="field field--block">
+                          <span class="field__label">Texto</span>
+                          <textarea
+                            class="input"
+                            rows="3"
+                            formControlName="body"
+                            placeholder="O que foi feito, observações…"
+                          ></textarea>
+                        </label>
+                      </div>
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <div>
+                            <h4 class="form-section__title">Anexos</h4>
+                            <p class="form-section__hint">NF, fotos ou comprovantes (opcional).</p>
+                          </div>
+                        </div>
+                        <div class="receipt-field">
+                          <input
+                            #noteFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+                            [disabled]="busy()"
+                            (change)="onNoteFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="noteFileInput.click()"
+                            >
+                              Escolher arquivos…
+                            </button>
+                            <span class="receipt-field__name"
+                              >PDF, JPG, PNG ou WEBP — até 8 MB por arquivo.</span
+                            >
+                          </div>
+                          @if (notePendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Anexos selecionados">
+                              @for (f of notePendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeNotePendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="busy()"
+                        >
+                          {{ busy() ? 'Publicando…' : 'Publicar na linha do tempo' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+
+                  @if (canRegisterTransaction() && registerTab() === 'transaction') {
+                    <form
+                      class="obras-register__form fund-form obras-transaction-form manut-transaction-form"
+                      [formGroup]="transactionForm"
+                      (ngSubmit)="submitTransaction()"
+                    >
+                      <div class="form-section">
+                        <div class="form-section__head">
+                          <div>
+                            <h4 class="form-section__title">Despesa na manutenção</h4>
+                            <p class="form-section__hint">
+                              Cria uma despesa no financeiro, com anexos (NF/comprovante), e
+                              vincula a esta manutenção. Para quitar com PIX, use
+                              <a
+                                [routerLink]="transactionsLink()"
+                                [queryParams]="transactionsQueryParams()"
+                                >Transações</a
+                              >.
+                            </p>
+                          </div>
+                        </div>
+                        <div class="plan-create-pair">
+                          <label class="field field--block">
+                            <span class="field__label">Título</span>
+                            <input
+                              type="text"
+                              class="input"
+                              formControlName="title"
+                              maxlength="255"
+                              placeholder="Ex.: Pagamento mão de obra"
+                            />
+                          </label>
+                          <label class="field field--block field--money">
+                            <span class="field__label">Valor (R$)</span>
+                            <div class="input-money">
+                              <span class="input-money__prefix" aria-hidden="true">R$</span>
+                              <input
+                                type="text"
+                                class="input input--money"
+                                formControlName="amountReais"
+                                appBrMoneyMask
+                                placeholder="0,00"
+                              />
+                            </div>
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Data</span>
+                            <input
+                              type="date"
+                              class="input"
+                              formControlName="occurredOn"
+                            />
+                          </label>
+                          <label class="field field--block">
+                            <span class="field__label">Fornecedor (opcional)</span>
+                            <select
+                              class="input"
+                              formControlName="supplierId"
+                              (change)="
+                                onTransactionSupplierIdChange($any($event.target).value)
+                              "
+                            >
+                              <option value="">— Digitar nome manualmente —</option>
+                              @for (s of suppliers(); track s.id) {
+                                <option [value]="s.id">{{ supplierOptionLabel(s) }}</option>
+                              }
+                            </select>
+                            @if (!transactionForm.controls.supplierId.value) {
+                              <input
+                                type="text"
+                                class="input manut-form__supplier-name"
+                                formControlName="supplierName"
+                                placeholder="Nome da empresa"
+                              />
+                              <div class="plan-create-pair supplier-pix-pair manut-form__pix-pair">
+                                <label class="field field--block">
+                                  <span class="field__label">Tipo de chave PIX (opcional)</span>
+                                  <select class="input" formControlName="supplierPixKeyType">
+                                    <option value="">Não informar PIX</option>
+                                    @for (opt of supplierPixTypeOptions; track opt.value) {
+                                      <option [value]="opt.value">{{ opt.label }}</option>
+                                    }
+                                  </select>
+                                </label>
+                                <label class="field field--block">
+                                  <span class="field__label">Chave PIX</span>
+                                  <input
+                                    type="text"
+                                    class="input"
+                                    formControlName="supplierPixKeyValue"
+                                    maxlength="255"
+                                    placeholder="Valor da chave"
+                                  />
+                                </label>
+                              </div>
+                            } @else {
+                              @if (transactionSupplierContactHint(); as hint) {
+                                <p class="muted small form-section__inline-hint">{{ hint }}</p>
+                              }
+                            }
+                          </label>
+                        </div>
+
+                        @if (activeBankAccounts().length === 0) {
+                          <p class="plan-banner plan-banner--warn" role="status">
+                            Cadastre uma conta bancária em
+                            <a
+                              [routerLink]="[
+                                '/painel/condominio',
+                                condominiumIdParam(),
+                                'contas-bancarias',
+                              ]"
+                              >Contas bancárias</a
+                            >
+                            antes de lançar.
+                          </p>
+                        } @else {
+                          <div class="plan-create-pair obras-register__pair-spaced">
+                            <label class="field field--block">
+                              <span class="field__label">Conta bancária</span>
+                              <select class="input" formControlName="bankAccountId">
+                                @for (a of activeBankAccounts(); track a.id) {
+                                  <option [value]="a.id">{{ bankAccountLabel(a) }}</option>
+                                }
+                              </select>
+                            </label>
+                            <label class="field field--block">
+                              <span class="field__label">Fundo (opcional)</span>
+                              <select class="input" formControlName="fundId">
+                                <option value="">— Nenhum —</option>
+                                @for (f of funds(); track f.id) {
+                                  <option [value]="f.id">{{ f.name }}</option>
+                                }
+                              </select>
+                            </label>
+                          </div>
+                        }
+
+                        <label class="field field--block obras-register__pair-spaced">
+                          <span class="field__label">Descrição (opcional)</span>
+                          <textarea
+                            class="input"
+                            rows="2"
+                            formControlName="description"
+                          ></textarea>
+                        </label>
+
+                        <div class="receipt-field obras-register__pair-spaced">
+                          <span class="field__label">Anexos (NF, comprovante…)</span>
+                          <input
+                            #transactionFileInput
+                            type="file"
+                            class="receipt-field__input"
+                            multiple
+                            accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+                            [disabled]="busy()"
+                            (change)="onTransactionFilesSelected($event)"
+                          />
+                          <div class="receipt-field__box">
+                            <button
+                              type="button"
+                              class="btn btn--ghost sm"
+                              [disabled]="busy()"
+                              (click)="transactionFileInput.click()"
+                            >
+                              Escolher arquivos…
+                            </button>
+                            <span class="receipt-field__name"
+                              >PDF, JPG, PNG ou WEBP — ficam na transação financeira.</span
+                            >
+                          </div>
+                          @if (transactionPendingFiles().length > 0) {
+                            <ul class="obras-file-chips" aria-label="Anexos selecionados">
+                              @for (f of transactionPendingFiles(); track $index) {
+                                <li class="obras-file-chips__item">
+                                  <span class="obras-file-chips__name">{{ f.name }}</span>
+                                  <button
+                                    type="button"
+                                    class="btn btn--ghost sm"
+                                    [disabled]="busy()"
+                                    (click)="removeTransactionPendingFile($index)"
+                                  >
+                                    Remover
+                                  </button>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="obras-register__actions">
+                        <button
+                          type="submit"
+                          class="btn primary"
+                          [disabled]="
+                            busy() ||
+                            transactionForm.invalid ||
+                            activeBankAccounts().length === 0
+                          "
+                        >
+                          {{ busy() ? 'Salvando…' : 'Registrar despesa' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+                  </div>
+                  </div>
+                </div>
+              }
+            </section>
+          }
+
+          <section
+            class="plan-detail__section obras-timeline-section"
+            aria-labelledby="manut-timeline-heading"
+          >
+            <div
+              class="obras-work-progress obras-work-progress--manut"
+              role="region"
+              aria-label="Custos da manutenção"
+            >
+              <div class="obras-work-progress__grid">
+                <div class="obras-work-progress__cell">
+                  <span class="obras-work-progress__label">Total previsto</span>
+                  <strong class="obras-work-progress__value">{{ costsTotalLabel() }}</strong>
+                </div>
+                <div class="obras-work-progress__cell">
+                  <span class="obras-work-progress__label">Pago</span>
+                  <strong class="obras-work-progress__value">{{ costsPaidLabel() }}</strong>
+                </div>
+              </div>
+              @if (canManage()) {
+                <div class="manut-costs-foot">
+                  <a
+                    class="btn btn--ghost sm"
+                    [routerLink]="transactionsLink()"
+                    [queryParams]="transactionsQueryParams()"
+                  >
+                    Ver / vincular transações
+                  </a>
+                </div>
+              }
+            </div>
+            <header class="obras-timeline-section__head">
+              <h3 class="plan-subtitle" id="manut-timeline-heading">Linha do tempo</h3>
+              @if (selected()!.timeline.length > 0) {
+                <span class="obras-timeline-section__count muted"
+                  >{{ selected()!.timeline.length }} registro{{
+                    selected()!.timeline.length === 1 ? '' : 's'
+                  }}</span
+                >
+              }
+            </header>
+            @if (selected()!.timeline.length === 0) {
+              <div class="obras-tl-empty" role="status">
+                <p class="obras-tl-empty__title">Nenhum registro ainda</p>
+                <p class="obras-tl-empty__desc muted">
+                  Publique uma nota ou registre uma despesa acima para começar o histórico.
+                </p>
+              </div>
+            } @else {
+              <div class="obras-tl-toolbar">
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="expandAllTimelineDays()"
+                >
+                  Abrir todos os dias
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="collapseAllTimelineDays()"
+                >
+                  Recolher todos
+                </button>
+              </div>
+
+              <div class="obras-tl">
+                <div class="obras-tl__rail" aria-hidden="true"></div>
+                @for (group of timelineDayGroups(); track group.dateKey) {
+                  @let dayExpanded = isTimelineDayExpanded(
+                    group.dateKey,
+                    group.entries
+                  );
+                  @let dayCollapsible = timelineDayHasCollapsibleContent(
+                    group.entries
+                  );
+                  <section
+                    class="obras-tl__day"
+                    [class.obras-tl__day--open]="dayExpanded"
+                    [attr.aria-label]="group.label"
+                  >
+                    @for (e of group.entries; track e.id) {
+                      @if (shouldShowTimelineEntry(e, dayExpanded)) {
+                        <article
+                          class="obras-tl__item obras-tl__item--event"
+                          [class.obras-tl__item--continued]="
+                            !isFirstVisibleTimelineEntry(
+                              group.entries,
+                              e.id,
+                              dayExpanded
+                            )
+                          "
+                          [attr.data-kind]="e.kind"
+                        >
+                          <div class="obras-tl__meta-col">
+                            @if (
+                              isFirstVisibleTimelineEntry(
+                                group.entries,
+                                e.id,
+                                dayExpanded
+                              )
+                            ) {
+                              @if (dayCollapsible) {
+                                <button
+                                  type="button"
+                                  class="obras-tl__date-chip"
+                                  [attr.aria-expanded]="dayExpanded"
+                                  (click)="toggleTimelineDay(group.dateKey)"
+                                >
+                                  <span class="obras-tl__date-chip-title">{{
+                                    group.label
+                                  }}</span>
+                                </button>
+                              } @else {
+                                <div
+                                  class="obras-tl__date-chip obras-tl__date-chip--static"
+                                >
+                                  <span class="obras-tl__date-chip-title">{{
+                                    group.label
+                                  }}</span>
+                                </div>
+                              }
+                            }
+                            <time
+                              class="obras-tl__time"
+                              [attr.datetime]="e.createdAt"
+                              [title]="formatDateTime(e.createdAt)"
+                              >{{ formatTimelineTime(e.createdAt) }}</time
+                            >
+                          </div>
+                          <div class="obras-tl__spine-col" aria-hidden="true">
+                            <span
+                              class="obras-tl__node"
+                              [class.obras-tl__node--day]="
+                                isFirstVisibleTimelineEntry(
+                                  group.entries,
+                                  e.id,
+                                  dayExpanded
+                                )
+                              "
+                            ></span>
+                          </div>
+                          <div class="obras-tl__content-col">
+                            @if (e.kind === 'edit') {
+                              <div class="obras-tl__card obras-tl__card--edit">
+                                <div class="obras-tl__edit-row">
+                                  <span class="obras-tl__kind">{{
+                                    timelineKindLabel(e.kind)
+                                  }}</span>
+                                  <span class="obras-tl__edit-meta">{{
+                                    e.authorDisplayName
+                                  }}</span>
+                                </div>
+                                @if (e.body) {
+                                  <p class="obras-tl__edit-body">{{ e.body }}</p>
+                                }
+                              </div>
+                            } @else {
+                              <div class="obras-tl__card">
+                                <header class="obras-tl__card-head">
+                                  <div class="obras-tl__card-head-tags">
+                                    <span class="obras-tl__kind">{{
+                                      timelineKindLabel(e.kind)
+                                    }}</span>
+                                    @if (
+                                      e.kind === 'transaction' &&
+                                      e.transaction &&
+                                      timelineTxPayBadge(e.transaction);
+                                      as payBadge
+                                    ) {
+                                      <span
+                                        class="obras-tl__pay-badge"
+                                        [attr.data-pay-badge]="payBadge.variant"
+                                        >{{ payBadge.label }}</span
+                                      >
+                                    }
+                                  </div>
+                                  <div class="obras-tl__card-intro">
+                                    @if (timelineEntryTitle(e); as title) {
+                                      <h4 class="obras-tl__card-title">{{ title }}</h4>
+                                    }
+                                    <p class="obras-tl__card-meta">{{
+                                      timelineCardMeta(e)
+                                    }}</p>
+                                  </div>
+                                </header>
+
+                                <div class="obras-tl__card-body">
+                                  @if (e.kind === 'transaction' && e.transaction) {
+                                    <p class="obras-tl__budget-value">
+                                      {{ transactionKindLabelPt(e.transaction.kind) }} ·
+                                      {{
+                                        formatCentsBrl(
+                                          Number(e.transaction.amountCents)
+                                        )
+                                      }}
+                                    </p>
+                                    @if (e.financialTransactionId) {
+                                      <p class="obras-tl__tx-link muted small">
+                                        <a
+                                          [routerLink]="transactionsLink()"
+                                          [queryParams]="transactionsQueryParams()"
+                                          >Ver em Transações</a
+                                        >
+                                      </p>
+                                    }
+                                  } @else if (e.body) {
+                                    <p class="obras-tl__comment">{{ e.body }}</p>
+                                  }
+
+                                  @if (attachmentCount(e) > 0) {
+                                    <div class="obras-tl__media">
+                                      <ul class="obras-tl__media-list">
+                                        @for (att of e.attachments; track att.id) {
+                                          <li class="obras-tl__media-item">
+                                            <app-manutencoes-timeline-attachment-preview
+                                              [condominiumId]="condominiumIdParam()"
+                                              [maintenanceId]="selected()!.id"
+                                              [entryId]="e.id"
+                                              [attachment]="att"
+                                              (download)="
+                                                downloadAttachment(
+                                                  e.id,
+                                                  att.id,
+                                                  att.originalFilename
+                                                )
+                                              "
+                                            />
+                                          </li>
+                                        }
+                                      </ul>
+                                    </div>
+                                  }
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        </article>
+                      }
+                    }
+
+                    @if (!dayExpanded && dayCollapsible) {
+                      <div class="obras-tl__item obras-tl__item--fold">
+                        <div class="obras-tl__meta-col">
+                          @if (
+                            !hasVisibleTimelineEntries(group.entries, dayExpanded)
+                          ) {
+                            <button
+                              type="button"
+                              class="obras-tl__date-chip"
+                              [attr.aria-expanded]="dayExpanded"
+                              (click)="toggleTimelineDay(group.dateKey)"
+                            >
+                              <span class="obras-tl__date-chip-title">{{
+                                group.label
+                              }}</span>
+                            </button>
+                          }
+                        </div>
+                        <div class="obras-tl__spine-col" aria-hidden="true">
+                          <span class="obras-tl__node obras-tl__node--day"></span>
+                        </div>
+                        <div class="obras-tl__content-col">
+                          <button
+                            type="button"
+                            class="obras-tl__fold-btn"
+                            (click)="toggleTimelineDay(group.dateKey)"
+                          >
+                            {{ group.entries.length }} registro{{
+                              group.entries.length === 1 ? '' : 's'
+                            }}
+                            — expandir
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </section>
+                }
+              </div>
+            }
+          </section>
+        </div>
+      </section>
+      }
+    </div>
+  }
+</div>
+
+<app-obras-timeline-attachment-modal-host />

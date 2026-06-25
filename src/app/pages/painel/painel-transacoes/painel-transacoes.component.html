@@ -149,18 +149,11 @@
               </label>
               <label class="field field--block field--money">
                 <span class="field__label">Valor (R$)</span>
-                <div class="input-money">
-                  <span class="input-money__prefix" aria-hidden="true">R$</span>
-                  <input
-                    type="number"
-                    class="input input--lg input--money"
-                    step="0.01"
-                    min="0.01"
-                    [value]="amountReais() || ''"
-                    (input)="setAmountFromInput($any($event.target).value)"
-                    placeholder="0,00"
-                  />
-                </div>
+                <app-br-money-field
+                  size="lg"
+                  [ngModel]="amountReais()"
+                  (ngModelChange)="amountReais.set($event)"
+                />
               </label>
               <label class="field field--block">
                 <span class="field__label">Data</span>
@@ -267,10 +260,16 @@
             <div>
               <h3 class="form-section__title">Rateio</h3>
               <p class="form-section__hint">
-                Quem entra no cálculo desta transação (mesma lógica dos fundos).
+                @if (workLocksAllocation()) {
+                  O rateio segue a configuração da obra selecionada (edite em
+                  Obras).
+                } @else {
+                  Quem entra no cálculo desta transação (mesma lógica dos fundos).
+                }
               </p>
             </div>
           </div>
+          <fieldset [disabled]="workLocksAllocation()" class="alloc-fieldset">
           <label class="field field--block">
             <span class="field__label">Critério</span>
             <select
@@ -359,6 +358,7 @@
               }
             </div>
           }
+          </fieldset>
         </div>
 
         <div class="form-section">
@@ -434,37 +434,22 @@
                   <span class="field__label"
                     >Novo valor por parcela — todas iguais (opcional)</span
                   >
-                  <div class="input-money">
-                    <span class="input-money__prefix" aria-hidden="true">R$</span>
-                    <input
-                      type="number"
-                      class="input input--lg input--money"
-                      step="0.01"
-                      min="0.01"
-                      [value]="seriesUniformAmountReais() || ''"
-                      (input)="
-                        setSeriesUniformAmountFromInput($any($event.target).value)
-                      "
-                      placeholder="vazio = manter valores"
-                    />
-                  </div>
+                  <app-br-money-field
+                    size="lg"
+                    placeholder="vazio = manter valores"
+                    [ngModel]="seriesUniformAmountReais()"
+                    (ngModelChange)="seriesUniformAmountReais.set($event)"
+                  />
                 </label>
               </div>
             } @else if (editingId() || entryMode() === 'single') {
               <label class="field field--block field--money">
                 <span class="field__label">Valor (R$)</span>
-                <div class="input-money">
-                  <span class="input-money__prefix" aria-hidden="true">R$</span>
-                  <input
-                    type="number"
-                    class="input input--lg input--money"
-                    step="0.01"
-                    min="0.01"
-                    [value]="amountReais() || ''"
-                    (input)="setAmountFromInput($any($event.target).value)"
-                    placeholder="0,00"
-                  />
-                </div>
+                <app-br-money-field
+                  size="lg"
+                  [ngModel]="amountReais()"
+                  (ngModelChange)="amountReais.set($event)"
+                />
               </label>
             } @else {
               <label class="field field--block">
@@ -513,36 +498,20 @@
                 @if (recurringMode() === 'by_installment') {
                   <label class="field field--block field--money">
                     <span class="field__label">Valor de cada parcela (R$)</span>
-                    <div class="input-money">
-                      <span class="input-money__prefix" aria-hidden="true">R$</span>
-                      <input
-                        type="number"
-                        class="input input--lg input--money"
-                        step="0.01"
-                        min="0.01"
-                        [value]="recurringInstallmentReais() || ''"
-                        (input)="
-                          setRecurringInstallmentFromInput($any($event.target).value)
-                        "
-                        placeholder="0,00"
-                      />
-                    </div>
+                    <app-br-money-field
+                      size="lg"
+                      [ngModel]="recurringInstallmentReais()"
+                      (ngModelChange)="recurringInstallmentReais.set($event)"
+                    />
                   </label>
                 } @else {
                   <label class="field field--block field--money">
                     <span class="field__label">Valor total (R$)</span>
-                    <div class="input-money">
-                      <span class="input-money__prefix" aria-hidden="true">R$</span>
-                      <input
-                        type="number"
-                        class="input input--lg input--money"
-                        step="0.01"
-                        min="0.01"
-                        [value]="recurringTotalReais() || ''"
-                        (input)="setRecurringTotalFromInput($any($event.target).value)"
-                        placeholder="0,00"
-                      />
-                    </div>
+                    <app-br-money-field
+                      size="lg"
+                      [ngModel]="recurringTotalReais()"
+                      (ngModelChange)="recurringTotalReais.set($event)"
+                    />
                   </label>
                 }
               </div>
@@ -601,16 +570,73 @@
                 <select
                   class="input input--lg"
                   [value]="supplierIdForm()"
-                  (change)="supplierIdForm.set($any($event.target).value)"
+                  (change)="onSupplierIdFormChange($any($event.target).value)"
                 >
                   <option value="">— Nenhum —</option>
+                  <option [value]="newSupplierOptionValue">+ Novo fornecedor…</option>
                   @for (s of suppliersList(); track s.id) {
                     <option [value]="s.id">{{ s.name }}</option>
                   }
                 </select>
               </label>
-              @if (selectedSupplier(); as sup) {
-                @if (sup.pixKeyValue) {
+              @if (isNewSupplierForm()) {
+                <label class="field field--block">
+                  <span class="field__label">Nome do fornecedor</span>
+                  <input
+                    type="text"
+                    class="input input--lg"
+                    [value]="supplierNameForm()"
+                    (input)="supplierNameForm.set($any($event.target).value)"
+                    maxlength="255"
+                    placeholder="Ex.: Empresa XYZ"
+                    autocomplete="organization"
+                  />
+                </label>
+                <div class="plan-create-pair supplier-pix-pair">
+                  <label class="field field--block">
+                    <span class="field__label">Tipo de chave PIX (opcional)</span>
+                    <select
+                      class="input plan-create-pair__control"
+                      [value]="supplierPixKeyTypeForm()"
+                      (change)="
+                        supplierPixKeyTypeForm.set($any($event.target).value)
+                      "
+                    >
+                      <option value="">Não informar PIX</option>
+                      @for (opt of supplierPixTypeOptions; track opt.value) {
+                        <option [value]="opt.value">{{ opt.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="field field--block">
+                    <span class="field__label">Chave PIX</span>
+                    <input
+                      type="text"
+                      class="input plan-create-pair__control"
+                      [value]="supplierPixKeyValueForm()"
+                      (input)="
+                        supplierPixKeyValueForm.set($any($event.target).value)
+                      "
+                      maxlength="255"
+                      placeholder="Valor da chave"
+                    />
+                  </label>
+                </div>
+                <p class="muted small form-section__inline-hint">
+                  O fornecedor é salvo no cadastro (categoria «Outros») e vinculado a esta
+                  transação. Se o nome já existir, reutilizamos o cadastro.
+                  <a
+                    [routerLink]="[
+                      '/painel/condominio',
+                      condominiumIdParam(),
+                      'fornecedores',
+                    ]"
+                    >Gerenciar fornecedores</a
+                  >.
+                </p>
+              } @else {
+                @let sup = selectedSupplier();
+                @if (sup && sup.pixKeyValue) {
                   <p class="muted small supplier-pix-line">
                     Chave PIX ({{ supplierPixTypeLabel(sup.pixKeyType) }}):
                     <strong>{{ sup.pixKeyValue }}</strong>
@@ -622,7 +648,7 @@
                       Copiar
                     </button>
                   </p>
-                } @else {
+                } @else if (sup) {
                   <p class="muted small">Este fornecedor ainda não tem chave PIX cadastrada.</p>
                 }
               }
@@ -632,7 +658,7 @@
               <select
                 class="input input--lg"
                 [value]="workIdForm()"
-                (change)="workIdForm.set($any($event.target).value)"
+                (change)="onWorkIdFormChange($any($event.target).value)"
                 [disabled]="entryMode() === 'transfer'"
               >
                 <option value="">— Nenhuma —</option>
@@ -642,6 +668,23 @@
               </select>
               <span class="muted small form-section__inline-hint">
                 O lançamento aparece na linha do tempo da obra.
+              </span>
+            </label>
+            <label class="field field--block">
+              <span class="field__label">Manutenção (opcional)</span>
+              <select
+                class="input input--lg"
+                [value]="maintenanceIdForm()"
+                (change)="onMaintenanceIdFormChange($any($event.target).value)"
+                [disabled]="entryMode() === 'transfer'"
+              >
+                <option value="">— Nenhuma —</option>
+                @for (m of maintenances(); track m.id) {
+                  <option [value]="m.id">{{ m.title }}</option>
+                }
+              </select>
+              <span class="muted small form-section__inline-hint">
+                O lançamento aparece na linha do tempo da manutenção.
               </span>
             </label>
           </div>
@@ -834,16 +877,16 @@
     </section>
 
     <section class="form-card tx-filters" role="search" aria-label="Filtros da lista">
-      <div class="form-card__head">
-        <h2 class="form-card__title">Filtros</h2>
-      </div>
       <div class="tx-filters__body">
-        <div class="tx-filters__grid">
-          <div class="tx-filters__col tx-filters__col--period">
-            <label class="field field--block">
-              <span class="field__label">Período (data da transação)</span>
+        <div
+          class="tx-filters__grid"
+          [class.tx-filters__grid--custom]="periodMode() === 'custom'"
+        >
+          <div class="tx-filters__period">
+            <span class="field__label">Período</span>
+            <div class="tx-filters__period-controls">
               <div
-                class="mode-tabs mode-tabs--sub tx-filters__mode"
+                class="mode-tabs mode-tabs--sub mode-tabs--inline tx-filters__mode"
                 role="group"
                 aria-label="Tipo de período"
               >
@@ -854,7 +897,7 @@
                   [attr.aria-pressed]="periodMode() === 'month'"
                   (click)="setPeriodMode('month')"
                 >
-                  <span class="mode-tab__name">Mês / ano</span>
+                  Mês / ano
                 </button>
                 <button
                   type="button"
@@ -863,53 +906,51 @@
                   [attr.aria-pressed]="periodMode() === 'custom'"
                   (click)="setPeriodMode('custom')"
                 >
-                  <span class="mode-tab__name">Intervalo</span>
+                  Intervalo
                 </button>
               </div>
               @if (periodMode() === 'month') {
-                <div class="tx-filters__period-row">
-                  <input
-                    type="month"
-                    class="input input--lg"
-                    [value]="periodMonthYm()"
-                    (change)="setPeriodMonthYm($any($event.target).value)"
-                    aria-label="Mês e ano"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn--ghost sm"
-                    (click)="resetPeriodToCurrentMonth()"
-                  >
-                    Mês atual
-                  </button>
-                </div>
+                <input
+                  type="month"
+                  class="input tx-filters__month"
+                  [value]="periodMonthYm()"
+                  (change)="setPeriodMonthYm($any($event.target).value)"
+                  aria-label="Mês e ano"
+                />
+                <button
+                  type="button"
+                  class="btn btn--ghost sm"
+                  (click)="resetPeriodToCurrentMonth()"
+                >
+                  Mês atual
+                </button>
               } @else {
-                <div class="period-row">
+                <div class="tx-filters__range">
                   <input
                     type="date"
-                    class="input input--lg"
+                    class="input"
                     [value]="periodFrom()"
                     (change)="setPeriodFrom($any($event.target).value)"
                     aria-label="Data inicial"
                   />
-                  <span class="period-row__sep muted" aria-hidden="true">até</span>
+                  <span class="tx-filters__range-sep muted" aria-hidden="true">até</span>
                   <input
                     type="date"
-                    class="input input--lg"
+                    class="input"
                     [value]="periodTo()"
                     (change)="setPeriodTo($any($event.target).value)"
                     aria-label="Data final"
                   />
                 </div>
               }
-            </label>
+            </div>
           </div>
           <label class="field field--block tx-filters__col">
-            <span class="field__label">Filtrar por fundo</span>
+            <span class="field__label">Fundo</span>
             <select
-              class="input input--lg"
-              [value]="fundFilter()"
-              (change)="setFundFilter($any($event.target).value)"
+              class="input"
+              [ngModel]="fundFilter()"
+              (ngModelChange)="setFundFilter($event)"
             >
               <option value="">Todos</option>
               @for (f of funds(); track f.id) {
@@ -918,11 +959,11 @@
             </select>
           </label>
           <label class="field field--block tx-filters__col">
-            <span class="field__label">Filtrar por obra</span>
+            <span class="field__label">Obra</span>
             <select
-              class="input input--lg"
-              [value]="workFilter()"
-              (change)="setWorkFilter($any($event.target).value)"
+              class="input"
+              [ngModel]="workFilter()"
+              (ngModelChange)="setWorkFilter($event)"
             >
               <option value="">Todas</option>
               @for (w of works(); track w.id) {
@@ -931,13 +972,26 @@
             </select>
           </label>
           <label class="field field--block tx-filters__col">
-            <span class="field__label">Buscar na lista</span>
+            <span class="field__label">Manutenção</span>
+            <select
+              class="input"
+              [ngModel]="maintenanceFilter()"
+              (ngModelChange)="setMaintenanceFilter($event)"
+            >
+              <option value="">Todas</option>
+              @for (m of maintenances(); track m.id) {
+                <option [value]="m.id">{{ m.title }}</option>
+              }
+            </select>
+          </label>
+          <label class="field field--block tx-filters__col tx-filters__col--search">
+            <span class="field__label">Buscar</span>
             <input
-              type="text"
-              class="input input--lg"
+              type="search"
+              class="input"
               [value]="searchTerm()"
               (input)="setSearchTerm($any($event.target).value)"
-              placeholder="Título, descrição, fornecedor, tipo, fundo ou data"
+              placeholder="Título, descrição, fornecedor…"
               autocomplete="off"
             />
           </label>
@@ -986,6 +1040,18 @@
             "
           >
             Vincular à obra
+          </button>
+          <button
+            type="button"
+            class="btn sm"
+            (click)="openBulkAssignMaintenanceModal()"
+            [disabled]="
+              bulkActionBusy() ||
+              bulkSettleBusy() ||
+              bulkMaintenanceAssignableSelectedCount() === 0
+            "
+          >
+            Vincular à manutenção
           </button>
           <button
             type="button"
@@ -1062,6 +1128,7 @@
             <th>Estado</th>
             <th>Fundo</th>
             <th>Obra</th>
+            <th>Manutenção</th>
             <th>Conta</th>
             <th class="num">Valor</th>
             @if (fundFilter()) {
@@ -1097,22 +1164,101 @@
                 </label>
               </td>
               <td data-label="Transação" class="tx-table__main">
-                <small class="tx-table__date">{{ formatDateDdMmYyyy(t.occurredOn) }}</small>
+                <div class="tx-table__mobile-head">
+                  <small class="tx-table__date">{{
+                    formatDateDdMmYyyy(t.occurredOn)
+                  }}</small>
+                  <span class="tx-table__kind" [attr.data-kind]="t.kind">{{
+                    transactionRowKindLabel(t)
+                  }}</span>
+                  <span
+                    class="tx-table__status tx-table__status--mobile"
+                    [attr.data-pay]="t.paymentStatus ?? 'pending'"
+                    >{{ transactionPaymentStatusLabelPt(t.paymentStatus) }}</span
+                  >
+                </div>
+                <small class="tx-table__date tx-table__date--table">{{
+                  formatDateDdMmYyyy(t.occurredOn)
+                }}</small>
                 <span class="tx-table__title">{{ t.title }}</span>
                 @if (t.description?.trim()) {
                   <span class="tx-table__desc">{{ t.description!.trim() }}</span>
                 }
-                <span class="tx-table__kind" [attr.data-kind]="t.kind">{{
-                  transactionRowKindLabel(t)
-                }}</span>
+                <span
+                  class="tx-table__kind tx-table__kind--table"
+                  [attr.data-kind]="t.kind"
+                  >{{ transactionRowKindLabel(t) }}</span
+                >
                 @if (t.supplier?.name) {
-                  <br />
                   <small class="muted tx-main-cell__supplier"
                     >Fornecedor: {{ t.supplier!.name }}</small
                   >
                 }
+                <div class="tx-table__mobile-meta">
+                  @if (t.fund?.name) {
+                    <span class="tx-table__mobile-meta-item">{{ t.fund!.name }}</span>
+                  }
+                  @if (t.work; as work) {
+                    @if (work.title && t.workId) {
+                      <span class="tx-table__mobile-meta-item">
+                        <a
+                          class="tx-table__work-link"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'obras',
+                            t.workId,
+                          ]"
+                          >{{ work.title }}</a
+                        >
+                      </span>
+                    }
+                  }
+                  @if (t.maintenance; as maintenance) {
+                    @if (maintenance.title && t.maintenanceId) {
+                      <span class="tx-table__mobile-meta-item">
+                        <a
+                          class="tx-table__work-link"
+                          [routerLink]="[
+                            '/painel/condominio',
+                            condominiumIdParam(),
+                            'manutencoes',
+                            t.maintenanceId,
+                          ]"
+                          >{{ maintenance.title }}</a
+                        >
+                      </span>
+                    }
+                  }
+                  <span
+                    class="tx-table__mobile-meta-item tx-table__mobile-meta-account"
+                    >{{ bankAccountNickname(t) }}</span
+                  >
+                </div>
+                @if (documentKeysFromTx(t).length > 0 || t.receiptStorageKey) {
+                  <div class="tx-table__mobile-attach">
+                    @if (documentKeysFromTx(t).length > 0) {
+                      <button
+                        type="button"
+                        class="btn btn--ghost sm"
+                        (click)="downloadRowDocument(t)"
+                      >
+                        Doc. ({{ documentKeysFromTx(t).length }})
+                      </button>
+                    }
+                    @if (t.receiptStorageKey) {
+                      <button
+                        type="button"
+                        class="btn btn--ghost sm"
+                        (click)="downloadRowReceipt(t)"
+                      >
+                        Comprovante
+                      </button>
+                    }
+                  </div>
+                }
               </td>
-              <td data-label="Estado">
+              <td data-label="Estado" class="tx-table__status-col">
                 <span
                   class="tx-table__status"
                   [attr.data-pay]="t.paymentStatus ?? 'pending'"
@@ -1142,6 +1288,26 @@
                   <span class="muted">—</span>
                 }
               </td>
+              <td data-label="Manutenção" class="tx-table__work">
+                @if (t.maintenance; as maintenance) {
+                  @if (maintenance.title && t.maintenanceId) {
+                    <a
+                      class="tx-table__work-link"
+                      [routerLink]="[
+                        '/painel/condominio',
+                        condominiumIdParam(),
+                        'manutencoes',
+                        t.maintenanceId,
+                      ]"
+                      >{{ maintenance.title }}</a
+                    >
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
               <td data-label="Conta" class="tx-table__account">
                 <span class="tx-table__account-name">{{
                   bankAccountNickname(t)
@@ -1149,8 +1315,7 @@
               </td>
               <td
                 data-label="Valor"
-                class="num"
-                [class]="extratoDeltaCssClass(signedDeltaForTransaction(t))"
+                [class]="'num ' + extratoDeltaCssClass(signedDeltaForTransaction(t))"
               >
                 {{ formatTransactionAmount(t) }}
               </td>
@@ -1165,7 +1330,7 @@
                   }}
                 </td>
               }
-              <td data-label="Documento" class="cell-receipt">
+              <td data-label="Documento" class="cell-receipt tx-table__cell--skip-mobile">
                 @if (documentKeysFromTx(t).length > 0) {
                   <button
                     type="button"
@@ -1178,7 +1343,7 @@
                   <span class="muted">—</span>
                 }
               </td>
-              <td data-label="Comprovante" class="cell-receipt">
+              <td data-label="Comprovante" class="cell-receipt tx-table__cell--skip-mobile">
                 @if (t.receiptStorageKey) {
                   <button
                     type="button"
@@ -1464,6 +1629,75 @@
             type="button"
             class="btn primary"
             (click)="confirmBulkAssignWork()"
+            [disabled]="bulkActionBusy()"
+          >
+            {{ bulkActionBusy() ? 'Salvando…' : 'Confirmar' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  @if (bulkAssignMaintenanceOpen()) {
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tx-bulk-maintenance-title"
+      (click)="closeBulkAssignMaintenanceModal()"
+    >
+      <div class="modal" (click)="$event.stopPropagation()">
+        <header class="modal__head">
+          <h2 id="tx-bulk-maintenance-title">
+            Vincular {{ bulkMaintenanceAssignableSelectedCount() }} transações à
+            manutenção
+          </h2>
+          <button
+            type="button"
+            class="modal__close"
+            aria-label="Fechar"
+            (click)="closeBulkAssignMaintenanceModal()"
+            [disabled]="bulkActionBusy()"
+          >
+            ×
+          </button>
+        </header>
+        <div class="modal__body">
+          <p class="muted small bulk-settle-lede">
+            Transferências entre contas são ignoradas. Escolha "Nenhuma" para
+            remover o vínculo com manutenção.
+          </p>
+          <label class="field field--block">
+            <span class="field__label">Manutenção</span>
+            <select
+              class="input input--lg"
+              [value]="bulkAssignMaintenanceId()"
+              (change)="bulkAssignMaintenanceId.set($any($event.target).value)"
+              [disabled]="bulkActionBusy()"
+            >
+              <option value="">— Nenhuma (desvincular) —</option>
+              @for (m of maintenances(); track m.id) {
+                <option [value]="m.id">{{ m.title }}</option>
+              }
+            </select>
+          </label>
+          @if (bulkAssignMaintenanceError(); as merr) {
+            <p class="error" role="alert">{{ merr }}</p>
+          }
+        </div>
+        <footer class="modal__foot">
+          <button
+            type="button"
+            class="btn btn--ghost"
+            (click)="closeBulkAssignMaintenanceModal()"
+            [disabled]="bulkActionBusy()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn primary"
+            (click)="confirmBulkAssignMaintenance()"
             [disabled]="bulkActionBusy()"
           >
             {{ bulkActionBusy() ? 'Salvando…' : 'Confirmar' }}

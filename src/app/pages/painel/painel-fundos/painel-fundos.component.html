@@ -223,17 +223,10 @@
           @if (form.controls.isPermanent.value) {
             <label class="field field--block field--money">
               <span class="field__label">Débito mensal por unidade (R$)</span>
-              <div class="input-money">
-                <span class="input-money__prefix" aria-hidden="true">R$</span>
-                <input
-                  type="number"
-                  class="input input--lg input--money"
-                  step="0.01"
-                  min="0.01"
-                  formControlName="permanentMonthlyReais"
-                  placeholder="0,00"
-                />
-              </div>
+              <app-br-money-field
+                size="lg"
+                formControlName="permanentMonthlyReais"
+              />
             </label>
           } @else {
             <div
@@ -269,17 +262,10 @@
               <div class="values-grid">
                 <label class="field field--block field--money">
                   <span class="field__label">Total por unidade (R$)</span>
-                  <div class="input-money">
-                    <span class="input-money__prefix" aria-hidden="true">R$</span>
-                    <input
-                      type="number"
-                      class="input input--lg input--money"
-                      step="0.01"
-                      min="0.01"
-                      formControlName="termTotalPerUnitReais"
-                      placeholder="0,00"
-                    />
-                  </div>
+                  <app-br-money-field
+                    size="lg"
+                    formControlName="termTotalPerUnitReais"
+                  />
                 </label>
                 <label class="field field--block">
                   <span class="field__label">N.º de mensalidades</span>
@@ -328,31 +314,14 @@
               <div class="values-grid">
                 <label class="field field--block field--money">
                   <span class="field__label">Valor total da obra (R$)</span>
-                  <div class="input-money">
-                    <span class="input-money__prefix" aria-hidden="true">R$</span>
-                    <input
-                      type="number"
-                      class="input input--lg input--money"
-                      step="0.01"
-                      min="0.01"
-                      formControlName="obraTotalReais"
-                      placeholder="0,00"
-                    />
-                  </div>
+                  <app-br-money-field size="lg" formControlName="obraTotalReais" />
                 </label>
                 <label class="field field--block field--money">
                   <span class="field__label">Mensalidade desejada por unidade (R$)</span>
-                  <div class="input-money">
-                    <span class="input-money__prefix" aria-hidden="true">R$</span>
-                    <input
-                      type="number"
-                      class="input input--lg input--money"
-                      step="0.01"
-                      min="0.01"
-                      formControlName="obraDesiredMonthlyReais"
-                      placeholder="0,00"
-                    />
-                  </div>
+                  <app-br-money-field
+                    size="lg"
+                    formControlName="obraDesiredMonthlyReais"
+                  />
                 </label>
                 <label class="field field--block">
                   <span class="field__label">1.ª mensalidade</span>

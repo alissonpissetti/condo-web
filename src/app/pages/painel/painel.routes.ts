@@ -180,6 +180,22 @@ export const painelRoutes: Routes = [
           ),
       },
       {
+        path: 'condominio/:condominiumId/manutencoes/:maintenanceId',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('maintenances')],
+        loadComponent: () =>
+          import('./painel-manutencoes/painel-manutencoes.component').then(
+            (m) => m.PainelManutencoesComponent,
+          ),
+      },
+      {
+        path: 'condominio/:condominiumId/manutencoes',
+        canActivate: [selectedCondominiumGuard, planFeatureGuard('maintenances')],
+        loadComponent: () =>
+          import('./painel-manutencoes/painel-manutencoes.component').then(
+            (m) => m.PainelManutencoesComponent,
+          ),
+      },
+      {
         path: 'condominio/:condominiumId/obras/:workId',
         canActivate: [selectedCondominiumGuard, planFeatureGuard('works')],
         loadComponent: () =>

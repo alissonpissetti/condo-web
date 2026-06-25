@@ -8,6 +8,7 @@
   background: var(--surface);
 
   &--menu-open {
+    overflow: visible;
     padding-bottom: 10.5rem;
   }
 

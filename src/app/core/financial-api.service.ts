@@ -78,6 +78,8 @@ export interface FinancialTransaction {
   transferCounterpartId?: string | null;
   workId?: string | null;
   work?: { id: string; title: string } | null;
+  maintenanceId?: string | null;
+  maintenance?: { id: string; title: string } | null;
   unitShares?: TransactionUnitShareRow[];
   createdAt: string;
   updatedAt: string;
@@ -297,6 +299,7 @@ export class FinancialApiService {
     occurredFromYmd?: string | null,
     occurredToYmd?: string | null,
     workId?: string | null,
+    maintenanceId?: string | null,
   ): Observable<FinancialTransaction[]> {
     let params = new HttpParams();
     if (fundId) {
@@ -305,6 +308,10 @@ export class FinancialApiService {
     const work = workId?.trim();
     if (work) {
       params = params.set('workId', work);
+    }
+    const maintenance = maintenanceId?.trim();
+    if (maintenance) {
+      params = params.set('maintenanceId', maintenance);
     }
     const from = occurredFromYmd?.trim();
     const to = occurredToYmd?.trim();
@@ -375,12 +382,14 @@ export class FinancialApiService {
       fundId?: string | null;
       bankAccountId: string;
       supplierId?: string | null;
+      supplierName?: string | null;
       allocationRule: AllocationRule;
       documentStorageKey?: string;
       documentStorageKeys?: string[];
       receiptStorageKey?: string;
       recurringSeriesId?: string;
       workId?: string | null;
+      maintenanceId?: string | null;
     },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
@@ -395,6 +404,16 @@ export class FinancialApiService {
   ): Observable<{ updated: number; skippedTransferIds: string[] }> {
     return this.http.patch<{ updated: number; skippedTransferIds: string[] }>(
       `${this.base(condoId)}/transactions/bulk/work`,
+      body,
+    );
+  }
+
+  bulkAssignMaintenance(
+    condoId: string,
+    body: { transactionIds: string[]; maintenanceId?: string | null },
+  ): Observable<{ updated: number; skippedTransferIds: string[] }> {
+    return this.http.patch<{ updated: number; skippedTransferIds: string[] }>(
+      `${this.base(condoId)}/transactions/bulk/maintenance`,
       body,
     );
   }
@@ -416,6 +435,7 @@ export class FinancialApiService {
       documentStorageKeys: string[] | null;
       receiptStorageKey: string | null;
       workId: string | null;
+      maintenanceId: string | null;
     }>,
   ): Observable<FinancialTransaction> {
     return this.http.patch<FinancialTransaction>(
