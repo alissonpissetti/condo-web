@@ -19,12 +19,13 @@ import {
   FinancialApiService,
   type CondominiumBankAccount,
   type CondominiumFeeCharge,
-  type CondominiumFeeSlipDeliveryAction,
-  type CondominiumFeeSlipDeliveryLogRow,
-  type SendFeeSlipsWhatsappResult,
+  type UnitFeeCreditBalanceRow,
+  type UnitFeeCreditEntry,
+  type UnitFeeCreditHistory,
 } from '../../../core/financial-api.service';
 import { formatDateDdMmYyyy } from '../../../core/date-display';
-import { formatCentsBrl } from '../../../core/money-brl';
+import { formatCentsBrl, parseReaisInputToCents } from '../../../core/money-brl';
+import { parseCentsBigint } from '../../../core/financial-extrato-display';
 
 @Component({
   selector: 'app-painel-taxas-condominiais',
@@ -39,21 +40,13 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
 
   protected readonly formatCentsBrl = formatCentsBrl;
   protected readonly formatDateDdMmYyyy = formatDateDdMmYyyy;
+  protected readonly parseCentsBigint = parseCentsBigint;
 
   protected readonly charges = signal<CondominiumFeeCharge[]>([]);
   protected readonly competenceYm = signal('');
   protected readonly loadError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly actionBusy = signal(false);
-  /** Resumo do último envio de slips por WhatsApp (gestão). */
-  protected readonly slipWaInfo = signal<string | null>(null);
-  protected readonly slipWaBusy = signal(false);
-
-  protected readonly slipDeliveryLog = signal<CondominiumFeeSlipDeliveryLogRow[]>(
-    [],
-  );
-  protected readonly slipDeliveryLogLoading = signal(false);
-  protected readonly slipDeliveryLogError = signal<string | null>(null);
 
   /** Quitação: cobrança alvo do modal, arquivo anexado (opcional) e estado. */
   protected readonly settleTarget = signal<CondominiumFeeCharge | null>(null);
@@ -77,6 +70,26 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
   protected readonly dueEditError = signal<string | null>(null);
   protected readonly dueEditBusy = signal(false);
 
+  /** Adiantamento justificado (crédito para próximas taxas). */
+  protected readonly advanceTarget = signal<CondominiumFeeCharge | null>(null);
+  protected readonly advanceAmountReais = signal('');
+  protected readonly advanceJustification = signal('');
+  protected readonly advanceBankAccountId = signal('');
+  protected readonly advanceReceiptFile = signal<File | null>(null);
+  protected readonly advanceError = signal<string | null>(null);
+  protected readonly advanceBusy = signal(false);
+
+  /** Saldos de crédito por unidade (adiantamentos / pagamentos por unidade). */
+  protected readonly unitCreditBalances = signal<UnitFeeCreditBalanceRow[]>([]);
+
+  /** Modal: histórico de crédito da unidade. */
+  protected readonly creditHistoryTarget = signal<CondominiumFeeCharge | null>(
+    null,
+  );
+  protected readonly creditHistory = signal<UnitFeeCreditHistory | null>(null);
+  protected readonly creditHistoryError = signal<string | null>(null);
+  protected readonly creditHistoryBusy = signal(false);
+
   /** IDs das cobranças selecionadas no modo em massa. */
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
 
@@ -97,16 +110,83 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     return this.bankAccounts().find((a) => a.id === id) ?? null;
   });
 
-  protected readonly selectedOpenUnitCount = computed(() => {
-    const ids = this.selectedIds();
-    const u = new Set<string>();
-    for (const c of this.charges()) {
-      if (c.status === 'open' && ids.has(c.id)) {
-        u.add(c.unitId);
-      }
+  protected chargeCreditApplied(c: CondominiumFeeCharge): bigint {
+    return parseCentsBigint(c.creditAppliedCents ?? '0');
+  }
+
+  protected chargeNetDue(c: CondominiumFeeCharge): bigint {
+    if (c.status === 'paid') {
+      return 0n;
     }
-    return u.size;
+    return parseCentsBigint(c.netDueCents ?? c.amountDueCents);
+  }
+
+  protected chargeUnitCreditBalance(c: CondominiumFeeCharge): bigint {
+    return parseCentsBigint(c.unitCreditBalanceCents ?? '0');
+  }
+
+  protected hasChargeCreditApplied(c: CondominiumFeeCharge): boolean {
+    return this.chargeCreditApplied(c) > 0n;
+  }
+
+  protected hasUnitCreditBalance(c: CondominiumFeeCharge): boolean {
+    return this.chargeUnitCreditBalance(c) > 0n;
+  }
+
+  protected chargeCreditReservedElsewhere(c: CondominiumFeeCharge): bigint {
+    if (c.status === 'paid') {
+      return 0n;
+    }
+    const rest = this.chargeUnitCreditBalance(c) - this.chargeCreditApplied(c);
+    return rest > 0n ? rest : 0n;
+  }
+
+  protected hasChargeCreditReservedElsewhere(c: CondominiumFeeCharge): boolean {
+    return this.chargeCreditReservedElsewhere(c) > 0n;
+  }
+
+  protected isNegativeCreditAmount(signedCents: string): boolean {
+    return parseCentsBigint(signedCents) < 0n;
+  }
+
+  protected readonly totalUnitCreditFormatted = computed(() => {
+    let sum = 0n;
+    for (const row of this.unitCreditBalances()) {
+      sum += parseCentsBigint(row.balanceCents);
+    }
+    return formatCentsBrl(sum.toString());
   });
+
+  protected creditEntryKindLabel(kind: UnitFeeCreditEntry['entryKind']): string {
+    switch (kind) {
+      case 'advance_payment':
+        return 'Adiantamento registrado';
+      case 'expense_paid_by_unit':
+        return 'Pagamento de despesa pela unidade';
+      case 'expense_paid_by_unit_reversed':
+        return 'Estorno (reabertura de despesa)';
+      case 'credit_applied':
+        return 'Crédito aplicado na taxa';
+      case 'credit_restored':
+        return 'Crédito restaurado (reabertura)';
+      default:
+        return kind;
+    }
+  }
+
+  protected formatCreditEntryAmount(signedCents: string): string {
+    const n = parseCentsBigint(signedCents);
+    const abs = formatCentsBrl((n < 0n ? -n : n).toString());
+    return n < 0n ? `−${abs}` : `+${abs}`;
+  }
+
+  protected settleRequiresBankAccount(): boolean {
+    const target = this.settleTarget();
+    if (!target) {
+      return true;
+    }
+    return this.chargeNetDue(target) > 0n;
+  }
 
   protected readonly allSelectableSelected = computed(() => {
     const selectable = this.charges();
@@ -175,8 +255,13 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     if (this.dueEditTargets().length > 0) {
       this.closeDueEdit();
     }
+    if (this.advanceTarget()) {
+      this.closeAdvance();
+    }
+    if (this.creditHistoryTarget()) {
+      this.closeCreditHistory();
+    }
     this.closeActionMenu();
-    this.slipWaInfo.set(null);
   }
 
   /** Agregados para o resumo visual (total, pago, em aberto, % quitado). */
@@ -251,103 +336,20 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
 
   load(): void {
     this.loadError.set(null);
-    this.slipWaInfo.set(null);
     this.loading.set(true);
     this.api.listCondominiumFees(this.condoId, this.competenceYm()).subscribe({
       next: (rows) => {
         this.charges.set(rows);
         this.loading.set(false);
-        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
         (() => { const m = this.msg(err); this.loadError.set(m); this.flash.error(m); })();
       },
     });
-  }
-
-  protected formatDateTime(value: string): string {
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) {
-      return value;
-    }
-    return dt.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    });
-  }
-
-  protected slipDeliveryActionLabel(
-    action: CondominiumFeeSlipDeliveryAction,
-  ): string {
-    switch (action) {
-      case 'pdf_transparency':
-        return 'PDF transparência (condomínio)';
-      case 'pdf_unit_slip':
-        return 'PDF da unidade';
-      case 'whatsapp_sent':
-        return 'WhatsApp enviado';
-      case 'whatsapp_skipped':
-        return 'WhatsApp não enviado';
-      case 'whatsapp_failed':
-        return 'Falha no WhatsApp';
-      default:
-        return action;
-    }
-  }
-
-  protected slipDeliveryDetailLabel(
-    row: CondominiumFeeSlipDeliveryLogRow,
-  ): string {
-    const d = row.detail;
-    if (!d) {
-      return '—';
-    }
-    const reason = d['reason'];
-    if (typeof reason === 'string' && reason.trim()) {
-      return reason.trim();
-    }
-    const err = d['error'];
-    if (typeof err === 'string' && err.trim()) {
-      return err.trim();
-    }
-    const last4 = d['phoneLast4'];
-    if (typeof last4 === 'string' && last4.trim()) {
-      return `Celular ···${last4.trim()}`;
-    }
-    const storageKey = d['storageKey'];
-    if (typeof storageKey === 'string' && storageKey.trim()) {
-      return storageKey.trim();
-    }
-    return '—';
-  }
-
-  private loadSlipDeliveryLog(): void {
-    if (!this.condoAccess.canManage()) {
-      this.slipDeliveryLog.set([]);
-      this.slipDeliveryLogError.set(null);
-      return;
-    }
-    const ym = this.competenceYm().trim();
-    if (!ym) {
-      this.slipDeliveryLog.set([]);
-      return;
-    }
-    this.slipDeliveryLogLoading.set(true);
-    this.slipDeliveryLogError.set(null);
-    this.api.listCondominiumFeeSlipDeliveryLog(this.condoId, ym).subscribe({
-      next: (rows) => {
-        this.slipDeliveryLog.set(rows);
-        this.slipDeliveryLogLoading.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        this.slipDeliveryLogLoading.set(false);
-        this.slipDeliveryLogError.set(this.msg(err));
-      },
+    this.api.listUnitFeeCreditBalances(this.condoId).subscribe({
+      next: (rows) => this.unitCreditBalances.set(rows),
+      error: () => this.unitCreditBalances.set([]),
     });
   }
 
@@ -401,6 +403,134 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     const primary = this.activeBankAccounts()[0]?.id ?? '';
     this.settleBankAccountId.set(primary);
     this.settleTarget.set(c);
+  }
+
+  openAdvance(c: CondominiumFeeCharge): void {
+    this.advanceError.set(null);
+    this.advanceAmountReais.set('');
+    this.advanceJustification.set('');
+    this.advanceReceiptFile.set(null);
+    this.advanceBankAccountId.set(this.activeBankAccounts()[0]?.id ?? '');
+    this.advanceTarget.set(c);
+  }
+
+  openCreditHistory(c: CondominiumFeeCharge): void {
+    this.creditHistoryTarget.set(c);
+    this.creditHistory.set(null);
+    this.creditHistoryError.set(null);
+    this.creditHistoryBusy.set(true);
+    this.api.listUnitFeeCreditHistory(this.condoId, c.unitId).subscribe({
+      next: (history) => {
+        this.creditHistory.set(history);
+        this.creditHistoryBusy.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.creditHistoryBusy.set(false);
+        this.creditHistoryError.set(this.msg(err));
+      },
+    });
+  }
+
+  closeCreditHistory(): void {
+    if (this.creditHistoryBusy()) {
+      return;
+    }
+    this.creditHistoryTarget.set(null);
+    this.creditHistory.set(null);
+    this.creditHistoryError.set(null);
+  }
+
+  closeAdvance(): void {
+    if (this.advanceBusy()) {
+      return;
+    }
+    this.advanceTarget.set(null);
+    this.advanceAmountReais.set('');
+    this.advanceJustification.set('');
+    this.advanceReceiptFile.set(null);
+    this.advanceError.set(null);
+  }
+
+  onAdvanceFileChange(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0] ?? null;
+    this.advanceReceiptFile.set(f);
+    if (this.advanceError()) {
+      this.advanceError.set(null);
+    }
+  }
+
+  clearAdvanceFile(): void {
+    this.advanceReceiptFile.set(null);
+  }
+
+  confirmAdvance(): void {
+    const target = this.advanceTarget();
+    if (!target) {
+      return;
+    }
+    const amountCents = parseReaisInputToCents(this.advanceAmountReais());
+    if (amountCents == null || amountCents <= 0) {
+      this.advanceError.set('Informe um valor válido para o adiantamento.');
+      return;
+    }
+    const justification = this.advanceJustification().trim();
+    if (justification.length < 8) {
+      this.advanceError.set(
+        'Descreva a justificativa (ex.: pagamento adiantado de contas do condomínio).',
+      );
+      return;
+    }
+    this.advanceBusy.set(true);
+    this.advanceError.set(null);
+    const bankAccountId = this.advanceBankAccountId().trim() || undefined;
+    const run = (receiptKey?: string) => {
+      this.api
+        .registerUnitFeeAdvance(this.condoId, {
+          unitId: target.unitId,
+          amountCents,
+          justification,
+          bankAccountId,
+          paymentReceiptStorageKey: receiptKey,
+        })
+        .subscribe({
+          next: () => {
+            this.advanceBusy.set(false);
+            this.advanceTarget.set(null);
+            this.advanceAmountReais.set('');
+            this.advanceJustification.set('');
+            this.advanceReceiptFile.set(null);
+            this.flash.success(
+              `Adiantamento registrado para ${target.unitIdentifier}. O crédito será descontado nas próximas taxas em aberto.`,
+            );
+            this.load();
+          },
+          error: (err: HttpErrorResponse) => {
+            this.advanceBusy.set(false);
+            void translateHttpErrorMessageAsync(err, {
+              network:
+                'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+              default: 'Não foi possível registrar o adiantamento.',
+            }).then((m) => this.advanceError.set(m));
+          },
+        });
+    };
+    const file = this.advanceReceiptFile();
+    if (file) {
+      this.api.uploadTransactionReceipt(this.condoId, file).subscribe({
+        next: ({ receiptStorageKey }) => run(receiptStorageKey),
+        error: (err: HttpErrorResponse) => {
+          this.advanceBusy.set(false);
+          void translateHttpErrorMessageAsync(err, {
+            network:
+              'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+            default: 'Não foi possível enviar o comprovante.',
+          }).then((m) => this.advanceError.set(m));
+        },
+      });
+    } else {
+      run();
+    }
   }
 
   /** Abre o modal de edição de vencimento para uma cobrança. */
@@ -625,7 +755,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     const target = this.settleTarget();
     if (!target) return;
     const bankAccountId = this.settleBankAccountId().trim();
-    if (!bankAccountId) {
+    if (this.settleRequiresBankAccount() && !bankAccountId) {
       this.settleError.set(
         'Selecione a conta bancária que recebeu o pagamento.',
       );
@@ -638,7 +768,7 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
       this.api
         .settleCondominiumFee(this.condoId, target.id, {
           paymentReceiptStorageKey: receiptKey ?? null,
-          bankAccountId,
+          bankAccountId: bankAccountId || undefined,
         })
         .subscribe({
           next: (updated) => {
@@ -703,7 +833,6 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
         a.download = `transparencia-condominial-${ym}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
-        this.loadSlipDeliveryLog();
       },
       error: (err: HttpErrorResponse) => {
         this.actionBusy.set(false);
@@ -742,7 +871,6 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
           a.download = `taxa-${ym}-${unitTag}.pdf`;
           a.click();
           URL.revokeObjectURL(url);
-          this.loadSlipDeliveryLog();
         },
         error: (err: HttpErrorResponse) => {
           this.actionBusy.set(false);
@@ -778,117 +906,29 @@ export class PainelTaxasCondominiaisComponent implements OnInit {
     });
   }
 
-  sendSlipsWhatsappAllOpen(): void {
-    if (!this.condoAccess.canManage()) {
-      return;
-    }
-    const open = this.charges().filter((c) => c.status === 'open');
-    const n = new Set(open.map((c) => c.unitId)).size;
-    if (n === 0) {
-      this.flash.warning('Não há cobranças em aberto nesta competência.');
-      return;
-    }
-    if (
-      !confirm(
-        `Enviar o PDF slip (PIX + relatório) por WhatsApp para as ${n} unidade(s) em aberto? Usa o celular do responsável financeiro, proprietário, responsáveis ou o WhatsApp de referência na unidade.`,
-      )
-    ) {
-      return;
-    }
-    this.runSendSlipsWhatsapp(undefined);
-  }
-
-  sendSlipsWhatsappSelectedOpen(): void {
-    if (!this.condoAccess.canManage()) {
-      return;
-    }
-    const openSelected = this.charges().filter(
-      (c) => c.status === 'open' && this.selectedIds().has(c.id),
-    );
-    const unitIds = [...new Set(openSelected.map((c) => c.unitId))];
-    if (unitIds.length === 0) {
-      this.flash.warning(
-        'Selecione cobranças em aberto ou use «WhatsApp slips (todas em aberto)».',
-      );
-      return;
-    }
-    if (
-      !confirm(
-        `Enviar slip por WhatsApp para ${unitIds.length} unidade(s) das linhas selecionadas?`,
-      )
-    ) {
-      return;
-    }
-    this.runSendSlipsWhatsapp(unitIds);
-  }
-
-  sendSlipsWhatsappOne(c: CondominiumFeeCharge): void {
-    if (!this.condoAccess.canManage()) {
-      return;
-    }
-    if (c.status !== 'open') {
-      this.flash.warning(
-        'Só é possível enviar slip por WhatsApp para cobranças em aberto.',
-      );
-      return;
-    }
-    if (
-      !confirm(
-        `Enviar o PDF slip por WhatsApp para a unidade «${c.unitIdentifier}»?`,
-      )
-    ) {
-      return;
-    }
-    this.runSendSlipsWhatsapp([c.unitId]);
-  }
-
-  dismissSlipWaInfo(): void {
-    this.slipWaInfo.set(null);
-  }
-
-  private formatSlipWaResult(r: SendFeeSlipsWhatsappResult): string {
-    const parts: string[] = [`Enviados: ${r.sent}.`];
-    if (r.skipped.length > 0) {
-      parts.push(
-        ` Sem número (${r.skipped.length}): ${r.skipped.map((s) => s.unitIdentifier).join(', ')}.`,
-      );
-    }
-    if (r.failures.length > 0) {
-      parts.push(
-        ` Falha (${r.failures.length}): ${r.failures.map((f) => f.unitIdentifier).join(', ')}.`,
-      );
-    }
-    return parts.join('');
-  }
-
-  private runSendSlipsWhatsapp(unitIds: string[] | undefined): void {
-    const ym = this.competenceYm().trim();
-    if (!ym) {
-      this.flash.warning('Indique a competência.');
-      return;
-    }
-    this.slipWaBusy.set(true);
-    this.slipWaInfo.set(null);
+  downloadClearanceDeclaration(c: CondominiumFeeCharge): void {
+    this.actionBusy.set(true);
     this.api
-      .sendCondominiumFeeSlipsWhatsapp(this.condoId, {
-        competenceYm: ym,
-        unitIds,
-      })
+      .condominiumClearanceDeclarationPdf(this.condoId, c.unitId)
       .subscribe({
-        next: (r) => {
-          this.slipWaBusy.set(false);
-          this.slipWaInfo.set(this.formatSlipWaResult(r));
-          this.loadSlipDeliveryLog();
-          if (unitIds?.length) {
-            this.clearSelection();
-          }
+        next: (blob) => {
+          this.actionBusy.set(false);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const unitTag = (c.unitIdentifier || c.unitId.slice(0, 8))
+            .replace(/[^\w-]+/g, '_')
+            .slice(0, 24);
+          a.download = `declaracao-quitacao-${unitTag}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
         },
         error: (err: HttpErrorResponse) => {
-          this.slipWaBusy.set(false);
+          this.actionBusy.set(false);
           void translateHttpErrorMessageAsync(err, {
             network:
               'Sem conexão com o servidor. Verifique a internet e tente novamente.',
-            default: 'Não foi possível enviar os slips por WhatsApp.',
+            default: 'Não foi possível gerar a declaração de quitação.',
           }).then((m) => this.flash.error(m));
         },
       });

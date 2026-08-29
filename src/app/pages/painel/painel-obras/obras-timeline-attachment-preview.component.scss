@@ -134,6 +134,50 @@
   }
 }
 
+.obras-att__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  margin-top: 0.1rem;
+}
+
+.obras-att__replace {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: color-mix(in srgb, #b45309 85%, var(--text));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover:not(:disabled) {
+    color: #92400e;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.obras-att__replace-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .obras-att__lead {
   flex-shrink: 0;
   width: 2.25rem;
@@ -509,7 +553,7 @@
 
   .obras-att--pdf .obras-att__expand {
     align-self: stretch;
-    margin-top: 0.15rem;
+    margin-top: 0;
     padding: 0.4rem 0.55rem;
     font-size: 0.76rem;
     font-weight: 700;
@@ -519,6 +563,26 @@
     background: color-mix(in srgb, #dc2626 10%, var(--surface));
     color: #b91c1c;
     border: 1px solid color-mix(in srgb, #dc2626 22%, var(--border));
+  }
+
+  .obras-att--pdf .obras-att__actions {
+    align-self: stretch;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+
+  .obras-att--pdf .obras-att__replace {
+    align-self: stretch;
+    padding: 0.38rem 0.55rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, #d97706 10%, var(--surface));
+    color: #92400e;
+    border: 1px solid color-mix(in srgb, #d97706 24%, var(--border));
   }
 
   .obras-att--pdf .obras-att__size {

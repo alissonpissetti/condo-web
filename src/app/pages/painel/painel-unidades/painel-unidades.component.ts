@@ -35,6 +35,10 @@ import {
   PlanningApiService,
   type CondoAccess,
 } from '../../../core/planning-api.service';
+import {
+  FinancialApiService,
+} from '../../../core/financial-api.service';
+import { translateHttpErrorMessageAsync } from '../../../core/api-errors-pt';
 
 @Component({
   selector: 'app-painel-unidades',
@@ -48,6 +52,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   private readonly api = inject(CondominiumManagementService);
   private readonly navData = inject(CondominiumNavDataService);
   private readonly planningApi = inject(PlanningApiService);
+  private readonly financialApi = inject(FinancialApiService);
   private readonly fb = inject(FormBuilder);
 
   protected readonly fieldErrorsPt = controlErrorMessagesPt;
@@ -57,6 +62,7 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
   protected readonly loadError = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
+  protected readonly pdfBusyUnitId = signal<string | null>(null);
 
   protected readonly newGroupingName = signal('');
   protected readonly editingGroupingId = signal<string | null>(null);
@@ -795,6 +801,41 @@ export class PainelUnidadesComponent implements OnInit, OnDestroy {
           this.flash.errorFromHttp(err, 'Não foi possível concluir o pedido.');
         },
       });
+  }
+
+  downloadClearanceDeclaration(u: UnitRow): void {
+    if (this.pdfBusyUnitId()) {
+      return;
+    }
+    this.pdfBusyUnitId.set(u.id);
+    this.financialApi
+      .condominiumClearanceDeclarationPdf(this.condominiumId, u.id)
+      .subscribe({
+        next: (blob) => {
+          this.pdfBusyUnitId.set(null);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const unitTag = (u.identifier || u.id.slice(0, 8))
+            .replace(/[^\w-]+/g, '_')
+            .slice(0, 24);
+          a.download = `declaracao-quitacao-${unitTag}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.pdfBusyUnitId.set(null);
+          void translateHttpErrorMessageAsync(err, {
+            network:
+              'Sem conexão com o servidor. Verifique a internet e tente novamente.',
+            default: 'Não foi possível gerar a declaração de quitação.',
+          }).then((m) => this.flash.error(m));
+        },
+      });
+  }
+
+  isClearancePdfBusy(unitId: string): boolean {
+    return this.pdfBusyUnitId() === unitId;
   }
 
   isEditingUnit(id: string): boolean {

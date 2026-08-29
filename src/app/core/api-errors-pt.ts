@@ -146,6 +146,18 @@ const EXACT: Record<string, string> = {
     'A série contém transações quitadas. Reabra as quitações antes de excluir.',
   'Charge must be paid to generate a receipt':
     'Só é possível emitir o comprovante para cobranças já quitadas.',
+  'Unit has open condominium fee charges':
+    'A unidade possui taxas condominiais em aberto com vencimento até hoje. Quite essas cobranças antes de emitir a declaração.',
+  'paidByUnitId only applies to expenses and investments':
+    'Só é possível registrar pagamento por unidade em despesas e aplicações.',
+  'Unit credit already registered for this transaction':
+    'Já existe crédito registrado para esta transação.',
+  'unitId is required': 'Informe a unidade para gerar a declaração de quitação.',
+  'Unit not accessible': 'Você não tem acesso a esta unidade.',
+  'bankAccountId is required when the charge has a remaining balance after credit':
+    'Informe a conta bancária para a parte em dinheiro da quitação (após desconto do crédito).',
+  'justification is too short':
+    'Descreva a justificativa do adiantamento (mínimo 8 caracteres).',
   'No units in condominium for transparency report':
     'Não há unidades neste condomínio para gerar o relatório de transparência.',
 };

@@ -210,6 +210,8 @@ export class PainelTransacoesComponent implements OnInit {
   /** Modal quitar transação (como taxas condominiais). */
   protected readonly settleTarget = signal<FinancialTransaction | null>(null);
   protected readonly settleReceiptFile = signal<File | null>(null);
+  protected readonly settlePaidByUnitEnabled = signal(false);
+  protected readonly settlePaidByUnitId = signal('');
   protected readonly settleError = signal<string | null>(null);
   protected readonly settleBusy = signal(false);
 
@@ -2389,7 +2391,13 @@ export class PainelTransacoesComponent implements OnInit {
     this.closeRowActionMenu();
     this.settleError.set(null);
     this.settleReceiptFile.set(null);
+    this.settlePaidByUnitEnabled.set(false);
+    this.settlePaidByUnitId.set('');
     this.settleTarget.set(t);
+  }
+
+  protected settleSupportsPaidByUnit(t: FinancialTransaction): boolean {
+    return t.kind === 'expense' || t.kind === 'investment';
   }
 
   protected closeTxSettle(): void {
@@ -2398,6 +2406,8 @@ export class PainelTransacoesComponent implements OnInit {
     }
     this.settleTarget.set(null);
     this.settleReceiptFile.set(null);
+    this.settlePaidByUnitEnabled.set(false);
+    this.settlePaidByUnitId.set('');
     this.settleError.set(null);
   }
 
@@ -2442,13 +2452,21 @@ export class PainelTransacoesComponent implements OnInit {
     if (!target) {
       return;
     }
+    if (this.settlePaidByUnitEnabled() && !this.settlePaidByUnitId().trim()) {
+      this.settleError.set('Selecione a unidade que efetuou o pagamento.');
+      return;
+    }
     this.settleError.set(null);
     this.settleBusy.set(true);
     const file = this.settleReceiptFile();
+    const paidByUnitId = this.settlePaidByUnitEnabled()
+      ? this.settlePaidByUnitId().trim()
+      : undefined;
     const run = (receiptKey: string | null) => {
       this.api
         .settleTransaction(this.condoId, target.id, {
           receiptStorageKey: receiptKey ?? undefined,
+          paidByUnitId,
         })
         .subscribe({
           next: () => {

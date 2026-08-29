@@ -5,38 +5,6 @@
   min-width: 0;
 }
 
-.audit-card {
-  margin-top: 1.25rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius, 10px);
-  background: var(--surface);
-  box-sizing: border-box;
-  max-width: 100%;
-  min-width: 0;
-
-  &__lede {
-    margin: 0 0 0.85rem;
-  }
-
-  .table-wrap {
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
-.card__title {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.slip-log-detail {
-  max-width: 28rem;
-  font-size: 0.88rem;
-  color: var(--muted);
-}
-
 /* ========================================================== */
 /* Header + toolbar                                             */
 /* ========================================================== */
@@ -175,6 +143,61 @@
   transition: width 0.4s ease;
 }
 
+.credit-panel {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, #1d4ed8 28%, var(--border));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, #1d4ed8 5%, var(--surface));
+}
+
+.credit-panel__head {
+  margin-bottom: 0.65rem;
+}
+
+.credit-panel__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.credit-panel__lede {
+  margin: 0;
+}
+
+.credit-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.credit-panel__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.55rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.credit-panel__unit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.credit-panel__amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
 /* ========================================================== */
 /* Tira de gestão (mais leve que um card)                       */
 /* ========================================================== */
@@ -228,20 +251,6 @@
   border: 1px solid color-mix(in srgb, #c0392b 28%, var(--border));
   font-size: 0.88rem;
   margin-bottom: 1rem;
-}
-
-.info-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem 1rem;
-  padding: 0.65rem 0.85rem;
-  margin-bottom: 1rem;
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  font-size: 0.88rem;
-  line-height: 1.45;
 }
 
 /* ========================================================== */
@@ -426,6 +435,17 @@
     font-weight: 700;
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+
+  .cell-amount__credit {
+    display: block;
+    margin-top: 0.2rem;
+    line-height: 1.35;
+  }
+
+  .cell-amount__credit--balance {
+    font-size: 0.8rem;
+    color: #1d4ed8;
   }
 
   .cell-amount__due {
@@ -994,73 +1014,6 @@
     border-radius: 0.75rem;
     background: var(--surface);
   }
-
-  /* Histórico PDF / WhatsApp — tabela → cards empilhados */
-  .audit-card {
-    padding: 0.85rem 0.9rem;
-  }
-
-  .slip-log-table {
-    display: block;
-    font-size: 0.88rem;
-
-    thead {
-      display: none;
-    }
-
-    tbody,
-    tr {
-      display: block;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    tbody tr {
-      padding: 0.75rem 0.85rem;
-      margin-bottom: 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    tbody tr:hover {
-      background: var(--surface);
-    }
-
-    td {
-      display: block;
-      min-width: 0;
-      max-width: 100%;
-      padding: 0.45rem 0;
-      border-bottom: 0;
-      text-align: left;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-
-      &::before {
-        content: attr(data-label);
-        display: block;
-        font-size: 0.66rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 0.18rem;
-      }
-
-      & + td {
-        margin-top: 0.15rem;
-        padding-top: 0.5rem;
-        border-top: 1px dashed color-mix(in srgb, var(--border) 75%, transparent);
-      }
-    }
-
-    .slip-log-detail {
-      max-width: none;
-      font-size: 0.86rem;
-    }
-  }
 }
 
 @media (max-width: 480px) {
@@ -1109,6 +1062,10 @@
   flex-direction: column;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
   overflow: hidden;
+
+  &--wide {
+    width: min(40rem, 100%);
+  }
 }
 
 .modal__head {
@@ -1298,6 +1255,52 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.credit-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: min(22rem, 50vh);
+  overflow-y: auto;
+}
+
+.credit-history-list__item {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--surface-2);
+}
+
+.credit-history-list__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.credit-history-list__amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1f883d;
+  white-space: nowrap;
+
+  &--neg {
+    color: #b45309;
+  }
+}
+
+.credit-history-list__date {
+  margin: 0.2rem 0 0;
+}
+
+.credit-history-list__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.4;
 }
 
 @media (max-width: 520px) {

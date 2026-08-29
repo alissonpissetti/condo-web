@@ -2305,7 +2305,7 @@
                                     ) {
                                       <div class="obras-tl__media">
                                         <ul class="obras-tl__media-list">
-                                          @for (att of e.attachments; track att.id) {
+                                          @for (att of e.attachments; track att.id + att.originalFilename + (att.sizeBytes ?? 0)) {
                                             <li class="obras-tl__media-item">
                                               <app-obras-timeline-attachment-preview
                                                 [condominiumId]="condominiumIdParam()"
@@ -2313,12 +2313,16 @@
                                                 [entryId]="e.id"
                                                 [attachment]="att"
                                                 [disabled]="busy()"
+                                                [canReplace]="canManage()"
                                                 (download)="
                                                   downloadAttachment(
                                                     e,
                                                     att.id,
                                                     att.originalFilename
                                                   )
+                                                "
+                                                (replaceFile)="
+                                                  replaceTimelineAttachment(e, att, $event)
                                                 "
                                               />
                                             </li>

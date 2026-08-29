@@ -1775,6 +1775,42 @@
             </div>
           }
 
+          @if (settleSupportsPaidByUnit(st)) {
+            <div class="settle-unit-credit" role="region" aria-label="Pagamento por unidade">
+              <label class="settle-unit-credit__toggle">
+                <input
+                  type="checkbox"
+                  [checked]="settlePaidByUnitEnabled()"
+                  (change)="settlePaidByUnitEnabled.set($any($event.target).checked)"
+                  [disabled]="settleBusy()"
+                />
+                <span>Pagamento feito por uma unidade específica</span>
+              </label>
+              <p class="muted small">
+                Gera crédito para a unidade escolhida, descontado automaticamente nas próximas
+                taxas condominiais em aberto (o condomínio repõe o valor depois).
+              </p>
+              @if (settlePaidByUnitEnabled()) {
+                <label class="field field--block">
+                  <span class="field__label">Unidade pagadora</span>
+                  <select
+                    class="input"
+                    [value]="settlePaidByUnitId()"
+                    (change)="settlePaidByUnitId.set($any($event.target).value)"
+                    [disabled]="settleBusy()"
+                  >
+                    <option value="">— Selecione —</option>
+                    @for (u of flatUnits(); track u.id) {
+                      <option [value]="u.id">
+                        {{ u.identifier }} · {{ u.groupingName }}
+                      </option>
+                    }
+                  </select>
+                </label>
+              }
+            </div>
+          }
+
           <div class="settle-attach">
             <label class="settle-attach__label" for="tx-settle-receipt-file">
               Comprovante <span class="muted small">(opcional)</span>

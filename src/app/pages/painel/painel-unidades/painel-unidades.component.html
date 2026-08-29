@@ -114,6 +114,7 @@
                   <th>Identificador</th>
                   <th>Responsáveis</th>
                   <th>Notas</th>
+                  <th>Documentos</th>
                   @if (canManageCondominium()) {
                     <th class="th-actions">
                       <span class="sr-only">Ações</span>
@@ -150,6 +151,7 @@
                           [disabled]="busy()"
                         />
                       </td>
+                      <td data-label="Documentos" class="muted">—</td>
                       <td class="td-actions">
                         <div class="td-actions__inner">
                           <button
@@ -713,6 +715,23 @@
                         </div>
                       </td>
                       <td data-label="Notas" class="notes">{{ u.notes || '—' }}</td>
+                      <td data-label="Documentos" class="td-actions">
+                        <button
+                          type="button"
+                          class="btn btn--ghost sm"
+                          (click)="downloadClearanceDeclaration(u)"
+                          [disabled]="busy() || isClearancePdfBusy(u.id)"
+                          [title]="
+                            'Declaração de quitação (CND) — unidade ' + u.identifier
+                          "
+                        >
+                          {{
+                            isClearancePdfBusy(u.id)
+                              ? 'Gerando…'
+                              : 'Declaração de quitação'
+                          }}
+                        </button>
+                      </td>
                       @if (canManageCondominium()) {
                         <td data-label="Ações" class="td-actions">
                           <div class="td-actions__inner">

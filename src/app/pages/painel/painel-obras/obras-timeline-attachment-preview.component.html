@@ -8,6 +8,17 @@
   [class.obras-att--idle]="state() === 'idle'"
   [attr.data-kind]="mediaKind()"
 >
+  @if (canReplace()) {
+    <input
+      type="file"
+      class="obras-att__replace-input"
+      [id]="replaceInputId"
+      tabindex="-1"
+      aria-hidden="true"
+      (change)="onReplaceFileSelected($event)"
+    />
+  }
+
   @if (state() !== 'loading') {
     <button
       type="button"
@@ -84,6 +95,16 @@
       @if (sizeLabel) {
         <span class="obras-att__size">{{ sizeLabel }}</span>
       }
+      @if (canReplace()) {
+        <button
+          type="button"
+          class="obras-att__replace linkish"
+          [disabled]="disabled()"
+          (click)="onReplaceClick($event)"
+        >
+          Substituir arquivo
+        </button>
+      }
     </div>
   } @else if (mediaKind() === 'image') {
     <button
@@ -130,6 +151,16 @@
       @if (sizeLabel) {
         <span class="obras-att__size">{{ sizeLabel }}</span>
       }
+      @if (canReplace()) {
+        <button
+          type="button"
+          class="obras-att__replace linkish"
+          [disabled]="disabled()"
+          (click)="onReplaceClick($event)"
+        >
+          Substituir arquivo
+        </button>
+      }
     </div>
   } @else if (mediaKind() === 'pdf') {
     <button
@@ -149,14 +180,26 @@
       <span class="obras-att__name" [title]="attachment().originalFilename">{{
         attachment().originalFilename
       }}</span>
-      <button
-        type="button"
-        class="obras-att__expand linkish"
-        [disabled]="disabled()"
-        (click)="openPreviewModal()"
-      >
-        Visualizar PDF
-      </button>
+      <div class="obras-att__actions">
+        <button
+          type="button"
+          class="obras-att__expand linkish"
+          [disabled]="disabled()"
+          (click)="openPreviewModal()"
+        >
+          Visualizar PDF
+        </button>
+        @if (canReplace()) {
+          <button
+            type="button"
+            class="obras-att__replace linkish"
+            [disabled]="disabled()"
+            (click)="onReplaceClick($event)"
+          >
+            Substituir arquivo
+          </button>
+        }
+      </div>
       @if (sizeLabel) {
         <span class="obras-att__size">{{ sizeLabel }}</span>
       }
@@ -185,6 +228,16 @@
           preload="metadata"
           [attr.aria-label]="attachment().originalFilename"
         ></audio>
+      }
+      @if (canReplace()) {
+        <button
+          type="button"
+          class="obras-att__replace linkish"
+          [disabled]="disabled()"
+          (click)="onReplaceClick($event)"
+        >
+          Substituir arquivo
+        </button>
       }
     </div>
   }

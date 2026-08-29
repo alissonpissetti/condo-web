@@ -42,8 +42,10 @@ export class ManutencoesTimelineAttachmentPreviewComponent
   readonly entryId = input.required<string>();
   readonly attachment = input.required<MaintenanceTimelineAttachment>();
   readonly disabled = input(false);
+  readonly canReplace = input(false);
 
   readonly download = output<void>();
+  readonly replaceFile = output<File>();
 
   private readonly api = inject(CondominiumMaintenancesApiService);
   private readonly modalSvc = inject(ObrasAttachmentPreviewModalService);
@@ -65,6 +67,8 @@ export class ManutencoesTimelineAttachmentPreviewComponent
   protected readonly imageModalLoading = signal(false);
 
   private imagePublicUrlFailed = false;
+
+  protected readonly replaceInputId = `manut-att-replace-${Math.random().toString(36).slice(2)}`;
 
   protected get sizeLabel(): string {
     return formatAttachmentSize(this.attachment().sizeBytes);
@@ -367,6 +371,30 @@ export class ManutencoesTimelineAttachmentPreviewComponent
       return;
     }
     this.download.emit();
+  }
+
+  protected onReplaceClick(ev: Event): void {
+    ev.stopPropagation();
+    if (this.disabled() || !this.canReplace()) {
+      return;
+    }
+    const input = document.getElementById(
+      this.replaceInputId,
+    ) as HTMLInputElement | null;
+    input?.click();
+  }
+
+  protected onReplaceFileSelected(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || this.disabled() || !this.canReplace()) {
+      return;
+    }
+    this.revoke();
+    this.objectUrl.set(null);
+    this.state.set(this.mediaKind());
+    this.replaceFile.emit(file);
   }
 
   private loadImagePreview(hooks?: {

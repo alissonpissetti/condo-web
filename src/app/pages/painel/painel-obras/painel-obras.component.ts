@@ -37,6 +37,7 @@ import {
   type WorkListItem,
   type WorkStatus,
   type WorkTimelineEntry,
+  type WorkTimelineAttachment,
 } from '../../../core/condominium-works-api.service';
 import { supplierSelectLabel, supplierPixTypeLabelPt } from '../../../core/supplier-display';
 import {
@@ -2462,6 +2463,35 @@ export class PainelObrasComponent implements OnInit {
             err,
             'Não foi possível registrar a despesa.',
           );
+        },
+      });
+  }
+
+  protected replaceTimelineAttachment(
+    entry: WorkTimelineEntry,
+    attachment: WorkTimelineAttachment,
+    file: File,
+  ): void {
+    const w = this.selected();
+    if (!w || !this.canManage() || this.busy()) return;
+    this.busy.set(true);
+    this.api
+      .replaceTimelineAttachment(
+        this.condominiumId,
+        w.id,
+        entry.id,
+        attachment.id,
+        file,
+      )
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.flash.success('Arquivo substituído e gravado no storage.');
+          this.loadDetail(w.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          this.flash.errorFromHttp(err, 'Não foi possível substituir o arquivo.');
         },
       });
   }

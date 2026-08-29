@@ -492,6 +492,21 @@ export class CondominiumWorksApiService {
     );
   }
 
+  replaceTimelineAttachment(
+    condominiumId: string,
+    workId: string,
+    entryId: string,
+    attachmentId: string,
+    file: File,
+  ): Observable<WorkTimelineEntry> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    return this.http.patch<WorkTimelineEntry>(
+      `${this.base}/condominiums/${condominiumId}/works/${workId}/timeline/${entryId}/attachments/${attachmentId}`,
+      fd,
+    );
+  }
+
   downloadTimelineAttachmentBlob(
     condominiumId: string,
     workId: string,

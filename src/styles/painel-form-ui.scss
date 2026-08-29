@@ -314,6 +314,38 @@ $form-card-gap-after-head: 1rem;
   }
 }
 
+/* Grid responsivo de campos: 1 coluna no mobile, 2 no desktop (≥520px).
+   Use `.field--span-2` para largura total; `.field-grid--1` força 1 coluna. */
+.field-grid {
+  display: grid;
+  gap: 0.85rem 1rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 520px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &--1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field--span-2 {
+  @media (min-width: 520px) {
+    grid-column: 1 / -1;
+  }
+}
+
+.field--grow {
+  min-width: 0;
+}
+
+.field--uf {
+  @media (min-width: 520px) {
+    min-width: 11rem;
+  }
+}
+
 .preview-card {
   margin-top: 1rem;
   padding: 1rem 1.1rem;

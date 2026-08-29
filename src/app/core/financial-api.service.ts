@@ -181,22 +181,6 @@ export interface BankAccountBalancePreview {
   movementsDeltaCents: string;
 }
 
-export type CondominiumFeeSlipDeliveryAction =
-  | 'pdf_transparency'
-  | 'pdf_unit_slip'
-  | 'whatsapp_sent'
-  | 'whatsapp_skipped'
-  | 'whatsapp_failed';
-
-export interface CondominiumFeeSlipDeliveryLogRow {
-  id: string;
-  action: CondominiumFeeSlipDeliveryAction;
-  createdAt: string;
-  unitIdentifier?: string | null;
-  detail?: Record<string, unknown> | null;
-  actorLabel: string;
-}
-
 export interface CondominiumFeeCharge {
   id: string;
   competenceYm: string;
@@ -212,12 +196,39 @@ export interface CondominiumFeeCharge {
   hasPaymentReceipt?: boolean;
   /** Nome único para referência financeira (quando a API envia). */
   financialResponsibleName?: string | null;
+  unitCreditBalanceCents?: string;
+  creditAppliedCents?: string;
+  netDueCents?: string;
 }
 
-export interface SendFeeSlipsWhatsappResult {
-  sent: number;
-  skipped: { unitId: string; unitIdentifier: string; reason: string }[];
-  failures: { unitId: string; unitIdentifier: string; error: string }[];
+export interface UnitFeeCreditEntry {
+  id: string;
+  unitId: string;
+  signedAmountCents: string;
+  entryKind:
+    | 'advance_payment'
+    | 'credit_applied'
+    | 'credit_restored'
+    | 'expense_paid_by_unit'
+    | 'expense_paid_by_unit_reversed';
+  justification: string | null;
+  hasPaymentReceipt: boolean;
+  bankAccountId: string | null;
+  chargeId: string | null;
+  actorUserId: string;
+  createdAt: string;
+}
+
+export interface UnitFeeCreditHistory {
+  balanceCents: string;
+  entries: UnitFeeCreditEntry[];
+}
+
+export interface UnitFeeCreditBalanceRow {
+  unitId: string;
+  unitIdentifier: string;
+  groupingName: string;
+  balanceCents: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -453,7 +464,7 @@ export class FinancialApiService {
   settleTransaction(
     condoId: string,
     txId: string,
-    body?: { receiptStorageKey?: string },
+    body?: { receiptStorageKey?: string; paidByUnitId?: string },
   ): Observable<FinancialTransaction> {
     return this.http.post<FinancialTransaction>(
       `${this.base(condoId)}/transactions/${txId}/settle`,
@@ -629,6 +640,53 @@ export class FinancialApiService {
     );
   }
 
+  /** Declaração de quitação de débitos condominiais (CND) por unidade. */
+  condominiumClearanceDeclarationPdf(
+    condoId: string,
+    unitId: string,
+  ): Observable<Blob> {
+    const params = new HttpParams().set('unitId', unitId.trim());
+    return this.http.get(
+      `${this.base(condoId)}/condominium-fees/clearance-declaration-pdf`,
+      { params, responseType: 'blob' },
+    );
+  }
+
+  registerUnitFeeAdvance(
+    condoId: string,
+    body: {
+      unitId: string;
+      amountCents: number;
+      justification: string;
+      bankAccountId?: string;
+      paymentReceiptStorageKey?: string;
+    },
+  ): Observable<UnitFeeCreditEntry> {
+    return this.http.post<UnitFeeCreditEntry>(
+      `${this.base(condoId)}/condominium-fees/unit-credit/advance`,
+      body,
+    );
+  }
+
+  listUnitFeeCreditBalances(
+    condoId: string,
+  ): Observable<UnitFeeCreditBalanceRow[]> {
+    return this.http.get<UnitFeeCreditBalanceRow[]>(
+      `${this.base(condoId)}/condominium-fees/unit-credit/balances`,
+    );
+  }
+
+  listUnitFeeCreditHistory(
+    condoId: string,
+    unitId: string,
+  ): Observable<UnitFeeCreditHistory> {
+    const params = new HttpParams().set('unitId', unitId.trim());
+    return this.http.get<UnitFeeCreditHistory>(
+      `${this.base(condoId)}/condominium-fees/unit-credit/history`,
+      { params },
+    );
+  }
+
   /** Comprovante anexado ao quitar (imagem ou PDF). */
   condominiumFeePaymentReceiptFile(
     condoId: string,
@@ -653,31 +711,6 @@ export class FinancialApiService {
     return this.http.get(
       `${this.base(condoId)}/condominium-fees/transparency-pdf`,
       { params, responseType: 'blob' },
-    );
-  }
-
-  /**
-   * Envia por WhatsApp o PDF slip/capa PIX + relatório para unidades em aberto.
-   * Sem `unitIds`, todas as unidades com cobrança em aberto na competência.
-   */
-  sendCondominiumFeeSlipsWhatsapp(
-    condoId: string,
-    body: { competenceYm: string; unitIds?: string[] },
-  ): Observable<SendFeeSlipsWhatsappResult> {
-    return this.http.post<SendFeeSlipsWhatsappResult>(
-      `${this.base(condoId)}/condominium-fees/send-slips-whatsapp`,
-      body,
-    );
-  }
-
-  listCondominiumFeeSlipDeliveryLog(
-    condoId: string,
-    competenceYm: string,
-  ): Observable<CondominiumFeeSlipDeliveryLogRow[]> {
-    const params = new HttpParams().set('competenceYm', competenceYm);
-    return this.http.get<CondominiumFeeSlipDeliveryLogRow[]>(
-      `${this.base(condoId)}/condominium-fees/slip-delivery-log`,
-      { params },
     );
   }
 
